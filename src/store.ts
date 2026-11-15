@@ -1,0 +1,331 @@
+import { create } from 'zustand'
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
+import { del, get, set } from 'idb-keyval'
+import { addDays, addHours, set as setDate, startOfDay } from 'date-fns'
+import type { CalEvent, FileMeta, Folder, Item, ItemKind, Section, Source } from './types'
+import { extractTags, htmlToText, uid, withoutLegacyTitle } from './lib/util'
+import { APP_NAME } from './brand'
+
+// Writes are batched: typing changes state several times a second, and each save serializes
+// everything. We save at most every 500 ms, and immediately when the tab is hidden or closed.
+let loaded = false
+let pending: { k: string; v: string } | null = null
+let saveTimer = 0
+const flushSave = () => {
+  clearTimeout(saveTimer)
+  saveTimer = 0
+  if (!pending) return
+  const { k, v } = pending
+  pending = null
+  void set(k, v)
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushSave)
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flushSave())
+}
+const idbStorage: StateStorage = {
+  getItem: async (k) => (await get(k)) ?? null,
+  setItem: (k, v) => {
+    // Never save before the stored data has loaded: that would overwrite it with the starter content.
+    if (!loaded) return
+    pending = { k, v }
+    if (!saveTimer) saveTimer = window.setTimeout(flushSave, 500)
+  },
+  removeItem: async (k) => del(k),
+}
+
+export interface Settings {
+  /** 'auto' picks for you: a Mac's MLX server, then Ollama, then the in-browser model. */
+  provider: 'auto' | 'mlx' | 'webllm' | 'ollama'
+  llmModel: string
+  ollamaModel: string
+  whisperModel: string
+  proactive: boolean
+  accent: string
+  theme: 'system' | 'light' | 'dark'
+  googleClientId: string
+  glass: boolean
+}
+
+interface State {
+  items: Item[]
+  folders: Folder[]
+  events: CalEvent[]
+  section: Section
+  activeId: string | null
+  calendarDate: number | null
+  folderId: string | null
+  tagFilter: string | null
+  aiOpen: boolean
+  /** A question typed into Ask or search, waiting for the assistant panel to pick it up. */
+  askDraft: string | null
+  paletteOpen: boolean
+  settingsOpen: boolean
+  connectOpen: boolean
+  drawerOpen: boolean
+  sidebarCollapsed: boolean
+  dismissed: string[]
+  settings: Settings
+  sources: Source[]
+
+  go: (section: Section, activeId?: string | null) => void
+  openCalendarDate: (date: Date) => void
+  open: (id: string) => void
+  createItem: (kind: ItemKind, patch?: Partial<Item>) => Item
+  updateItem: (id: string, patch: Partial<Item>) => void
+  trashItem: (id: string) => void
+  restoreItem: (id: string) => void
+  purgeItem: (id: string) => void
+  createFolder: (name: string) => void
+  renameFolder: (id: string, name: string) => void
+  deleteFolder: (id: string) => void
+  setFolder: (id: string | null) => void
+  setTag: (t: string | null) => void
+  addEvent: (e: Omit<CalEvent, 'id'>) => CalEvent
+  updateEvent: (id: string, patch: Partial<CalEvent>) => void
+  deleteEvent: (id: string) => void
+  dismiss: (id: string) => void
+  setUI: (patch: Partial<Pick<State, 'aiOpen' | 'paletteOpen' | 'settingsOpen' | 'connectOpen' | 'drawerOpen' | 'sidebarCollapsed'>>) => void
+  setSettings: (patch: Partial<Settings>) => void
+  addSource: (s: Source) => void
+  updateSource: (id: string, patch: Partial<Source>) => void
+  removeSource: (id: string) => void
+  /** Update sync metadata without touching updatedAt */
+  patchFile: (id: string, patch: Partial<FileMeta>) => void
+}
+
+const now = Date.now()
+const today = startOfDay(new Date())
+
+const seedItems: Item[] = [
+  {
+    id: 'welcome',
+    kind: 'doc',
+    title: `Welcome to ${APP_NAME}`,
+    content: `<p>Your notes, docs, recordings and calendar in one place, with an assistant that runs on your own devices.</p><h2>Try these</h2><ul data-type="taskList"><li data-type="taskItem" data-checked="true"><p>Open the app</p></li><li data-type="taskItem" data-checked="false"><p>Press <code>⌘K</code> to jump anywhere</p></li><li data-type="taskItem" data-checked="false"><p>Type <code>/</code> on an empty line for blocks — checklists, tables, sketches</p></li><li data-type="taskItem" data-checked="false"><p>Record a class or meeting and get notes written for you</p></li></ul><p>Proactive help: write something like <em>“Problem set due Friday 5pm”</em> in any note, and ${APP_NAME} offers to put it on your calendar. #getting-started</p>`,
+    folderId: null,
+    parentId: null,
+    pinned: true,
+    tags: ['getting-started'],
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'doc-guide',
+    kind: 'doc',
+    title: 'Study system',
+    content: `<p>Docs are for longer, structured writing — like a wiki. They support Markdown shortcuts: type <code>#</code> for a heading, <code>-</code> for a list, <code>[]</code> for a checklist, <code>&gt;</code> for a quote, and <code>\`\`\`</code> for code.</p><h2>Weekly loop</h2><ol><li><p>Record lectures → review AI notes the same day</p></li><li><p>Turn key points into flashcards</p></li><li><p>Plan the week in Calendar every Sunday</p></li></ol><h2>Courses</h2><table><tbody><tr><th><p>Course</p></th><th><p>When</p></th><th><p>Focus</p></th></tr><tr><td><p>Linear Algebra</p></td><td><p>Tue / Thu</p></td><td><p>Eigenvalues</p></td></tr><tr><td><p>Philosophy 101</p></td><td><p>Mon / Wed</p></td><td><p>Socratic method</p></td></tr></tbody></table><blockquote><p>“The unexamined life is not worth living.”</p></blockquote>`,
+    folderId: null,
+    parentId: null,
+    pinned: false,
+    tags: [],
+    createdAt: now - 1000,
+    updatedAt: now - 1000,
+  },
+]
+
+const seedEvents: CalEvent[] = [
+  {
+    id: 'ev1',
+    title: 'Linear Algebra lecture',
+    start: setDate(today, { hours: 10 }).getTime(),
+    end: setDate(today, { hours: 11, minutes: 30 }).getTime(),
+    color: 'violet',
+    location: 'Hall B',
+  },
+  {
+    id: 'ev2',
+    title: 'Study group',
+    start: addHours(setDate(addDays(today, 1), { hours: 15 }), 0).getTime(),
+    end: setDate(addDays(today, 1), { hours: 16, minutes: 30 }).getTime(),
+    color: 'teal',
+  },
+  {
+    id: 'ev3',
+    title: 'Philosophy essay due',
+    start: addDays(today, 3).getTime(),
+    end: addDays(today, 4).getTime(),
+    color: 'rose',
+    allDay: true,
+  },
+]
+
+export const useStore = create<State>()(
+  persist(
+    (setS, getS) => ({
+      items: seedItems,
+      folders: [{ id: 'f-school', name: 'School' }, { id: 'f-personal', name: 'Personal' }],
+      events: seedEvents,
+      section: 'home',
+      activeId: null,
+      calendarDate: null,
+      folderId: null,
+      tagFilter: null,
+      aiOpen: false,
+      askDraft: null,
+      paletteOpen: false,
+      settingsOpen: false,
+      connectOpen: false,
+      drawerOpen: false,
+      sidebarCollapsed: false,
+      dismissed: [],
+      settings: {
+        provider: 'auto',
+        // 'default' means the Default tier, resolved per device (see modelForTier). Existing installs keep their pick.
+        llmModel: 'default',
+        ollamaModel: '',
+        whisperModel: 'Xenova/whisper-base.en',
+        proactive: true,
+        accent: '#7c5cff',
+        theme: 'dark',
+        googleClientId: '',
+        glass: true,
+      },
+      sources: [],
+
+      go: (section, activeId = null) => {
+        if (activeId === null && section !== 'home' && section !== 'calendar') {
+          const kind = section === 'docs' ? 'doc' : section === 'lectures' ? 'lecture' : null
+          const cur = getS().items.find((i) => i.id === getS().activeId)
+          if (kind && cur?.kind === kind && !cur.deletedAt) activeId = cur.id
+          else if (kind) {
+            const first = getS()
+              .items.filter((i) => i.kind === kind && !i.deletedAt)
+              .sort((a, b) => b.updatedAt - a.updatedAt)[0]
+            activeId = first?.id ?? null
+          }
+        }
+        setS({ section, activeId, tagFilter: null, calendarDate: null })
+      },
+      openCalendarDate: (date) => setS({ section: 'calendar', activeId: null, tagFilter: null, calendarDate: date.getTime() }),
+      open: (id) => {
+        const it = getS().items.find((i) => i.id === id)
+        if (!it) return
+        const section: Section = it.deletedAt ? 'trash' : it.kind === 'lecture' ? 'lectures' : 'docs'
+        setS({ section, activeId: id, ...(section === 'docs' && getS().folderId && getS().folderId !== it.folderId ? { folderId: null } : {}) })
+      },
+      createItem: (asked, patch = {}) => {
+        const kind = asked === 'note' ? 'doc' : asked // notes were merged into docs
+        const t = Date.now()
+        const item: Item = {
+          id: uid(),
+          kind,
+          title: '',
+          content: '',
+          folderId: kind === 'doc' && !patch.parentId ? getS().folderId : null,
+          parentId: null,
+          pinned: false,
+          tags: [],
+          createdAt: t,
+          updatedAt: t,
+          ...(kind === 'lecture' ? { lecture: { duration: 0, transcript: [], hasAudio: false, status: 'idle' as const } } : {}),
+          ...patch,
+        }
+        setS((s) => ({
+          items: [item, ...s.items],
+          activeId: item.id,
+          section: kind === 'lecture' ? 'lectures' : 'docs',
+        }))
+        return item
+      },
+      updateItem: (id, patch) =>
+        setS((s) => ({
+          items: s.items.map((i) => {
+            if (i.id !== id) return i
+            if (Object.keys(patch).every((k) => i[k as keyof Item] === patch[k as keyof Item])) return i
+            const next = { ...i, ...patch, updatedAt: patch.pinned !== undefined && Object.keys(patch).length === 1 ? i.updatedAt : Date.now() }
+            if (patch.content !== undefined) {
+              const text = htmlToText(patch.content)
+              next.tags = extractTags(text)
+            }
+            return next
+          }),
+        })),
+      trashItem: (id) =>
+        setS((s) => {
+          const ids = new Set([id])
+          // trash nested docs too
+          let grew = true
+          while (grew) {
+            grew = false
+            for (const i of s.items) if (i.parentId && ids.has(i.parentId) && !ids.has(i.id)) (ids.add(i.id), (grew = true))
+          }
+          return {
+            items: s.items.map((i) => (ids.has(i.id) ? { ...i, deletedAt: Date.now() } : i)),
+            activeId: s.activeId && ids.has(s.activeId) ? null : s.activeId,
+          }
+        }),
+      restoreItem: (id) =>
+        setS((s) => ({ items: s.items.map((i) => (i.id === id ? { ...i, deletedAt: undefined, parentId: s.items.some((p) => p.id === i.parentId && !p.deletedAt) ? i.parentId : null } : i)) })),
+      purgeItem: (id) => {
+        del(`audio:${id}`)
+        setS((s) => ({ items: s.items.filter((i) => i.id !== id), activeId: s.activeId === id ? null : s.activeId }))
+      },
+      createFolder: (name) => setS((s) => ({ folders: [...s.folders, { id: uid(), name }] })),
+      renameFolder: (id, name) => setS((s) => ({ folders: s.folders.map((f) => (f.id === id ? { ...f, name } : f)) })),
+      deleteFolder: (id) =>
+        setS((s) => ({
+          folders: s.folders.filter((f) => f.id !== id),
+          items: s.items.map((i) => (i.folderId === id ? { ...i, folderId: null } : i)),
+          folderId: s.folderId === id ? null : s.folderId,
+        })),
+      setFolder: (folderId) => setS({ folderId, activeId: null, tagFilter: null, section: 'docs' }),
+      setTag: (tagFilter) => setS({ tagFilter, section: 'docs' }),
+      addEvent: (e) => {
+        const ev = { ...e, id: uid() }
+        setS((s) => ({ events: [...s.events, ev] }))
+        return ev
+      },
+      updateEvent: (id, patch) => setS((s) => ({ events: s.events.map((e) => (e.id === id ? { ...e, ...patch } : e)) })),
+      deleteEvent: (id) => setS((s) => ({ events: s.events.filter((e) => e.id !== id) })),
+      dismiss: (id) => setS((s) => ({ dismissed: [...s.dismissed.filter((d) => d !== id).slice(-499), id] })),
+      setUI: (patch) => setS(patch.connectOpen || patch.settingsOpen || patch.paletteOpen ? { ...patch, drawerOpen: false } : patch),
+      setSettings: (patch) => setS((s) => ({ settings: { ...s.settings, ...patch } })),
+      addSource: (src) => setS((s) => ({ sources: [...s.sources, src] })),
+      updateSource: (id, patch) => setS((s) => ({ sources: s.sources.map((x) => (x.id === id ? { ...x, ...patch, config: { ...x.config, ...patch.config } } : x)) })),
+      removeSource: (id) =>
+        setS((s) => ({
+          sources: s.sources.filter((x) => x.id !== id),
+          items: s.items.filter((i) => i.sourceId !== id),
+          activeId: s.items.find((i) => i.id === s.activeId)?.sourceId === id ? null : s.activeId,
+        })),
+      patchFile: (id, patch) =>
+        setS((s) => ({ items: s.items.map((i) => (i.id === id && i.file ? { ...i, file: { ...i.file, ...patch } } : i)) })),
+    }),
+    {
+      name: 'socratic-v1',
+      version: 8,
+      migrate: (persisted: unknown, v: number) => {
+        const p = persisted as Partial<State>
+        if (v < 2) p.aiOpen = false
+        if (p.settings && p.settings.googleClientId === undefined) p.settings.googleClientId = ''
+        if (p.settings && p.settings.glass === undefined) p.settings.glass = true
+        // Engines are picked automatically now.
+        if (v < 5 && p.settings && p.settings.provider === 'webllm') p.settings.provider = 'auto'
+        // Models are now picked by tier; older picks were last generation, so move everyone to Default.
+        if (v < 6 && p.settings) p.settings.llmModel = 'default'
+        if (v < 7 && p.items) p.items = p.items.map((i) => i.kind === 'note' || i.id === 'doc-guide' ? { ...i, content: withoutLegacyTitle(i.content, i.title) } : i)
+        // Notes and docs are one thing now.
+        if (v < 8 && p.items) p.items = p.items.map((i) => (i.kind === 'note' ? { ...i, kind: 'doc' } : i))
+        return p as State
+      },
+      storage: createJSONStorage(() => idbStorage),
+      partialize: (s) => ({
+        items: s.items,
+        folders: s.folders,
+        events: s.events,
+        settings: s.settings,
+        sources: s.sources,
+        dismissed: s.dismissed,
+        aiOpen: s.aiOpen,
+        sidebarCollapsed: s.sidebarCollapsed,
+      }),
+    },
+  ),
+)
+
+if (useStore.persist.hasHydrated()) loaded = true
+useStore.persist.onFinishHydration(() => (loaded = true))
+
+export const saveAudio = (id: string, blob: Blob) => set(`audio:${id}`, blob)
+export const loadAudio = (id: string) => get<Blob>(`audio:${id}`)

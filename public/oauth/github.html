@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Signing in</title>
+    <style>
+      body { margin: 0; height: 100vh; display: grid; place-items: center; font: 15px/1.5 system-ui, sans-serif; background: #111113; color: #b4b4bc; }
+      @media (prefers-color-scheme: light) { body { background: #fff; color: #60646c; } }
+    </style>
+  </head>
+  <body>
+    <p id="msg">Finishing sign-in…</p>
+    <script>
+      // Hand the code back to the app tab. BroadcastChannel works even if GitHub's
+      // cross-origin isolation cut the link to window.opener.
+      const p = new URLSearchParams(location.search)
+      const msg = { type: 'github-oauth', code: p.get('code'), state: p.get('state'), error: p.get('error_description') || p.get('error') }
+      try { new BroadcastChannel('oauth').postMessage(msg) } catch {}
+      try { window.opener && window.opener.postMessage(msg, location.origin) } catch {}
+      setTimeout(() => window.close(), 150)
+      setTimeout(() => (document.getElementById('msg').textContent = 'Signed in. You can close this tab.'), 600)
+    </script>
+  </body>
+</html>

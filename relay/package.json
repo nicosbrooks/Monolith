@@ -1,0 +1,22 @@
+{
+  "name": "monolith-relay",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --env=''",
+    "check": "tsc --noEmit",
+    "smoke": "node test/smoke.mjs",
+    "tail": "wrangler tail --env=''",
+    "deploy:staging": "wrangler deploy --env staging",
+    "tail:staging": "wrangler tail --env staging"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261029.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.156.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

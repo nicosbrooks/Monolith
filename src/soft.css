@@ -1,0 +1,1385 @@
+/* ─────────────────────────────────────────────────────────────
+   Soft: the current look. Warm near-black first, round corners on everything, no dividing lines.
+   Space and soft fills separate things instead. Loaded last, over index.css and theme.css.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --r: 12px;
+  --r-lg: 18px;
+  --side-w: 236px;
+  /* warm paper for light mode */
+  --s1: #fbfaf8;
+  --s2: #f4f3f0;
+  --s3: #ecebe7;
+  --s4: #e4e3de;
+  --s5: #dad9d3;
+  --s6: #cfcec7;
+  --s7: #bdbcb5;
+  --s9: #8a8983;
+  --s11: #5f5e59;
+  --s12: #1d1d1b;
+  --bg: var(--s2);
+  --content: #ffffff;
+  --surface: #ffffff;
+  --nav-on: var(--s3);
+  --border: transparent;
+  --border-2: rgba(0, 0, 0, 0.08);
+  --ok: #2f9e62;
+  --info: #2f6fdb;
+  --danger: #d4483f;
+}
+:root[data-theme='dark'] {
+  --s1: #121211;
+  --s2: #0f0f0e;
+  --s3: #1e1e1c;
+  --s4: #222220;
+  --s5: #2a2a28;
+  --s6: #333331;
+  --s7: #44443f;
+  --s9: #94938e;
+  --s11: #b9b8b3;
+  --s12: #eeedea;
+  --bg: #0f0f0e;
+  --content: #171716;
+  --surface: #171716;
+  --surface-2: #1e1e1c;
+  --surface-3: #222220;
+  --hover: #1e1e1c;
+  --nav-on: #222220;
+  --border: transparent;
+  --border-2: rgba(255, 255, 255, 0.07);
+  --fg-inverse: #0f0f0e;
+  --ok: #7fd69e;
+  --info: #86b3ff;
+  --danger: #ff7a70;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+/* ── layout: the panel floats on the ground with round corners ── */
+.app:not(.mobile) .main,
+.app.collapsed:not(.mobile) .main,
+.app:not(.ai-open):not(.mobile) .main {
+  margin: 10px 10px 10px 0;
+  border: 0;
+  border-radius: 20px;
+  background: var(--content);
+  overflow: hidden;
+}
+.app.collapsed:not(.mobile) .main {
+  margin-left: 10px;
+}
+.app.ai-open:not(.mobile) .main {
+  margin-right: 0;
+}
+.ai-wrap {
+  border-left: 0;
+  background: var(--bg);
+}
+.side-wrap,
+.sidebar {
+  background: transparent;
+  border: 0;
+}
+/* ── no dividing lines ── */
+.choice,
+.modal-foot,
+.link-row + .link-row {
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+}
+.panel {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+/* ── round everything ── */
+.btn,
+.btn.sm {
+  border-radius: 999px;
+  border-color: transparent;
+  box-shadow: none;
+  background: var(--s3);
+  padding: 0 14px;
+}
+.btn:hover:not(:disabled) {
+  background: var(--s5);
+  border-color: transparent;
+}
+.btn.primary {
+  background: var(--fg);
+}
+.icon-btn {
+  border-radius: 999px;
+}
+.text-btn {
+  border-radius: 999px;
+}
+.drop,
+.slash-menu,
+.bubble,
+.palette,
+.modal {
+  border-radius: 18px;
+  border-color: var(--border-2);
+}
+.drop button,
+.slash-menu button {
+  border-radius: 10px;
+}
+.seg {
+  border-radius: 999px;
+}
+.seg button {
+  border-radius: 999px;
+}
+input,
+textarea,
+select {
+  border-radius: 12px;
+}
+kbd {
+  border-radius: 6px;
+}
+.row-item {
+  border-radius: 12px;
+}
+.nav {
+  border-radius: 10px;
+  height: 36px;
+  font-size: 14px;
+  gap: 10px;
+}
+.nav.sub {
+  height: 32px;
+  font-size: 13.5px;
+}
+.side-label {
+  font-family: var(--font);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  margin: 20px 0 6px;
+}
+/* ── sidebar ── */
+.side-top .brand {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.side-top .brand svg {
+  width: 17px;
+  height: 17px;
+}
+.devices-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: var(--s3);
+  color: var(--text-2);
+  font-size: 12.5px;
+  text-align: left;
+}
+.devices-row:hover {
+  color: var(--text);
+}
+.devices-row i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex-shrink: 0;
+}
+.devices-row i.off {
+  background: var(--s9);
+}
+/* ── Home: reads like a page ── */
+.home-page {
+  container-type: inline-size;
+  width: min(100%, 1060px);
+  margin-inline: auto;
+  padding: 42px clamp(20px, 5%, 56px) 116px;
+}
+.home-header,
+.home-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.home-header {
+  margin-bottom: 24px;
+}
+.home-header h1 {
+  margin: 0 0 2px;
+  font: 650 28px/1.2 var(--font);
+  letter-spacing: -0.025em;
+}
+.home-header time,
+.home-panel-head > span,
+.home-empty {
+  color: var(--text-2);
+  font-size: 13px;
+}
+.home-panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 24px;
+  align-items: start;
+}
+.home-panel {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--raised-edge);
+  border-radius: 16px;
+  background: var(--raised-fill);
+}
+.home-schedule {
+  grid-column: 1 / -1;
+}
+.home-brief {
+  margin-top: 16px;
+}
+.home-panel-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font: 600 14px/1.4 var(--font);
+}
+.home-panel-head h2 svg,
+.home-item-icon,
+.home-recent-arrow {
+  flex: none;
+  color: var(--text-2);
+}
+.home-rows {
+  display: grid;
+  margin-top: 10px;
+}
+.home-rows .soft-row {
+  width: 100%;
+  min-height: 49px;
+  text-align: left;
+}
+.home-row-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+.home-row-copy > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-row-copy small {
+  max-width: none;
+}
+.home-tasks .home-row-copy > span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.home-empty {
+  margin: 12px 0 2px;
+}
+.home-schedule .week-strip-shell,
+.home-schedule .nudge {
+  margin-top: 12px;
+}
+@container (max-width: 580px) {
+  .home-panels { grid-template-columns: minmax(0, 1fr); }
+}
+.nudge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+  padding: 10px 10px 10px 16px;
+  border-radius: 16px;
+  background: var(--s3);
+  font-size: 14px;
+}
+.nudge > span {
+  flex: 1;
+  min-width: 0;
+}
+.nudge small {
+  display: block;
+  color: var(--text-3);
+  font-size: 12.5px;
+  margin-top: 2px;
+}
+.nudge .dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--info);
+}
+.soft-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 15px;
+  text-align: left;
+  color: var(--text);
+}
+.soft-row:hover {
+  background: var(--s3);
+}
+.soft-row .grow {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.soft-row small {
+  color: var(--text-3);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.soft-row input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--fg);
+  margin: 0;
+}
+/* ── floating Ask pill ── */
+.main {
+  position: relative;
+}
+/* ── one typeface: the system sans everywhere except code ── */
+:root {
+  --font-sub: var(--font);
+  --font-display: var(--font);
+}
+.side-label,
+.list-group,
+.row-sub .date,
+[cmdk-group-heading],
+.ai-label {
+  font-family: var(--font);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.list-group,
+[cmdk-group-heading],
+.ai-label {
+  font-size: 12px;
+}
+/* ── chat answer actions ── */
+.msg-actions {
+  display: flex;
+  gap: 14px;
+}
+/* ── settings: rarely needed choices stay folded away ── */
+details.advanced {
+  margin-top: 8px;
+}
+details.advanced > summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--text-3);
+  font-size: 13px;
+  padding: 8px 0;
+}
+details.advanced > summary::-webkit-details-marker {
+  display: none;
+}
+details.advanced > summary::after {
+  content: ' ›';
+}
+details.advanced[open] > summary::after {
+  content: ' ⌄';
+}
+/* Primary buttons are light-on-dark in dark mode and dark-on-light in light mode: the label takes the page colour. */
+.btn.primary,
+.btn.primary:hover:not(:disabled) {
+  color: var(--bg);
+}
+/* ─────────────────────────────────────────────────────────────
+   Every surface, not just the main ones: soft corners and no hairlines
+   in lists, the editor, calendar, assistant, palette, dialogs and the phone layout.
+   (Table cells, the calendar's hour lines and checkboxes keep their structure.)
+   ───────────────────────────────────────────────────────────── */
+.icon-btn.sm,
+.tb,
+.crumbs button,
+.toc button,
+.twisty,
+.search,
+.thumb,
+.round,
+.tseg,
+.quick-add,
+[cmdk-item],
+.sugg-ico,
+.quick-grid button,
+.starter,
+.answer,
+.ctx,
+.send,
+.field input,
+.ev-notes,
+.modal select,
+.slash-menu .ico,
+.view-skel i,
+:focus-visible {
+  border-radius: 10px;
+}
+.rec-btn,
+.chip,
+.mev,
+.mev.all,
+.tag,
+.row-tags span,
+.text-btn {
+  border-radius: 999px;
+}
+.bar,
+.bar i,
+.segments i {
+  border-radius: 999px;
+}
+.prose code,
+.md code {
+  border-radius: 6px;
+}
+/* Lines that used to divide areas: space and soft fills do it now. */
+.list-pane,
+.subdocs,
+.sketch-tools,
+.tabs,
+.cal-head,
+.week-days,
+.week-allday,
+.ad,
+.mh,
+.todo,
+.toolbar,
+.modal header,
+.modal section,
+[cmdk-input],
+.p-opts.row2 {
+  border-top-color: transparent !important;
+  border-bottom-color: transparent !important;
+  border-left-color: transparent !important;
+  border-right-color: transparent !important;
+}
+.list-pane {
+  background: transparent;
+}
+.modal section + section {
+  margin-top: 6px;
+}
+/* Calendar: soft pills of colour instead of boxes with a hard edge. */
+.ev {
+  border-radius: 10px;
+  border-left: 0;
+  padding: 5px 9px;
+  background: color-mix(in oklab, var(--c) 18%, var(--content));
+}
+.ev:hover {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--c) 40%, transparent);
+}
+.sheet {
+  border-radius: 20px;
+}
+.sheet .dot {
+  border-radius: 50%;
+}
+/* The phone layout's bottom bar floats like the Ask pill. */
+/* Phone width: Home has no big title (the date and headline are the title), and the suggestion stacks. */
+.app.mobile .home .p-large:has(h1:empty) {
+  display: none;
+}
+.app.mobile .home-page {
+  padding: 8px 14px 96px;
+}
+.app.mobile .home-panel {
+  padding: 12px 8px;
+}
+.app.mobile .home-panel-head {
+  padding-inline: 4px;
+}
+@media (max-width: 560px) {
+  .nudge {
+    flex-wrap: wrap;
+    padding: 14px 16px;
+  }
+  .nudge > span {
+    flex-basis: calc(100% - 24px);
+  }
+  .nudge .btn {
+    margin-left: 20px;
+  }
+}
+/* ── phone: sidebar drawer and the floating dock ── */
+.p-drawer {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: min(86vw, 340px);
+  z-index: 81;
+  background: var(--bg);
+  border-radius: 0 24px 24px 0;
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+}
+.p-drawer .sidebar {
+  width: 100%;
+}
+.p-dock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  left: 14px;
+  right: 14px;
+}
+.p-fab {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--fg);
+  color: var(--bg);
+}
+.p-drawer [title^='Collapse sidebar'] {
+  display: none;
+}
+/* ── model tiers: three soft choices ── */
+.tiers {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+.tier {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--s3);
+  text-align: left;
+}
+.tier small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.tier.on {
+  background: var(--fg);
+  color: var(--bg);
+}
+.tier.on small {
+  color: color-mix(in oklab, var(--bg) 70%, transparent);
+}
+.tier:disabled {
+  opacity: 0.4;
+}
+.tier .bar {
+  display: block;
+  width: 100%;
+  height: 3px;
+  margin-top: 6px;
+  background: color-mix(in oklab, currentColor 20%, transparent);
+}
+.tier .bar i {
+  display: block;
+  height: 100%;
+  background: currentColor;
+}
+/* ── Contrast: anything that pops up sits clearly above the page ──
+   A solid raised surface, a visible edge, a real shadow and a darker backdrop. No see-through popups. */
+:root {
+  --raised: #ffffff;
+  --raised-edge: rgba(0, 0, 0, 0.1);
+  --raised-fill: rgba(0, 0, 0, 0.05);
+  --raised-fill-2: rgba(0, 0, 0, 0.09);
+  --btn: #e6e5e0;
+  --btn-hover: #dad9d3;
+  --scrim: rgba(20, 20, 18, 0.32);
+}
+:root[data-theme='dark'] {
+  --raised: #252523;
+  --raised-edge: rgba(255, 255, 255, 0.11);
+  --raised-fill: rgba(255, 255, 255, 0.07);
+  --raised-fill-2: rgba(255, 255, 255, 0.12);
+  --btn: #2a2a28;
+  --btn-hover: #353533;
+  --scrim: rgba(0, 0, 0, 0.62);
+}
+.overlay,
+.p-scrim {
+  background: var(--scrim) !important;
+  backdrop-filter: none !important;
+}
+.modal,
+.palette,
+.confirm,
+.drop,
+.drop.ctx,
+.slash-menu,
+.bubble,
+.sheet {
+  background: var(--raised) !important;
+  backdrop-filter: none !important;
+  border: 1px solid var(--raised-edge) !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+}
+:root[data-theme='light'] .modal,
+:root[data-theme='light'] .palette,
+:root[data-theme='light'] .confirm,
+:root[data-theme='light'] .drop,
+:root[data-theme='light'] .sheet {
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+/* Rows and controls inside popups use fills relative to the raised surface, so they stay visible. */
+.modal .btn,
+.confirm .btn,
+.palette .btn,
+.sheet .btn {
+  background: var(--raised-fill-2);
+}
+.modal .btn:hover:not(:disabled),
+.confirm .btn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--raised-fill-2) 100%, var(--text) 8%);
+}
+.modal input:not([type='checkbox']):not([type='radio']),
+.modal textarea,
+.modal select,
+.palette [cmdk-input] {
+  background: var(--raised-fill);
+  border: 1px solid transparent;
+}
+.drop button:hover,
+.drop.ctx button:hover,
+.slash-menu button:hover,
+[cmdk-item][data-selected='true'],
+.modal .choice:hover,
+.modal .row-item:hover {
+  background: var(--raised-fill-2) !important;
+}
+.modal .tier,
+.modal .choice-list > * {
+  background: var(--raised-fill);
+}
+.modal .tier.on {
+  background: var(--raised-fill-2);
+  box-shadow: inset 0 0 0 1.5px var(--text);
+}
+/* Buttons on the page */
+.btn,
+.btn.sm {
+  background: var(--btn);
+  color: var(--text);
+}
+.btn:hover:not(:disabled) {
+  background: var(--btn-hover);
+}
+.btn.primary,
+.modal .btn.primary,
+.confirm .btn.primary {
+  background: var(--text);
+  color: var(--bg);
+}
+.btn.primary:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--text) 88%, var(--bg));
+}
+.btn.danger.solid,
+.confirm .btn.danger.solid {
+  background: var(--danger);
+  color: #fff;
+}
+/* Toasts: the inverse of the page, so they never blend in */
+.toast {
+  background: var(--text) !important;
+  color: var(--bg) !important;
+  border: 0 !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35) !important;
+}
+.toast button {
+  color: var(--bg) !important;
+  font-weight: 600;
+}
+/* Suggestion card on Home */
+.nudge {
+  background: var(--btn);
+}
+/* ── Calendar: linked calendars, colors, swipe ── */
+.cal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  touch-action: pan-y pinch-zoom;
+}
+.cal-track,
+.cal-slide {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cal-track {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  min-height: 0;
+}
+.cal-slide {
+  grid-area: 1 / 1;
+  min-height: 0;
+  background: var(--content);
+}
+.cal-slide:not(:last-child) {
+  pointer-events: none;
+}
+html,
+body {
+  overscroll-behavior-x: none;
+}
+.cal-pick {
+  position: relative;
+}
+.cal-panel {
+  position: absolute;
+  left: auto;
+  right: 0;
+  top: calc(100% + 6px);
+  width: 300px;
+  padding: 8px;
+  z-index: 111;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 0 6px 0 8px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.cal-row.off .grow {
+  color: var(--text-3);
+}
+.cal-row .grow {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cal-row .sw,
+.cal-panel .sw {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border-radius: 50%;
+  flex: none;
+}
+.cal-row button.sw:hover {
+  transform: scale(1.2);
+}
+.cal-panel .colors {
+  padding: 6px 8px 8px 30px;
+}
+.cal-panel .colors button {
+  width: 18px;
+  height: 18px;
+}
+.cal-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 4px 4px 4px 10px;
+  border-radius: 12px;
+  background: var(--raised-fill);
+}
+.cal-add input {
+  flex: 1;
+  min-width: 0;
+  background: transparent !important;
+  border: 0 !important;
+  height: 30px;
+  padding: 0;
+  font-size: 13.5px;
+}
+.cal-panel > .text-btn {
+  align-self: flex-start;
+  font-size: 12.5px;
+  margin: 2px 4px;
+}
+.cal-panel details.advanced {
+  margin: 4px 4px 2px;
+}
+.cal-panel details p {
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
+.ev-notes-ro {
+  white-space: pre-wrap;
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+.sheet .ev-title {
+  flex: 1;
+  font-size: 16px;
+}
+/* ── Same look as the native apps: system font, one flat page, quiet sidebar ── */
+:root {
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter Variable', 'Inter', system-ui, 'Segoe UI', sans-serif;
+  --font-display: var(--font);
+}
+:root[data-theme='dark'] {
+  --content: #0f0f0e;
+  --nav-on: #1e1e1c;
+}
+:root[data-theme='light'] {
+  --content: #f4f3f0;
+  --nav-on: #e8e7e2;
+}
+.app:not(.mobile) .main,
+.app.collapsed:not(.mobile) .main,
+.app:not(.ai-open):not(.mobile) .main {
+  margin: 0;
+  border-radius: 0;
+  background: var(--bg);
+}
+.app.collapsed:not(.mobile) .main {
+  margin-left: 0;
+}
+.side-tree {
+  margin: 2px 0 6px 10px;
+}
+.side-label .hover-only {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.side-label:hover .hover-only,
+.side-label .hover-only:focus-visible {
+  opacity: 1;
+}
+/* Home: the Ask bar and a new-note button, like the iPhone */
+.home-dock {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 48px));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 20;
+}
+.home-dock .p-fab {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: var(--shadow);
+}
+/* "Pick up where you left off": plain rows, like native */
+.nudge .icon-btn {
+  color: var(--text-3);
+}
+/* Assistant actions */
+.act-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 10px 10px 10px 12px;
+  border-radius: 14px;
+  background: var(--btn);
+}
+.act-card .col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.act-card b {
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.act-card small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.act-ico {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--info);
+}
+.act-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ok);
+  font-size: 12.5px;
+}
+/* ── Home: a week at a glance ── */
+.week-strip-shell {
+  container-type: inline-size;
+  margin-top: 28px;
+}
+.week-strip {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: 20px;
+  background: var(--surface-2, #1a1a18);
+}
+:root[data-theme='dark'] .week-strip {
+  background: #181817;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+:root[data-theme='light'] .week-strip {
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+.week-strip > li {
+  display: flex;
+  flex: 0.25 0 40px;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 134px;
+  border-radius: 14px;
+  background: var(--raised-fill);
+  transition: flex-grow 240ms cubic-bezier(0.2, 0.7, 0.3, 1), background-color 180ms ease;
+}
+.week-strip > li.expanded {
+  flex-grow: 5;
+  background: var(--btn);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--text) 10%, transparent);
+}
+.ws-day {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 0;
+  border-radius: 14px;
+  color: var(--text);
+}
+.week-strip > li:not(.expanded) .ws-day:hover {
+  background: var(--btn);
+}
+.expanded .ws-day {
+  flex: 0 0 auto;
+  flex-direction: row;
+  gap: 6px;
+  padding: 4px 12px;
+  cursor: default;
+}
+.ws-day:focus-visible,
+.ws-open:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: -2px;
+}
+.ws-dow {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.ws-day.today .ws-dow {
+  color: var(--text);
+  font-weight: 600;
+}
+.ws-num {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.ws-dots {
+  display: flex;
+  gap: 3px;
+  margin-top: 5px;
+}
+.ws-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+.expanded .ws-dots {
+  display: none;
+}
+.ws-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 12px 8px;
+}
+.ws-details[hidden] {
+  display: none;
+}
+.ws-evs {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ws-event {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 6px 3px 8px;
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--c) 14%, transparent);
+  box-shadow: inset 2px 0 var(--c);
+  font-size: 12px;
+}
+.ws-time {
+  flex: none;
+  color: var(--text-2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ws-event-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ws-empty {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.ws-footer {
+  display: flex;
+  flex-wrap: wrap-reverse;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: 6px;
+  color: var(--text-2);
+}
+.ws-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  border-radius: 4px;
+  font-size: 12px;
+  text-align: left;
+}
+.ws-open:hover {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ws-open svg {
+  flex: none;
+}
+.wd.selected:not(.today) b {
+  box-shadow: inset 0 0 0 1px var(--text-2);
+}
+@container (max-width: 450px) {
+  .week-strip {
+    gap: 3px;
+    padding: 5px;
+  }
+  .week-strip > li {
+    flex-basis: 32px;
+    border-radius: 11px;
+  }
+  .week-strip > li.expanded {
+    flex-grow: 9;
+  }
+  .ws-day {
+    border-radius: 11px;
+  }
+  .expanded .ws-day {
+    padding-inline: 8px;
+  }
+  .ws-details {
+    padding-inline: 8px;
+  }
+  .ws-event {
+    display: grid;
+    gap: 0;
+  }
+  .ws-event-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  .ws-open {
+    min-height: 44px;
+  }
+}
+@container (max-width: 360px) {
+  .week-strip > li {
+    flex-basis: 28px;
+  }
+  .ws-dow {
+    font-size: 11px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .week-strip > li {
+    transition: none;
+  }
+}
+/* ── Sidebar: its own surface, roomier rows ── */
+.app:not(.mobile) .side-wrap {
+  padding: 8px 4px 8px 8px;
+}
+.app:not(.mobile) .sidebar {
+  width: 100%;
+  height: 100%;
+  border-radius: 18px;
+  background: #151514;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+.tree-title {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-move {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+.note-move select {
+  max-width: 140px;
+  color: var(--text);
+  background: var(--raised);
+  border: 1px solid var(--raised-edge);
+  border-radius: 5px;
+}
+.doc-head .emoji-grid {
+  width: max-content;
+  max-width: 100%;
+  margin-block: 6px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--raised);
+}
+.emoji-grid .emoji-text {
+  grid-column: 1 / -1;
+  font-size: 13px;
+}
+.emoji-grid button:hover {
+  background: var(--hover);
+  border-radius: 6px;
+}
+:root[data-theme='light'] .app:not(.mobile) .sidebar {
+  background: #ebeae5;
+  box-shadow: none;
+}
+.side-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.nav {
+  height: 38px;
+  flex: none;
+}
+.nav.sub {
+  height: 34px;
+}
+.side-label {
+  margin: 22px 0 6px;
+  padding-left: 12px;
+}
+.side-top {
+  padding-bottom: 12px;
+}
+.app:not(.mobile) .main {
+  padding-left: 0;
+}
+/* ── One empty state, not two: an empty list takes the whole page ── */
+.main:has(.list-pane .empty-list) > .detail,
+.main:has(.list-pane .empty-list) .empty-detail {
+  display: none;
+}
+.main:has(.list-pane .empty-list) .list-pane {
+  flex: 1;
+  max-width: none;
+  width: auto;
+}
+.list-pane .empty-list {
+  padding: 18vh 24px 0;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 15px;
+}
+.cal-head .quick-add {
+  flex: 1 1 220px;
+  max-width: 420px;
+}
+/* A row's own add button (Docs): shown while you're there, or on hover */
+.nav-row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.nav-row .nav-add {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.nav-row:hover .nav-add,
+.nav-row.here .nav-add,
+.nav-row .nav-add:focus-visible {
+  opacity: 1;
+}
+/* ── The Ask bar: on every page, aware of what's open ── */
+.ask-bar {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.ask-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 6px 0 18px;
+  border-radius: 999px;
+  background: var(--btn);
+  border: 1px solid var(--raised-edge);
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.45);
+  transition: background 0.15s, border-color 0.15s;
+}
+.ask-bar.phone .ask-field {
+  height: 52px;
+}
+.ask-bar:hover .ask-field {
+  background: var(--btn-hover);
+}
+.ask-bar.focus .ask-field {
+  background: var(--raised);
+  border-color: color-mix(in oklab, var(--text) 22%, transparent);
+}
+.ask-ico {
+  flex: none;
+  color: var(--text-3);
+}
+.ask-field input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+.ask-field input::placeholder {
+  color: var(--text-3);
+}
+.ask-send {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--bg);
+}
+.ask-pop {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: 18px;
+  background: var(--raised);
+  border: 1px solid var(--raised-edge);
+  box-shadow: 0 18px 50px -12px rgba(0, 0, 0, 0.55);
+  z-index: 30;
+}
+.ask-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  color: var(--text-2);
+  font-size: 14px;
+  text-align: left;
+}
+.ask-opt > span:not(:first-child) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ask-opt svg {
+  flex: none;
+  color: var(--text-3);
+}
+.ask-opt small {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.ask-opt:hover,
+.ask-opt.on {
+  background: var(--raised-fill);
+  color: var(--text);
+}
+/* Phone, inside a page: the bar sits alone and gives way to the keyboard while you write. */
+.p-dock.detail {
+  display: flex;
+}
+.app.mobile:has(.ProseMirror:focus, textarea:focus, .editor input:focus) .p-dock.detail {
+  display: none;
+}
+/* Toasts sit above the Ask bar, never on it. */
+.toaster {
+  bottom: calc(92px + env(safe-area-inset-bottom));
+}

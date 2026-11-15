@@ -1,0 +1,45 @@
+# Monolith sync relay: forwards end-to-end encrypted messages between a person's linked devices.
+# Setup, step by step: see README.md in this folder.
+name = "monolith-relay"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+
+# Serve at https://monolith-relay.<your-subdomain>.workers.dev
+workers_dev = true
+
+# To use your own domain instead (it must already be on your Cloudflare account), uncomment and edit:
+# routes = [{ pattern = "relay.example.com", custom_domain = true }]
+
+[vars]
+# Leave empty to accept connections from any website. To lock it to your own site, list the origins browsers
+# will load Monolith from, comma-separated, e.g. "https://monolith.example.com,http://localhost:5199".
+# The iPhone app is never affected by this.
+ALLOWED_ORIGINS = ""
+
+# Calendar fetches (/ics): at most 30 a minute from one address. Plenty for real use, stops abuse.
+[[ratelimits]]
+name = "ICS_LIMIT"
+namespace_id = "1001"
+simple = { limit = 30, period = 60 }
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+# SQLite-backed Durable Objects are the kind available on the free plan. The relay stores nothing in them.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+# Request logs in the Cloudflare dashboard, and live with `npm run tail`.
+[observability]
+enabled = true
+
+# A second copy for trying changes before your users get them: `npm run deploy:staging`.
+# Its address is https://monolith-relay-staging.<your-subdomain>.workers.dev. Bindings aren't inherited, so
+# they're repeated here; the rate limiter needs its own namespace_id.
+[env.staging]
+name = "monolith-relay-staging"
+vars = { ALLOWED_ORIGINS = "" }
+ratelimits = [{ name = "ICS_LIMIT", namespace_id = "1002", simple = { limit = 30, period = 60 } }]
+durable_objects.bindings = [{ name = "ROOMS", class_name = "Room" }]
