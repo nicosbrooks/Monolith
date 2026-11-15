@@ -142,7 +142,7 @@ const seedItems: Item[] = [
     id: 'welcome',
     kind: 'doc',
     title: `Welcome to ${APP_NAME}`,
-    content: `<p>Your notes, docs, recordings and calendar in one place, with an assistant that runs on your own devices.</p><h2>Try these</h2><ul data-type="taskList"><li data-type="taskItem" data-checked="true"><p>Open the app</p></li><li data-type="taskItem" data-checked="false"><p>Press <code>⌘K</code> to jump anywhere</p></li><li data-type="taskItem" data-checked="false"><p>Type <code>/</code> on an empty line for blocks — checklists, tables, sketches</p></li><li data-type="taskItem" data-checked="false"><p>Record a class or meeting and get notes written for you</p></li></ul><p>Proactive help: write something like <em>“Problem set due Friday 5pm”</em> in any note, and ${APP_NAME} offers to put it on your calendar. #getting-started</p>`,
+    content: `<p>Your docs, tasks, recordings and calendar in one place, with an assistant that runs on your own devices.</p><h2>Try these</h2><ul data-type="taskList"><li data-type="taskItem" data-checked="true"><p>Open the app</p></li><li data-type="taskItem" data-checked="false"><p>Press <code>⌘K</code> to jump anywhere</p></li><li data-type="taskItem" data-checked="false"><p>Type <code>/</code> on an empty line for blocks — checklists, tables, sketches</p></li><li data-type="taskItem" data-checked="false"><p>Record a class or meeting and get notes written for you</p></li></ul><h2>Everything connects</h2><p>Type <code>[[</code> to link one doc to another, like <a href="#doc/doc-guide">Study system</a>. Each doc shows what links to it at the bottom.</p><p>Checklist lines from every doc gather in Tasks. Give one a date (<em>“essay draft by Friday”</em>) and it’s sorted by when it’s due.</p><p>Write something like <em>“Problem set due Friday 5pm”</em> in any doc, and ${APP_NAME} offers to put it on your calendar. #getting-started</p>`,
     folderId: null,
     parentId: null,
     pinned: true,
@@ -275,9 +275,22 @@ export const useStore = create<State>()(
         return item
       },
       updateItem: (id, patch) =>
-        setS((s) => ({
+        setS((s) => {
+          // A renamed doc keeps its name in the docs that link to it (links still showing the old title, that is;
+          // a link someone reworded is theirs). Not counted as an edit of those docs.
+          const was = patch.title !== undefined ? s.items.find((i) => i.id === id)?.title : undefined
+          const href = `href="#doc/${id}"`
+          const esc = (t: string) => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)
+          const retitle = was !== undefined && was !== patch.title && was.trim() && patch.title!.trim()
+            ? (html: string) => html.replace(/<a\b[^>]*>([^<]*)<\/a>/g, (a, text: string) => (a.includes(href) && text === esc(was) ? a.replace(/>[^<]*<\/a>$/, `>${esc(patch.title!)}</a>`) : a))
+            : null
+          return {
           items: s.items.map((i) => {
-            if (i.id !== id) return i
+            if (i.id !== id) {
+              if (!retitle || !i.content.includes(href)) return i
+              const content = retitle(i.content)
+              return content === i.content ? i : { ...i, content }
+            }
             if (Object.keys(patch).every((k) => i[k as keyof Item] === patch[k as keyof Item])) return i
             const next = { ...i, ...patch, updatedAt: patch.pinned !== undefined && Object.keys(patch).length === 1 ? i.updatedAt : Date.now() }
             if (patch.content !== undefined) {
@@ -286,7 +299,8 @@ export const useStore = create<State>()(
             }
             return next
           }),
-        })),
+          }
+        }),
       trashItem: (id) =>
         setS((s) => {
           const ids = new Set([id])

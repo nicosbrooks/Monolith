@@ -28,9 +28,11 @@ const views = {
   doc: () => import('./views/DocView'),
   lecture: () => import('./views/LectureView'),
   calendar: () => import('./views/CalendarView'),
+  tasks: () => import('./views/TasksView'),
 }
 const DocView = lazy(() => views.doc().then((m) => ({ default: m.DocView })))
 const LectureView = lazy(() => views.lecture().then((m) => ({ default: m.LectureView })))
+const TasksView = lazy(() => views.tasks().then((m) => ({ default: m.TasksView })))
 const CalendarView = lazy(() => views.calendar().then((m) => ({ default: m.CalendarView })))
 const AIPanel = lazy(() => import('./components/AIPanel').then((m) => ({ default: m.AIPanel })))
 const CommandPalette = lazy(() => import('./components/CommandPalette').then((m) => ({ default: m.CommandPalette })))
@@ -139,6 +141,7 @@ export default function App() {
   let atRoot = true // phones: top-level screen (shows the tab bar) vs an open item
   let main: React.ReactNode
   if (section === 'home') main = <HomeView />
+  else if (section === 'tasks') main = <TasksView />
   else if (section === 'calendar') main = <CalendarView key={calendarDate ?? 'today'} initialDate={calendarDate} />
   else {
     const kind = section === 'docs' ? 'doc' : section === 'lectures' ? 'lecture' : undefined

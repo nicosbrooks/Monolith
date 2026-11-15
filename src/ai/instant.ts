@@ -1,6 +1,6 @@
 import { format, isSameDay } from 'date-fns'
 import type { CalEvent, Item } from '../types'
-import { extractOpenTodos } from '../lib/util'
+import { dueLabel, readWorkspace } from '../lib/graph'
 import { betweenEventsAnswer } from './availability'
 
 // Some questions have an exact answer in the app's own data: what's on a day, what's next, what's left to do.
@@ -71,7 +71,8 @@ export function instantAnswer(question: string, o: { events: CalEvent[]; items: 
 
   // "what are my tasks", "what's left to do", "my to-dos"
   if (/^(what are |show( me)? |list )?(my )?(open |remaining )?(tasks|to-?dos|todo list)$|^what('s| is) (left|on my (to-?do|task) list)( to do)?$|^what do i (still )?(need|have) to do$/.test(q)) {
-    const todos = o.items.filter((i) => !i.deletedAt).flatMap((i) => extractOpenTodos(i.content, i.id).map((t) => ({ t: t.text, doc: i.title || 'Untitled' })))
+    const title = new Map(o.items.map((i) => [i.id, i.title || 'Untitled']))
+    const todos = readWorkspace(o.items, now).tasks.map((t) => ({ t: `${t.title}${t.due !== undefined ? `, ${dueLabel(t, now).toLowerCase().replace(/^(?!today|tomorrow|yesterday)/, 'due ')}` : ''}`, doc: title.get(t.itemId)! }))
     if (!todos.length) return { text: 'No open tasks. Everything’s checked off.', source: 'tasks' }
     const shown = todos.slice(0, 12)
     return {

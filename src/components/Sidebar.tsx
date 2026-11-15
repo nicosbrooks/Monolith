@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   LayoutGrid, CalendarDays, FileText, Mic, Trash2, Plus, Folder, Settings, ChevronRight, PanelLeft, FolderPlus, 
-  AudioWaveform, RefreshCw, GitCommitHorizontal, CircleAlert, Pencil, Star, StarOff, FilePlus2, Unplug, Inbox,
+  AudioWaveform, RefreshCw, ListChecks, GitCommitHorizontal, CircleAlert, Pencil, Star, StarOff, FilePlus2, Unplug, Inbox,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
@@ -14,11 +14,13 @@ import { APP_NAME } from '../brand'
 import { itemEmoji } from '../lib/util'
 import { startRecording } from '../lib/recordNext'
 import { rowMenu } from '../views/ItemList'
+import { useWorkspace } from '../lib/graph'
 
+/** The mark: an upright slab, 4 wide to 9 tall. Also the selection marker and the assistant's waiting sign (soft.css). */
 export function Logo({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="8.25" y="3" width="7.5" height="18" rx="2" fill="currentColor" />
+      <rect x="8" y="3" width="8" height="18" rx="2" fill="currentColor" />
     </svg>
   )
 }
@@ -62,6 +64,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
 
       <nav className="side-scroll">
         {nav('home', 'Home', LayoutGrid)}
+        <TasksNav nav={nav} />
         <div className={`nav-row ${s.section === 'docs' && !s.folderId ? 'here' : ''}`}>
           {nav('docs', 'Docs', FileText)}
           <button className="icon-btn sm nav-add" title="New doc (⌘N)" aria-label="New doc" onClick={() => (s.setFolder(null), s.createItem('doc'))}><Plus size={14} /></button>
@@ -133,6 +136,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       </nav>
     </aside>
   )
+}
+
+/** Tasks, with how many are open. Its own component so only this row re-reads docs as they change. */
+function TasksNav({ nav }: { nav: (id: Section, label: string, Icon: typeof LayoutGrid, n?: number) => React.ReactNode }) {
+  const n = useWorkspace().tasks.length
+  return <>{nav('tasks', 'Tasks', ListChecks, n)}</>
 }
 
 function Tree({ docs, depth = 0, parent = null }: { docs: Item[]; depth?: number; parent?: string | null }) {

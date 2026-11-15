@@ -26,21 +26,6 @@ export function extractTags(text: string): string[] {
   return [...set]
 }
 
-export interface Todo {
-  itemId: string
-  text: string
-}
-
-export function extractOpenTodos(html: string, itemId: string): Todo[] {
-  if (!html.includes('data-checked')) return []
-  // A <template> parses without loading anything (pictures in a plain <div> would start downloading).
-  const tpl = document.createElement('template')
-  tpl.innerHTML = html
-  return [...tpl.content.querySelectorAll('li[data-checked="false"]')]
-    .map((li) => ({ itemId, text: (li.textContent || '').trim() }))
-    .filter((t) => t.text)
-}
-
 export function firstLine(html: string): string {
   const t = htmlToText(html)
   return t.split('\n').find((l) => l.trim()) || ''

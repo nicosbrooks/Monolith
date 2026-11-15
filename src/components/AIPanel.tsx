@@ -343,7 +343,7 @@ function Chat() {
                   {shown ? (
                     <div className="md" dangerouslySetInnerHTML={{ __html: mdToHtml(shown) }} />
                   ) : live || !mt?.acts.length ? (
-                    <div className="ai-status"><span className="typing"><i /><i /><i /></span>{mt?.status && <span>{mt.status}</span>}</div>
+                    <div className="ai-status"><span className="slab-wait" aria-hidden="true" />{mt?.status && <span>{mt.status}</span>}</div>
                   ) : null}
                   {!live &&
                     mt?.acts.map((a, k) => {

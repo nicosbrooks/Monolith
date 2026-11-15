@@ -18,6 +18,18 @@ Status of each area is in [Coverage](#coverage) at the end: not every screen fol
 10. **No "AI" decoration.** No sparkles (✨) anywhere. The assistant is labelled with words, and actions get an icon for what they do: a speech bubble to ask, a pen to write notes, a lightbulb for insights.
 11. **Same product on every device.** iOS uses the web's icons, menu order and wording, done the native way.
 
+12. **One connected workspace.** Docs, tasks, recordings and the calendar are views of the same things, tied together by links. A task is a checklist line in a doc, not a separate object; a link is an ordinary link. Nothing is copied into a second place.
+
+## Identity
+
+Monolith is monochrome and uses the system typeface, so what makes it recognisable is the **slab** and how the app speaks.
+
+- **The mark** is an upright slab, 4 wide to 9 tall, with softly rounded corners (`Logo` in `Sidebar.tsx`, `public/favicon.svg`). Always the text colour on the page colour. Never tinted, tilted, outlined or animated into another shape.
+- **The slab marks where you are.** The current top-level row in the sidebar, and the current section in Settings, carry a 3×14px slab at their left edge on top of the soft fill. An open doc under Docs keeps only its fill, so there is one marker on screen, not two.
+- **The slab is the waiting sign.** While the assistant works, one small slab breathes beside the words that say what it's doing (`.slab-wait`). No dots, no spinners for the assistant.
+- **Titles go through one token**, `--font-display` (page titles, doc titles, headings in docs, setup). It is set to the system sans. Changing the app's display face is one line in `src/soft.css`; don't hard-code a family on a title.
+- Names for places are plain nouns in this order everywhere: **Home, Tasks, Docs, Recordings, Calendar**.
+
 ## Colour
 
 Web tokens are CSS variables; the current values are set in `src/soft.css` (it loads last). iOS equivalents are in `apple/iOS/Theme.swift`.
@@ -205,6 +217,26 @@ Two short steps on one calm card (web) or full screen (iOS), with a step indicat
 ### Lock screen (`Unlock` on web, `LockScreen` on iOS)
 A lock icon in a soft circle, "Monolith is locked", one line, a password field (web) and one full-width Unlock button. A wrong passcode clears the field and says "That passcode isn't right." On iOS it asks for Face ID as soon as the app is in front, and covers the app in the app switcher.
 
+### Links between docs (`src/lib/graph.ts`, `Editor.tsx`)
+- Typing `[[` in a doc opens a short list titled "Link to": matching docs and recordings (most recent first), then "New doc “…”" when nothing has that exact name. Enter or Tab picks; Escape closes. `/` › "Link to a doc" does the same.
+- A link shows as the doc's name on a soft fill (`--card-hover`), 550 weight, no underline: it reads as a name, not a web address. Clicking it opens the doc. Web links keep the underline.
+- A link is stored as an ordinary link to `#doc/<id>`, so Markdown files, backups and phone sync carry it unchanged. Renaming a doc renames the links that still show its old name.
+- Picking a name that doesn't exist makes the doc and stays where you are.
+
+### Connections (`.cx`, `Connections.tsx`)
+Under a doc's or recording's text, only when there is something to show, in this order: **Linked from** (each doc that links here, with the sentence it's mentioned in), **On your calendar** (its upcoming events), **Related** (up to three docs close in meaning, from System 1, never ones already linked). A group label is a section label (13.5px / 550, `--text-2`); rows are icon, title, one quiet line. 56px above the first group.
+
+### Tasks (`TasksView.tsx`, `.hm-due`)
+- A page in the Home column: the title "Tasks", one line saying how many and from how many docs, then a card per time group in this order: **Overdue, Today, Next 7 days, Later, No date**. Empty groups aren't shown.
+- A row is the Home task row: checkbox, the task, the doc it's in, and when it's due on the right in faint tabular text ("Today", "Tomorrow", "Fri", "Nov 28", with a time if the line gave one). The date turns `--danger` only once it's late.
+- The date comes from the line itself ("essay draft by Friday"), read by the same parser as quick add; the title shown is the line without its date words.
+- Adding is the Ask bar's job on this page ("Add a task or ask what to do first"): anything that isn't a question becomes a task in a doc called "Tasks", made the first time. The toast says "Task added" with Undo.
+- Home shows the first five of the same list, with "See all N" or "Open" as its one link.
+- Checkboxes in docs are the same 20px rounded square as Home and Tasks, inside a 24px target.
+
+### Settings (`.modal.settings`, `SettingsModal.tsx`)
+Sections on the left (General, Assistant, Storage and files, Devices, About), one shown at a time on the right, so nothing is found by scrolling. The dialog keeps one size as sections change. The title on the right is the section's name; a section never repeats its own name as a heading. On phones the sections become a row of pills across the top.
+
 ### Menus and dialogs
 - Menu order for a doc: Add sub-doc, favourite, Move to, then Delete in red after a gap. iOS copies this order.
 - Confirm dialogs: a question as the title, one consequence line, a verb on the confirm button, and the main button disabled until the form is valid.
@@ -247,7 +279,9 @@ Three files load in order: `src/index.css` (base), `src/theme.css`, `src/soft.cs
 | Web notifications | Yes (Nov 15) |
 | Web empty states: Recordings, Recently Deleted, no doc open | Yes (Nov 15) |
 | Web assistant chat, Settings switches and Integrations | Reviewed Nov 15 (pass 5) |
-| Web Docs, doc editor, Recordings detail, Calendar, rest of Settings, assistant For you tab, command palette | Not yet reviewed against this file |
+| Web Tasks, links and connections, Settings sections | Yes (Nov 15, 0.10): dark and light, axe-checked |
+| Web Docs, doc editor, Recordings detail, Calendar, assistant For you tab, command palette | Not yet reviewed against this file |
+| iOS Tasks, links, connections | Not built: iOS shows a link as its text, and has no Tasks screen yet |
 | iOS Home, drawer, Docs and Recordings lists | Yes (Nov 15, pass 2): `Space` tokens, drawer icon column. Checked in the iPhone 17 simulator, dark only |
 | iOS Integrations | Yes (Nov 15): seen in the iPhone 17 simulator with every switch on. iPad and light mode not checked |
 | iOS chat, menus, doc editor | Follows the principles from the Nov 14 passes; not re-checked against the iOS spacing tokens |

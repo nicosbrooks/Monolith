@@ -1,6 +1,6 @@
 # Monolith
 
-Notes, docs, lecture recordings and a calendar in one app, with an AI that runs **entirely on your device**.
+Docs, tasks, recordings and a calendar in one connected workspace, with an AI that runs **entirely on your device**.
 
 ```bash
 npm install
@@ -11,6 +11,8 @@ npm run dev   # http://localhost:5199
 
 - **Notes** (Apple Notes-style): title/heading/body/monospace styles, checklists (move checked to bottom), tables, pictures and **file attachments** (paste, drag or `/File`; pictures are resized, every file is stored once on the device and opens or downloads from its card), freehand **sketch** blocks (pen, highlighter, eraser; pressure-sensitive), folders, #tags, pinning, gallery view, Recently Deleted, Markdown export.
 - **Docs** (Slite-style): nested pages, emoji icons, `/` slash commands, Markdown shortcuts, table of contents, Markdown import/export.
+- **Links**: type `[[` to link a doc to any doc or recording (or to a new doc by name). Every doc lists what links to it, its events, and related docs underneath. Links are plain Markdown links, so they survive files, backups and sync.
+- **Tasks**: every checklist line from every doc in one place, sorted by the date written in the line ("essay draft by Friday"): Overdue, Today, Next 7 days, Later, No date. Check one off there and it's checked in its doc.
 - **Lectures**: record or import audio → live captions → on-device Whisper transcript (click a line to jump in the audio) → AI study notes and flashcards.
 - **Calendar**: week/month views, drag to create/move/resize, natural-language quick add ("calc review thu 4pm for 2h"), link events to notes or recordings.
 - **Proactive help**: spots dates in your writing ("essay due Nov 14") and offers to schedule them, prompts you before/after classes, and the local model suggests what's missing from the page you're on.

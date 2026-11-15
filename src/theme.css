@@ -331,7 +331,7 @@ button:focus-visible {
 .prose h2,
 .prose h3,
 .doc-title {
-  font-family: var(--font);
+  font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: -0.022em;
 }
@@ -368,15 +368,6 @@ button:focus-visible {
   background: var(--s2);
   font-weight: 500;
   color: var(--text-2);
-}
-.prose ul[data-type='taskList'] input[type='checkbox'] {
-  border-radius: 4px;
-  width: 17px;
-  height: 17px;
-  border-color: var(--s7);
-}
-.prose ul[data-type='taskList'] li > label {
-  margin-top: 4px;
 }
 .prose a {
   color: var(--info);
@@ -989,13 +980,6 @@ button:focus-visible {
 .tag.on {
   background: var(--accent);
   color: var(--on-accent);
-}
-.prose ul[data-type='taskList'] input[type='checkbox']:checked {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.prose ul[data-type='taskList'] input[type='checkbox']:checked::after {
-  border-color: #fff;
 }
 .todo input:checked {
   background: var(--accent);

@@ -4,7 +4,9 @@ import { ArrowUpRight, CalendarDays, FileText, ListChecks, MapPin, AudioWaveform
 import { useMobile, useScrolled } from '../lib/useMobile'
 import { PhoneTitle } from '../components/Phone'
 import { useStore } from '../store'
-import { extractOpenTodos, htmlToText, itemEmoji } from '../lib/util'
+import { htmlToText, itemEmoji } from '../lib/util'
+import { useWorkspace } from '../lib/graph'
+import { TaskRow } from './TasksView'
 import { isReady, useAI } from '../ai/llm'
 import { useRuleSuggestions } from '../ai/suggestions'
 import { useSubEvents } from '../lib/calendars'
@@ -31,7 +33,7 @@ export function HomeView() {
   const suggestions = useRuleSuggestions()
   const mobile = useMobile()
   const [scrolled, onScroll] = useScrolled()
-  const [allTasks, setAllTasks] = useState(false)
+  const ws = useWorkspace()
   const name = useStore((s) => s.settings.name)
   const setupAt = useStore((s) => s.settings.setupAt)
   const [away] = useState(() => awayFor(new Date()))
@@ -49,20 +51,7 @@ export function HomeView() {
   const recent = live.filter((i) => !i.file?.dir).sort((a, b) => b.updatedAt - a.updatedAt)
   const nudge = proactive ? suggestions[0] : undefined
   // The assistant is already asking about this line, so it isn't listed a second time under Tasks.
-  const todos = live.flatMap((i) => extractOpenTodos(i.content, i.id)).filter((t) => !(nudge?.found && t.itemId === nudge.found.itemId && same(t.text, nudge.found.line)))
-
-  const checkTodo = (itemId: string, text: string) => {
-    const it = live.find((i) => i.id === itemId)
-    if (!it) return
-    const template = document.createElement('template')
-    template.innerHTML = it.content
-    const li = [...template.content.querySelectorAll('li[data-checked="false"]')].find((l) => (l.textContent || '').trim() === text)
-    if (!li) return
-    li.setAttribute('data-checked', 'true')
-    const before = it.content
-    st.updateItem(itemId, { content: template.innerHTML })
-    toast('Task done', { ms: 6000, action: { label: 'Undo', run: () => useStore.getState().updateItem(itemId, { content: before }) } })
-  }
+  const todos = ws.tasks.filter((t) => !(nudge?.found && t.itemId === nudge.found.itemId && same(t.text, nudge.found.line)))
 
   const restore = (id: string) => useStore.setState((s) => ({ dismissed: s.dismissed.filter((d) => d !== id) }))
   const notNow = (id: string) => {
@@ -86,7 +75,7 @@ export function HomeView() {
       ].filter((x): x is { icon: typeof FileText; text: string } => !!x)
     : []
   const ask = (prompt: string) => useStore.setState({ askDraft: prompt, aiOpen: true })
-  const tasks = allTasks ? todos : todos.slice(0, SHOWN)
+  const tasks = todos.slice(0, SHOWN)
 
   return (
     <div className={`home page-scroll ${mobile ? 'p-screen' : ''}`} onScroll={mobile ? onScroll : undefined}>
@@ -143,19 +132,13 @@ export function HomeView() {
         <Week events={events} today={today} />
 
         <section className="hm-sec" aria-labelledby="hm-tasks">
-          <div className="hm-label"><h2 id="hm-tasks">Tasks</h2></div>
+          <div className="hm-label">
+            <h2 id="hm-tasks">Tasks</h2>
+            {todos.length > 0 && <button onClick={() => st.go('tasks')}>{todos.length > SHOWN ? `See all ${todos.length}` : 'Open'}</button>}
+          </div>
           <div className="hm-card hm-list">
-            {tasks.map((t, i) => (
-              <div key={`${t.itemId}:${t.text}:${i}`} className="hm-row hm-task">
-                <input type="checkbox" checked={false} aria-label={`Mark done: ${t.text}`} onChange={() => checkTodo(t.itemId, t.text)} />
-                <button className="hm-row-main" onClick={() => st.open(t.itemId)} title="Open the doc">
-                  <span>{t.text}</span>
-                  <small>{live.find((x) => x.id === t.itemId)?.title || 'Untitled'}</small>
-                </button>
-              </div>
-            ))}
+            {tasks.map((t) => <TaskRow key={`${t.itemId}:${t.n}`} task={t} docTitle={live.find((x) => x.id === t.itemId)?.title || 'Untitled'} />)}
             {!todos.length && <p className="hm-empty">Nothing to do. Checklist items from your docs show up here.</p>}
-            {todos.length > SHOWN && <button className="hm-more" onClick={() => setAllTasks(!allTasks)}>{allTasks ? 'Show fewer' : `Show all ${todos.length}`}</button>}
           </div>
         </section>
 

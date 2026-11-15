@@ -1,7 +1,7 @@
 import { Command } from 'cmdk'
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
-import { CalendarDays, CalendarPlus, FileText, Home, Mic, AudioWaveform, Moon, Settings, MessageCircle, StickyNote, Sun, HardDriveUpload, Smartphone, Keyboard } from 'lucide-react'
+import { CalendarDays, CalendarPlus, ListChecks, Square, FileText, Home, Mic, AudioWaveform, Moon, Settings, MessageCircle, StickyNote, Sun, HardDriveUpload, Smartphone, Keyboard } from 'lucide-react'
 import { useShortcuts } from './Overlays'
 import { AnimatePresence, motion } from 'motion/react'
 import { useStore } from '../store'
@@ -9,6 +9,7 @@ import { htmlToText, itemEmoji } from '../lib/util'
 import { startRecording } from '../lib/recordNext'
 import { related } from '../ai/system1'
 import { eventColor, parseQuickEvent, whenLabel } from '../lib/dates'
+import { dueLabel, useWorkspace } from '../lib/graph'
 
 export function CommandPalette() {
   const open = useStore((s) => s.paletteOpen)
@@ -35,6 +36,9 @@ export function CommandPalette() {
     .slice(0, 12)
 
   const Icon = { note: StickyNote, doc: FileText, lecture: AudioWaveform }
+  // Open tasks whose words match: picking one opens the doc it's in.
+  const ws = useWorkspace()
+  const taskHits = ql.length > 1 ? ws.tasks.filter((t) => t.text.toLowerCase().includes(ql)).slice(0, 4) : []
 
   // System 1: docs close in meaning that the words didn't find ("eigenvectors" → "Linear algebra, week 3").
   const [meaning, setMeaning] = useState<string[]>([])
@@ -109,6 +113,17 @@ export function CommandPalette() {
                     })}
                   </Command.Group>
                 )}
+                {taskHits.length > 0 && (
+                  <Command.Group heading="Tasks">
+                    {taskHits.map((t) => (
+                      <Command.Item key={`${t.itemId}:${t.n}`} value={`task-${t.itemId}-${t.n}`} onSelect={run(() => st.open(t.itemId))}>
+                        <Square size={16} />
+                        <span>{t.title}</span>
+                        {t.due !== undefined && <small>{dueLabel(t)}</small>}
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                )}
                 {q &&
                   events
                     .filter((e) => e.title.toLowerCase().includes(ql))
@@ -125,6 +140,7 @@ export function CommandPalette() {
                     { l: q ? `New doc “${q}”` : 'New doc', i: FileText, k: '⌘N', f: () => st.createItem('doc', q ? { title: q } : {}) },
                     { l: 'Start recording', i: Mic, f: () => void startRecording(q) },
                     { l: 'Go home', i: Home, f: () => st.go('home') },
+                    { l: 'Go to Tasks', i: ListChecks, f: () => st.go('tasks') },
                     { l: 'Go to Calendar', i: CalendarDays, f: () => st.go('calendar') },
                     { l: 'Open the assistant', i: MessageCircle, k: '⌘J', f: () => st.setUI({ aiOpen: !st.aiOpen }) },
                     { l: document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode', i: document.documentElement.dataset.theme === 'dark' ? Sun : Moon, f: () => st.setSettings({ theme: document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark' }) },

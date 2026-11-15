@@ -1097,39 +1097,48 @@ kbd {
 }
 .prose ul[data-type='taskList'] li > label {
   flex-shrink: 0;
-  margin-top: 3px;
+  margin: 1px -2px 0;
   user-select: none;
 }
 .prose ul[data-type='taskList'] li > div {
   flex: 1;
   min-width: 0;
 }
+/* The same checkbox as Home and Tasks (DESIGN.md › Checkbox): a 20px rounded square, inside a 24px target. */
 .prose ul[data-type='taskList'] input[type='checkbox'] {
   appearance: none;
-  width: 19px;
-  height: 19px;
-  border-radius: 50%;
-  border: 1.6px solid var(--text-3);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
+  position: relative;
+  display: block;
+  width: 24px;
+  height: 24px;
   margin: 0;
-  transition: all 0.18s var(--ease);
+  cursor: pointer;
 }
-.prose ul[data-type='taskList'] input[type='checkbox']:hover {
-  border-color: var(--accent);
+.prose ul[data-type='taskList'] input[type='checkbox']::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1.6px var(--text-3);
+  transition: box-shadow 0.12s, background 0.12s;
 }
-.prose ul[data-type='taskList'] input[type='checkbox']:checked {
-  background: var(--accent);
-  border-color: var(--accent);
+.prose ul[data-type='taskList'] input[type='checkbox']:hover::before {
+  box-shadow: inset 0 0 0 1.6px var(--text);
+}
+.prose ul[data-type='taskList'] input[type='checkbox']:checked::before {
+  background: var(--text);
+  box-shadow: none;
 }
 .prose ul[data-type='taskList'] input[type='checkbox']:checked::after {
   content: '';
+  position: absolute;
+  left: 9px;
+  top: 5.5px;
   width: 5px;
   height: 9px;
-  border: solid var(--on-accent);
+  border: solid var(--bg);
   border-width: 0 2px 2px 0;
-  transform: translateY(-1px) rotate(45deg);
+  transform: rotate(45deg);
 }
 .prose ul[data-type='taskList'] li[data-checked='true'] > div {
   color: var(--text-3);
@@ -2499,30 +2508,6 @@ kbd {
 }
 .mini:hover {
   color: var(--accent);
-}
-.typing {
-  display: flex;
-  gap: 4px;
-  padding: 4px 0;
-}
-.typing i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-3);
-  animation: bounce 1s infinite;
-}
-.typing i:nth-child(2) {
-  animation-delay: 0.15s;
-}
-.typing i:nth-child(3) {
-  animation-delay: 0.3s;
-}
-@keyframes bounce {
-  50% {
-    transform: translateY(-4px);
-    opacity: 0.5;
-  }
 }
 .composer {
   display: flex;

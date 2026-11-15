@@ -157,7 +157,7 @@ function TooltipHost() {
 const MOD = typeof navigator !== 'undefined' && /Mac|iP(hone|ad)/.test(navigator.platform) ? '⌘' : 'Ctrl'
 const SHORTCUTS: [string, [string, string][]][] = [
   ['Go', [['Search and commands', `${MOD} K`], ['Assistant', `${MOD} J`], ['Toggle sidebar', `${MOD} \\`], ['Settings', `${MOD} ,`], ['This list', '?']]],
-  ['Create', [['New note', `${MOD} N`], ['New doc', `${MOD} ⌥ N`], ['Insert a block', '/']]],
+  ['Create', [['New doc', `${MOD} N`], ['Insert a block', '/'], ['Link to a doc', '[[']]],
   ['Write', [['Bold', `${MOD} B`], ['Italic', `${MOD} I`], ['Underline', `${MOD} U`], ['Heading', '#  space'], ['Checklist', '[ ]  space'], ['Quote', '>  space'], ['Code block', '```']]],
   ['Calendar', [['Today', 'T'], ['Week / Month', 'W / M'], ['Previous / Next', '← / →']]],
 ]

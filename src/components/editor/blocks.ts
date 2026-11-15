@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/core'
 import {
-  CheckSquare, Code2, Heading1, Heading2, Heading3, ImageIcon, List, ListOrdered, Minus, PenTool, Quote, PenLine, Paperclip, Table, Type, Wand2, ListChecks,
+  CheckSquare, Code2, Link2, Heading1, Heading2, Heading3, ImageIcon, List, ListOrdered, Minus, PenTool, Quote, PenLine, Paperclip, Table, Type, Wand2, ListChecks,
   type LucideIcon,
 } from 'lucide-react'
 import { addFile } from '../../lib/files'
@@ -77,6 +77,7 @@ export const BLOCKS: Block[] = [
   { id: 'sketch', label: 'Sketch', hint: 'Draw with pen or finger', icon: PenTool, keywords: 'draw sketch canvas pen handwriting scratch', run: (e) => e.chain().focus().insertSketch().run() },
   { id: 'img', label: 'Image', hint: 'Add a picture', icon: ImageIcon, keywords: 'image photo picture', run: (e) => pickFiles(e, 'image/*') },
   { id: 'file', label: 'File', hint: 'Attach any file', icon: Paperclip, keywords: 'file attachment attach pdf document upload', run: (e) => pickFiles(e) },
+  { id: 'link', label: 'Link to a doc', hint: 'Or type [[', icon: Link2, keywords: 'link doc page mention reference backlink wiki connect', run: (e) => e.chain().focus().insertContent('[[').run() },
   { id: 'quote', label: 'Quote', hint: 'Block quote', icon: Quote, keywords: 'quote blockquote', run: (e) => e.chain().focus().toggleBlockquote().run() },
   { id: 'code', label: 'Monospaced', hint: 'Code block', icon: Code2, keywords: 'code mono monospaced', run: (e) => e.chain().focus().toggleCodeBlock().run() },
   { id: 'hr', label: 'Divider', hint: 'Horizontal line', icon: Minus, keywords: 'divider hr line separator', run: (e) => e.chain().focus().setHorizontalRule().run() },

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowUp, ArrowUpRight, CalendarPlus, FileText, MessageCircle, AudioWaveform, StickyNote } from 'lucide-react'
+import { ArrowUp, ArrowUpRight, CalendarPlus, ListPlus, FileText, MessageCircle, AudioWaveform, StickyNote } from 'lucide-react'
 import { useStore } from '../store'
 import { eventColor, parseQuickEvent, whenLabel } from '../lib/dates'
 import { htmlToText, itemEmoji } from '../lib/util'
 import { toast } from './Toast'
+import { addTask, dueLabel, removeTask } from '../lib/graph'
 
 // Match iOS: a date in a question or request for information should go to chat.
 const questionStart = /^(what|when|where|who|why|how|do|does|did|is|are|am|can|could|should|will|would|which|any|show|list|find|tell|summarize|explain)\b/i
@@ -30,6 +31,11 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
       return {
         hint: 'Add an event or ask about your schedule',
         chips: ['What’s on this week?', 'What’s left today?', 'Find a free hour tomorrow'],
+      }
+    if (section === 'tasks')
+      return {
+        hint: 'Add a task or ask what to do first',
+        chips: ['What should I do first?', 'What’s due this week?'],
       }
     if (page?.kind === 'lecture')
       return {
@@ -59,9 +65,18 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
     ? parseQuickEvent(text.replace(/^(add|schedule|book|new( event)?)\s+/i, ''))
     : null
   const isEvent = !!event
+  // On Tasks, anything that isn't a question is a new task ("essay draft by friday" keeps its date).
+  const isTask = section === 'tasks' && !isQuestion && text.length > 1
+  const taskDue = isTask ? parseQuickEvent(text) : null
+  const newTask = () => {
+    const t = addTask(text)
+    if (!t) return
+    toast('Task added', { ms: 6000, action: { label: 'Undo', run: () => removeTask(t) } })
+    setQ('')
+  }
   const ql = text.toLowerCase()
   const hits = useMemo(() => {
-    if (!focused || ql.length < 2 || isEvent) return []
+    if (!focused || ql.length < 2 || isEvent || isTask) return []
     const matches: typeof items = []
     for (const item of items) {
       if (item.deletedAt) continue
@@ -70,7 +85,7 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
       if (matches.length === 4) break
     }
     return matches
-  }, [focused, isEvent, items, ql])
+  }, [focused, isEvent, isTask, items, ql])
 
   const ask = (prompt: string) => {
     useStore.setState({ askDraft: prompt, aiOpen: true })
@@ -96,7 +111,7 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
   // answer starts sooner; adding an event or searching never wakes it. Without System 1, a question mark is the cue.
   useEffect(() => {
     const t = q.trim()
-    if (t.length < 6 || isEvent) return
+    if (t.length < 6 || isEvent || isTask) return
     let live = true
     const timer = setTimeout(async () => {
       const [{ intent }, llm] = await Promise.all([import('../ai/system1'), import('../ai/llm')])
@@ -104,11 +119,12 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
       if (live && (read ? read.kind === 'ask' && read.confidence > 0.03 : /\?\s*$/.test(t))) llm.warmUp()
     }, 350)
     return () => ((live = false), clearTimeout(timer))
-  }, [q, isEvent])
+  }, [q, isEvent, isTask])
 
   const submit = () => {
     if (!text) return
-    if (isEvent) addEvent()
+    if (isTask) newTask()
+    else if (isEvent) addEvent()
     else ask(text)
   }
 
@@ -150,8 +166,14 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
                 <small>{whenLabel(event)}</small>
               </button>
             )}
+            {isTask && (
+              <button className="ask-opt on" onClick={newTask}>
+                <ListPlus size={14} /> <span>Add task “{(taskDue?.title || text).slice(0, 60)}”</span>
+                {taskDue && <small>{dueLabel({ due: taskDue.start.getTime(), allDay: taskDue.allDay })}</small>}
+              </button>
+            )}
             {text && !isEvent && (
-              <button className="ask-opt on" onClick={() => ask(text)}>
+              <button className={`ask-opt ${isTask ? '' : 'on'}`} onClick={() => ask(text)}>
                 <MessageCircle size={14} />{' '}
                 <span>
                   Ask
@@ -186,8 +208,8 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
           aria-label={ctx.hint}
         />
         {text && (
-          <button className="ask-send" onClick={submit} aria-label={isEvent ? 'Add event' : 'Ask'}>
-            {isEvent ? <CalendarPlus size={15} /> : <ArrowUp size={15} />}
+          <button className="ask-send" onClick={submit} aria-label={isTask ? 'Add task' : isEvent ? 'Add event' : 'Ask'}>
+            {isTask ? <ListPlus size={15} /> : isEvent ? <CalendarPlus size={15} /> : <ArrowUp size={15} />}
           </button>
         )}
       </div>

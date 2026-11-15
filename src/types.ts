@@ -87,7 +87,7 @@ export interface CalEvent {
   calId?: string
 }
 
-export type Section = 'home' | 'docs' | 'lectures' | 'calendar' | 'trash'
+export type Section = 'home' | 'tasks' | 'docs' | 'lectures' | 'calendar' | 'trash'
 
 export interface Suggestion {
   id: string

@@ -3,7 +3,10 @@ import { BubbleMenu } from '@tiptap/react/menus'
 import { Placeholder } from '@tiptap/extension-placeholder'
 import { baseExtensions } from './extensions'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Bold, Italic, Underline, Strikethrough, Code, Link2, Highlighter, MessageCircle, ChevronDown } from 'lucide-react'
+import { Bold, Italic, Underline, Strikethrough, Code, Link2, Highlighter, MessageCircle, ChevronDown, FileText, AudioWaveform, FilePlus2 } from 'lucide-react'
+import { useStore } from '../../store'
+import { linkHref, linkedId } from '../../lib/graph'
+import { itemEmoji } from '../../lib/util'
 import { Sketch } from './SketchNode'
 import { BLOCKS, insertFiles, setStoresFiles, type Block } from './blocks'
 import { externalize } from '../../lib/files'
@@ -47,6 +50,45 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
   const filteredRef = useRef(filtered)
   filteredRef.current = filtered
 
+  // `[[` links this doc to another doc or recording (or to a new doc with that name).
+  const [link, setLink] = useState<{ q: string; from: number; x: number; y: number } | null>(null)
+  const linkRef = useRef(link)
+  linkRef.current = link
+  const targets = useMemo(() => {
+    if (!link) return []
+    const q = link.q.toLowerCase().trim()
+    const st = useStore.getState()
+    const found = st.items
+      .filter((i) => !i.deletedAt && !i.file?.dir && i.id !== st.activeId && (!q || (i.title || 'Untitled').toLowerCase().includes(q)))
+      .sort((a, b) => Number((b.title || '').toLowerCase().startsWith(q)) - Number((a.title || '').toLowerCase().startsWith(q)) || b.updatedAt - a.updatedAt)
+      .slice(0, 7)
+      .map((i) => ({ id: i.id as string | null, title: i.title || 'Untitled', kind: i.kind, emoji: itemEmoji(i) }))
+    const exact = found.some((f) => f.title.toLowerCase() === q)
+    return q && !exact ? [...found, { id: null, title: link.q.trim(), kind: 'doc' as const, emoji: undefined }] : found
+  }, [link])
+  const targetsRef = useRef(targets)
+  targetsRef.current = targets
+  const runLink = (editor: TEditor, t: { id: string | null; title: string }): void => {
+    const l = linkRef.current
+    if (!l) return
+    setLink(null)
+    let id = t.id
+    if (!id) {
+      // A link to a doc that doesn't exist yet makes it, without leaving this one.
+      const st = useStore.getState()
+      const here = { section: st.section, activeId: st.activeId }
+      const cur = st.items.find((i) => i.id === st.activeId)
+      id = st.createItem('doc', { title: t.title, folderId: cur?.folderId ?? null }).id
+      useStore.setState(here)
+    }
+    editor
+      .chain()
+      .focus()
+      .deleteRange({ from: l.from, to: editor.state.selection.from })
+      .insertContent([{ type: 'text', text: t.title, marks: [{ type: 'link', attrs: { href: linkHref(id) } }] }, { type: 'text', text: ' ' }])
+      .run()
+  }
+
   const runBlock = (editor: TEditor, b: Block) => {
     const s = slashRef.current
     if (s) editor.chain().focus().deleteRange({ from: s.from, to: editor.state.selection.from }).run()
@@ -69,7 +111,27 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
     autofocus: autofocus ? 'end' : false,
     editorProps: {
       attributes: { class: `prose ${className || ''}`, spellcheck: 'true', 'aria-label': 'Doc body', 'aria-multiline': 'true' },
-      handleKeyDown: (view, e) => {
+      handleClick: (_view, _pos, e) => {
+        // A link to another doc opens it; other links stay as text to edit, as before.
+        const id = linkedId((e.target as HTMLElement).closest?.('a')?.getAttribute('href'))
+        if (!id) return false
+        e.preventDefault()
+        useStore.getState().open(id)
+        return true
+      },
+      handleKeyDown: (view, e): boolean => {
+        if (linkRef.current) {
+          const list = targetsRef.current
+          if (e.key === 'ArrowDown') return (setSel((i) => (i + 1) % Math.max(1, list.length)), true)
+          if (e.key === 'ArrowUp') return (setSel((i) => (i - 1 + list.length) % Math.max(1, list.length)), true)
+          if (e.key === 'Escape') return (setLink(null), true)
+          if (e.key === 'Enter' || e.key === 'Tab') {
+            const t = list[selRef.current]
+            if (t && editorRef.current) return (runLink(editorRef.current, t), true)
+            setLink(null)
+          }
+          return false
+        }
         const s = slashRef.current
         if (!s) return false
         const list = filteredRef.current
@@ -105,16 +167,25 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
       detectSlash(editor)
       storeEmbedded(editor)
       clearTimeout(saveTimer.current)
-      saveTimer.current = window.setTimeout(() => onChangeRef.current(editor.getHTML(), editor), 250)
+      saveTimer.current = window.setTimeout(() => ((saveTimer.current = 0), onChangeRef.current(editor.getHTML(), editor)), 250)
     },
     onSelectionUpdate: ({ editor }) => detectSlash(editor),
     onFocus: ({ editor }) => setActiveEditor(editor),
   })
-  const editorRef = useRef(editor)
+  const editorRef = useRef<TEditor | null>(editor)
   editorRef.current = editor
   // Tiptap's EditorContent, on its way out, redraws a live editor without its node views, so every picture in the doc
   // starts loading once more. Destroying the editor first (this runs before EditorContent's cleanup) skips that.
-  useLayoutEffect(() => () => void (editorRef.current && !editorRef.current.isDestroyed && editorRef.current.destroy()), [])
+  // What was typed in the last moment before leaving is saved first: once destroyed, the editor can't be read.
+  useLayoutEffect(
+    () => () => {
+      const e = editorRef.current
+      if (!e || e.isDestroyed) return
+      if (saveTimer.current) (clearTimeout(saveTimer.current), (saveTimer.current = 0), onChangeRef.current(e.getHTML(), e))
+      e.destroy()
+    },
+    [],
+  )
   // Tell the parent once we're mounted (not during render, which React warns about).
   const onReadyRef = useRef(onReady)
   onReadyRef.current = onReady
@@ -161,8 +232,18 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
   function detectSlash(editor: TEditor) {
     if (!mounted.current) return // the editor fires selection events while it is still being created
     const { $from, empty } = editor.state.selection
-    if (!empty || $from.parent.type.name === 'codeBlock') return setSlash(null)
+    if (!empty || $from.parent.type.name === 'codeBlock') return (setSlash(null), setLink(null))
     const before = $from.parent.textBetween(0, $from.parentOffset, undefined, '￼')
+    const l = before.match(/\[\[([^\[\]\n]{0,40})$/)
+    if (l) {
+      const at = editor.view.coordsAtPos($from.pos)
+      setSlash(null)
+      return setLink((prev) => {
+        if (!prev || prev.q !== l[1]) setSel(0)
+        return { q: l[1], from: $from.pos - l[1].length - 2, x: at.left, y: at.bottom }
+      })
+    }
+    setLink(null)
     const m = before.match(/(?:^|\s)\/([\w ]{0,20})$/)
     if (!m || m[1].endsWith('  ')) return setSlash(null)
     const coords = editor.view.coordsAtPos($from.pos)
@@ -194,6 +275,25 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
         <FormatButtons editor={editor} />
       </BubbleMenu>
       <EditorContent editor={editor} />
+      {link && targets.length > 0 && (
+        <div className="slash-menu link-menu" role="listbox" aria-label="Link to" style={{ left: Math.min(link.x, window.innerWidth - 290), top: Math.min(link.y + 6, window.innerHeight - 340) }}>
+          <div className="link-menu-head">Link to</div>
+          {targets.map((t, i) => (
+            <button
+              key={t.id ?? 'new'}
+              role="option"
+              aria-selected={i === sel}
+              className={i === sel ? 'on' : ''}
+              onMouseEnter={() => setSel(i)}
+              onMouseDown={(e) => (e.preventDefault(), runLink(editor, t))}
+              ref={i === sel ? (el) => { el?.scrollIntoView({ block: 'nearest' }) } : undefined}
+            >
+              <span className="ico">{t.id === null ? <FilePlus2 size={16} /> : t.emoji || (t.kind === 'lecture' ? <AudioWaveform size={16} /> : <FileText size={16} />)}</span>
+              <span className="lbl">{t.id === null ? `New doc “${t.title}”` : t.title}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {slash && filtered.length > 0 && (
         <div className="slash-menu" style={{ left: Math.min(slash.x, window.innerWidth - 290), top: Math.min(slash.y + 6, window.innerHeight - 340) }}>
           {filtered.map((b, i) => (

@@ -46,6 +46,14 @@ for (const scheme of ['dark', 'light'] as const) {
       await page.getByText('Study system').first().click()
       await expect(page.locator('.ProseMirror')).toBeVisible()
       await check(page, 'a doc')
+      // Study system is linked from the welcome doc, so its connections show; the welcome doc has a link in its text.
+      await expect(page.locator('.cx-row').first()).toBeVisible()
+      await page.locator('.cx-row').first().click()
+      await expect(page.locator('.ProseMirror a[href^="#doc/"]')).toBeVisible()
+      await check(page, 'a doc with a link')
+      await page.locator('.sidebar .nav', { hasText: 'Tasks' }).click()
+      await expect(page.locator('.hm-task').first()).toBeVisible()
+      await check(page, 'tasks')
       await page.getByText('Recordings', { exact: true }).first().click()
       await check(page, 'recordings')
       await page.getByText('Calendar', { exact: true }).first().click()
@@ -56,6 +64,11 @@ for (const scheme of ['dark', 'light'] as const) {
     test('settings, command menu and file viewer', async ({ page }) => {
       await page.keyboard.press('Control+,')
       await expect(page.locator('.modal')).toBeVisible()
+      // Each section of Settings, ending on About with Privacy open.
+      for (const tab of ['Assistant', 'Storage and files', 'Devices', 'About']) {
+        await page.locator('.set-nav button', { hasText: tab }).click()
+        await check(page, `settings: ${tab}`, '.modal')
+      }
       await page.locator('.about summary', { hasText: 'Privacy' }).click()
       await check(page, 'settings', '.modal')
       await page.keyboard.press('Escape')

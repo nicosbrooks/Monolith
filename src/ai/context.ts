@@ -1,6 +1,7 @@
 import { addDays, format, startOfDay } from 'date-fns'
 import type { CalEvent, Item } from '../types'
-import { extractOpenTodos, htmlToText } from '../lib/util'
+import { htmlToText } from '../lib/util'
+import { dueLabel, readWorkspace } from '../lib/graph'
 import { APP_NAME } from '../brand'
 import { promptBudget, tokensOf } from './prompt'
 import { gapLine, requestedMinutes } from './availability'
@@ -44,7 +45,8 @@ export function sharedContext(o: { items: Item[]; events: CalEvent[]; now?: Date
     .slice(0, 30)
     .map((e) => eventLine(e) + (e.end < now.getTime() ? ' (over)' : ''))
   const live = o.items.filter((i) => !i.deletedAt && !i.file?.dir)
-  const tasks = live.flatMap((i) => extractOpenTodos(i.content, i.id).map((t) => `- ${t.text} (in "${i.title || 'Untitled'}")`)).slice(0, 15)
+  const title = new Map(live.map((i) => [i.id, i.title || 'Untitled']))
+  const tasks = readWorkspace(live, now).tasks.slice(0, 15).map((t) => `- ${t.title}${t.due !== undefined ? ` (due ${dueLabel(t, now)})` : ''} (in "${title.get(t.itemId)}")`)
   const recent = [...live]
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, 6)
@@ -126,6 +128,9 @@ export function relevant(question: string, o: { items: Item[]; open?: Item | nul
   const named = new Set(live.filter((i) => i.title.trim().length > 2 && lower.includes(i.title.toLowerCase().replace(/^recording · /, '').trim())).map((i) => i.id))
   const titleWords = new Set(live.filter((i) => named.has(i.id)).flatMap((i) => terms(i.title)))
   const topic = q.filter((w) => !titleWords.has(w))
+  // Docs the open doc links to, or that link to it, are likelier to be what the question is about.
+  const ws = o.open ? readWorkspace(live) : null
+  const tied = new Set(o.open && ws ? [...(ws.links.get(o.open.id) ?? []), ...(ws.mentions.get(o.open.id) ?? []).map((m) => m.from.id)] : [])
   const df = new Map<string, number>()
   for (const c of all) for (const w of q) if (c.words.has(w)) df.set(w, (df.get(w) ?? 0) + 1)
   const scored = all
@@ -136,6 +141,7 @@ export function relevant(question: string, o: { items: Item[]; open?: Item | nul
       s += titleHits * 1.5
       if (named.has(c.item.id)) s += 4
       if (o.open && c.item.id === o.open.id) s += 1.2
+      else if (s > 0 && tied.has(c.item.id)) s += 0.8
       // System 1: closeness in meaning (EmbeddingGemma, see system1.ts). Counts on its own, so a passage that says it
       // in other words still qualifies; above ~0.45 it passes the bar below with no shared words at all.
       const sim = o.semantic?.get(`${c.item.id}#${chunks(c.item).indexOf(c)}`) ?? 0
@@ -268,10 +274,11 @@ export function turnEvidence(question: string, o: Workspace & { open?: Item | nu
     if (results.length > 12) evidence.push({ kind: 'calendar', text: `${heading}: further events omitted.` })
   }
   if (tasks) {
-    const rows = live.flatMap((item) => extractOpenTodos(item.content, item.id).map((todo) => ({
-      text: `Open tasks: ${todo.text} (in “${item.title || 'Untitled'}”)`,
-      match: score(`${todo.text} ${item.title}`),
-    }))).sort((a, b) => b.match - a.match)
+    const title = new Map(live.map((i) => [i.id, i.title || 'Untitled']))
+    const rows = readWorkspace(live, o.now).tasks.map((t) => ({
+      text: `Open tasks: ${t.title}${t.due !== undefined ? ` (due ${dueLabel(t, o.now)})` : ''} (in “${title.get(t.itemId)}”)`,
+      match: score(`${t.text} ${title.get(t.itemId)}`),
+    })).sort((a, b) => b.match - a.match)
     for (const row of rows.slice(0, 8)) evidence.push({ kind: 'tasks', text: row.text })
     if (!rows.length) evidence.push({ kind: 'tasks', text: 'Open tasks: none.' })
   }

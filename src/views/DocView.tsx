@@ -12,6 +12,7 @@ import { toast } from '../components/Toast'
 import { htmlToText, itemEmoji } from '../lib/util'
 import { createFile, isDirty, kindLabel, resolve, useSync } from '../storage/sync'
 import { SourceIcon } from '../components/StorageSettings'
+import { Connections } from '../components/Connections'
 
 // Docs kept as Markdown files elsewhere: no sketches (Markdown can't hold them). A folder also holds the doc's files
 // (assets/ beside it); GitHub and Drive hold text only, so no attachments there yet.
@@ -249,6 +250,7 @@ export function DocView({ item }: { item: Item }) {
                 ))}
               </div>
             )}
+            {!isDir && !item.deletedAt && <Connections item={item} />}
           </div>
           {toc.length > 1 && (
             <aside className="toc">

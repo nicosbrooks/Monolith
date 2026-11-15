@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Connections } from '../components/Connections'
 import type { Editor as TEditor } from '@tiptap/react'
 import { format } from 'date-fns'
 import { Mic, Square, Pause, Play, PenLine, Upload, Trash2, Layers, Loader2, Captions, RotateCcw, MoreHorizontal } from 'lucide-react'
@@ -407,6 +408,7 @@ export function LectureView({ item }: { item: Item }) {
                 ))}
             </div>
           )}
+          {!recording && !item.deletedAt && <Connections item={item} />}
         </div>
       </div>
 

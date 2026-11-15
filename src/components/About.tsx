@@ -17,7 +17,6 @@ const MODELS: [string, string][] = [
 export function About() {
   return (
     <section className="about">
-      <h3>About</h3>
       <p className="about-version">
         <b>Monolith {__APP_VERSION__}</b>
         <span className="muted small">Built {__BUILD_DATE__}</span>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Check, Monitor, Moon, Sun, Trash2, X } from 'lucide-react'
+import { Check, HardDrive, Info, MessageCircle, Monitor, Moon, SlidersHorizontal, Smartphone, Sun, Trash2, X } from 'lucide-react'
 import { useStore } from '../store'
 import { chooseModel, deleteModel, fits, modelForTier, models, refreshCache, resolvedModel, useAI } from '../ai/llm'
 import { STT_MODELS, sttModel } from '../ai/stt'
@@ -12,7 +12,17 @@ import { useLink } from '../link/link'
 import { useSystem1 } from '../ai/system1'
 import { deviceSummary, setIntegration, useDevice } from '../lib/integrations'
 
+const TABS = [
+  { id: 'general', label: 'General', icon: SlidersHorizontal },
+  { id: 'assistant', label: 'Assistant', icon: MessageCircle },
+  { id: 'storage', label: 'Storage and files', icon: HardDrive },
+  { id: 'devices', label: 'Devices', icon: Smartphone },
+  { id: 'about', label: 'About', icon: Info },
+] as const
+type Tab = (typeof TABS)[number]['id']
+
 export function SettingsModal() {
+  const [tab, setTab] = useState<Tab>('general')
   const open = useStore((s) => s.settingsOpen)
   const settings = useStore((s) => s.settings)
   const set = useStore((s) => s.setSettings)
@@ -26,14 +36,28 @@ export function SettingsModal() {
     <AnimatePresence>
       {open && (
         <motion.div className="overlay" onMouseDown={close} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <motion.div className="modal" role="dialog" aria-modal="true" aria-label="Settings" onMouseDown={(e) => e.stopPropagation()} initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}>
-            <header>
+          <motion.div className="modal settings" role="dialog" aria-modal="true" aria-label="Settings" onMouseDown={(e) => e.stopPropagation()} initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}>
+            {/* Sections on the left, one at a time on the right: nothing to scroll past to find a setting. */}
+            <div className="set-nav">
               <h2>Settings</h2>
-              <button className="icon-btn" onClick={close} aria-label="Close" title="Close (Esc)">
-                <X size={18} />
-              </button>
-            </header>
-            <div className="modal-body">
+              <div role="tablist" aria-label="Settings sections" aria-orientation="vertical">
+              {TABS.map((t) => (
+                <button key={t.id} role="tab" id={`set-tab-${t.id}`} aria-selected={tab === t.id} aria-controls="set-panel" className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>
+                  <t.icon size={16} strokeWidth={1.8} aria-hidden="true" /> {t.label}
+                </button>
+              ))}
+              </div>
+            </div>
+            <div className="set-main">
+              <header>
+                <h2>{TABS.find((t) => t.id === tab)!.label}</h2>
+                <button className="icon-btn" onClick={close} aria-label="Close" title="Close (Esc)">
+                  <X size={18} />
+                </button>
+              </header>
+              <div className="modal-body" id="set-panel" role="tabpanel" aria-labelledby={`set-tab-${tab}`} key={tab}>
+                {tab === 'general' && (
+                  <>
               <section>
                 <h3>You</h3>
                 <input className="input su-name-field" value={settings.name} onChange={(e) => set({ name: e.target.value })} placeholder="Your first name" aria-label="Your name" maxLength={40} />
@@ -57,20 +81,11 @@ export function SettingsModal() {
                 </div>
               </section>
 
+                  </>
+                )}
+                {tab === 'assistant' && (
+                  <>
               <section>
-                <h3>Your phone</h3>
-                <p className="muted">Use Monolith on your iPhone too. Scan a code once and everything stays in step.</p>
-                <button className="btn sm" onClick={() => (close(), openLink())}>
-                  {useLink.getState().pairings.length ? 'Your devices' : 'Link your phone'}
-                </button>
-              </section>
-
-              <StorageSettings />
-
-              <FilesSettings />
-
-              <section>
-                <h3>Assistant</h3>
                 <label className="toggle">
                   <input type="checkbox" checked={settings.proactive} onChange={(e) => set({ proactive: e.target.checked })} />
                   <span />
@@ -136,7 +151,28 @@ export function SettingsModal() {
                 <p className="muted small">{STT_MODELS.find((m) => m.id === sttModel(settings.whisperModel))!.name} · {STT_MODELS.find((m) => m.id === sttModel(settings.whisperModel))!.size}, downloaded once. Speech is transcribed on this device as it’s said; nothing is sent anywhere.</p>
               </details>
 
-              <About />
+                  </>
+                )}
+                {tab === 'storage' && (
+                  <>
+                    <StorageSettings />
+                    <FilesSettings />
+                  </>
+                )}
+                {tab === 'devices' && (
+                  <>
+              <section>
+                <h3>Your phone</h3>
+                <p className="muted">Use Monolith on your iPhone too. Scan a code once and everything stays in step.</p>
+                <button className="btn sm" onClick={() => (close(), openLink())}>
+                  {useLink.getState().pairings.length ? 'Your devices' : 'Link your phone'}
+                </button>
+              </section>
+
+                  </>
+                )}
+                {tab === 'about' && <About />}
+              </div>
             </div>
           </motion.div>
         </motion.div>
