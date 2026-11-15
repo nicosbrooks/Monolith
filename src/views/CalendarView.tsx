@@ -243,7 +243,7 @@ function Week({ cursor, events, onEdit, span }: { cursor: Date; events: CalEvent
           </div>
         ))}
       </div>
-      <div className="week-scroll" ref={scroller}>
+      <div className="week-scroll" ref={scroller} tabIndex={0} aria-label="Week">
         <div className="week-grid" style={{ height: HOUR * 24 }}>
           <div className="gutter hours">
             {Array.from({ length: 24 }, (_, h) => (

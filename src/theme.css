@@ -20,7 +20,7 @@
   --s5: #e0e1e6;
   --s6: #d9d9e0;
   --s7: #cdced6;
-  --s9: #8b8d98;
+  --s9: #6b6d76;
   --s11: #60646c;
   --s12: #1c2024;
 
@@ -58,7 +58,7 @@
   --s5: #2e3135;
   --s6: #363a3f;
   --s7: #43484e;
-  --s9: #696e77;
+  --s9: #93949e;
   --s11: #b0b4ba;
   --s12: #edeef0;
   --bg: var(--s2);
@@ -730,7 +730,9 @@ button:focus-visible {
 }
 /* ═════════ Expo dashboard match (from reference screenshot) ═════════ */
 :root {
-  --blue: #0d8bff;
+  /* Calendar blue: white text on it and it as text both meet WCAG AA (lighter text shade in dark, below). */
+  --blue: #0a6cd0;
+  --blue-text: #0a6cd0;
   --red: #e5484d;
   /* neutral by default; sections opt into a color below */
   --accent: var(--fg);
@@ -743,6 +745,8 @@ button:focus-visible {
   --nav-on: var(--s4);
 }
 :root[data-theme='dark'] {
+  --blue: #1a73e8;
+  --blue-text: #5aa5ff;
   --bg: #19191c;
   --content: #111113;
   --surface: #111113;
@@ -1005,14 +1009,14 @@ button:focus-visible {
   background: var(--accent);
 }
 .wd.today small {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 /* ── contextual accents: color only where it carries meaning ── */
 .main.sec-calendar {
   --accent: var(--blue);
   --on-accent: #fff;
   --accent-soft: color-mix(in oklab, var(--blue) 14%, transparent);
-  --accent-text: var(--blue);
+  --accent-text: var(--blue-text);
 }
 .main.sec-lectures {
   --accent: var(--red);

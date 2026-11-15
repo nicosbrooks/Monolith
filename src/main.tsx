@@ -8,6 +8,9 @@ import './theme.css'
 import './soft.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { installFocusTrap } from './lib/focusTrap'
+
+installFocusTrap()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -19,6 +22,4 @@ createRoot(document.getElementById('root')!).render(
 )
 
 // Offline support in the production build only (a service worker would get in the way of hot reload).
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js').catch(() => {}))
-}
+if (import.meta.env.PROD) void import('./lib/updates').then((m) => m.registerServiceWorker())

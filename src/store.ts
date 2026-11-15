@@ -66,6 +66,8 @@ export interface Settings {
   setupAt: number | null
   /** When the workspace was last saved to a backup file. */
   lastBackup?: number
+  /** When Monolith last suggested a backup (lib/safekeeping.ts). */
+  backupNudgedAt?: number
   /** Integrations turned on in this browser (Settings › Integrations). */
   integrations?: ('location' | 'weather')[]
   /** Settings › Files. Unset means on: pictures resized, other files compressed where it helps. */

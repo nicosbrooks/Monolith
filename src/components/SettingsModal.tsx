@@ -5,6 +5,7 @@ import { useStore } from '../store'
 import { chooseModel, deleteModel, fits, modelForTier, models, refreshCache, resolvedModel, useAI } from '../ai/llm'
 import { STT_MODELS, sttModel } from '../ai/stt'
 import { StorageSettings } from './StorageSettings'
+import { About } from './About'
 import { toast } from './Toast'
 import { openLink } from './LinkDialog'
 import { useLink } from '../link/link'
@@ -25,10 +26,10 @@ export function SettingsModal() {
     <AnimatePresence>
       {open && (
         <motion.div className="overlay" onMouseDown={close} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <motion.div className="modal" onMouseDown={(e) => e.stopPropagation()} initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}>
+          <motion.div className="modal" role="dialog" aria-modal="true" aria-label="Settings" onMouseDown={(e) => e.stopPropagation()} initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}>
             <header>
               <h2>Settings</h2>
-              <button className="icon-btn" onClick={close}>
+              <button className="icon-btn" onClick={close} aria-label="Close" title="Close (Esc)">
                 <X size={18} />
               </button>
             </header>
@@ -134,6 +135,8 @@ export function SettingsModal() {
                 </div>
                 <p className="muted small">{STT_MODELS.find((m) => m.id === sttModel(settings.whisperModel))!.name} · {STT_MODELS.find((m) => m.id === sttModel(settings.whisperModel))!.size}, downloaded once. Speech is transcribed on this device as it’s said; nothing is sent anywhere.</p>
               </details>
+
+              <About />
             </div>
           </motion.div>
         </motion.div>

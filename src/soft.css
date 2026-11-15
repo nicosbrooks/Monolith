@@ -14,8 +14,8 @@
   --s5: #dad9d3;
   --s6: #cfcec7;
   --s7: #bdbcb5;
-  --s9: #8a8983;
-  --s11: #5f5e59;
+  --s9: #686761;
+  --s11: #52514c;
   --s12: #1d1d1b;
   --bg: var(--s2);
   --content: #ffffff;
@@ -35,7 +35,7 @@
   --s5: #2a2a28;
   --s6: #333331;
   --s7: #44443f;
-  --s9: #94938e;
+  --s9: #9c9b96;
   --s11: #b9b8b3;
   --s12: #eeedea;
   --bg: #0f0f0e;
@@ -775,7 +775,7 @@ details.advanced[open] > summary::after {
   text-align: left;
 }
 .tier small {
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: 12px;
 }
 .tier.on {
@@ -1261,6 +1261,8 @@ body {
 }
 .nav-row .nav-add {
   position: absolute;
+  min-width: 24px;
+  min-height: 24px;
   right: 6px;
   top: 50%;
   transform: translateY(-50%);
@@ -1895,6 +1897,7 @@ body {
 /* File menus: on a card, after Open; on a picture, in its corner while hovered or selected. */
 .ProseMirror .file-node { position: relative; }
 .file-card .file-more { flex: none; }
+.file-more { min-width: 24px; min-height: 24px; }
 .ProseMirror .file-more.on-picture { position: absolute; top: 8px; right: 8px; background: var(--raised); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25); opacity: 0; transition: opacity 0.15s; }
 .ProseMirror .file-node:hover .file-more.on-picture,
 .ProseMirror .file-node.is-selected .file-more.on-picture,
@@ -1952,3 +1955,14 @@ body {
 .crash { display: grid; justify-items: center; align-content: center; gap: 8px; padding: 32px 20px; min-height: 200px; text-align: center; }
 .crash p { color: var(--text-2); margin: 0 0 6px; }
 .crash-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+/* Settings › About */
+.about-version { display: flex; align-items: baseline; gap: 10px; margin: 0 0 4px; }
+.about-body { font-size: 13px; line-height: 1.55; color: var(--text-2, inherit); }
+.about-body p { margin: 8px 0; }
+.about-body ul { margin: 6px 0 10px; padding-left: 18px; }
+.about-body li { margin: 4px 0; }
+.about-body a { color: inherit; text-decoration: underline; text-underline-offset: 2px; display: inline-flex; align-items: center; gap: 3px; }
+
+/* Settings › Storage: the browser may clear data */
+.warn-line { color: var(--text-2); margin: 4px 0 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border, rgba(127,127,127,.3)); line-height: 1.5; }

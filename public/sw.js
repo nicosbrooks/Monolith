@@ -1,9 +1,15 @@
 // Offline cache for the production build. The app shell and its hashed assets are cached as they're used,
 // so after one visit the app opens without a network. AI models are cached separately by the AI libraries.
+// The build replaces this name with one per release (vite.config.ts), so each release is a new service worker.
 const CACHE = 'app-v1'
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/favicon.svg', '/manifest.webmanifest'])).then(() => self.skipWaiting()))
+  // The first install takes over at once. An update waits for the page's Reload (lib/updates.ts) so a tab is never
+  // switched to new code mid-edit; it also takes over once every Monolith tab has been closed.
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/favicon.svg', '/manifest.webmanifest'])).then(() => (self.registration.active ? undefined : self.skipWaiting())))
+})
+self.addEventListener('message', (e) => {
+  if (e.data === 'activate') self.skipWaiting()
 })
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k.startsWith('app-')).map((k) => caches.delete(k)))).then(() => self.clients.claim()))

@@ -1,5 +1,6 @@
 # Every push and pull request: type-check, lint, the date parser cases, a production build (which also fails if any
-# file is over Cloudflare Pages' 25 MiB limit), and the end-to-end tests against that build in Chromium.
+# file is over Cloudflare Pages' 25 MiB limit), the startup bundle budget, and the end-to-end tests against that build
+# in Chromium, accessibility checks (axe, WCAG 2.2 AA) included.
 name: CI
 on:
   push:
@@ -19,6 +20,7 @@ jobs:
       - run: npx oxlint
       - run: npm run test:dates
       - run: npx vite build
+      - run: npm run budget
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - if: failure()

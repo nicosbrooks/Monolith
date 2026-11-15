@@ -206,9 +206,10 @@ function Week({ events, today }: { events: CalEvent[]; today: Date }) {
             const isOn = d.getTime() === active.getTime()
             const n = on(d)
             return (
-              <button key={d.getTime()} role="tab" aria-selected={isOn} className={isOn ? 'on' : undefined} onClick={() => (isOn ? openDay() : setSelected(d.getTime()))} aria-label={`${format(d, 'EEEE, MMMM d')}, ${n.length} event${n.length === 1 ? '' : 's'}`}>
+              <button key={d.getTime()} role="tab" aria-selected={isOn} className={isOn ? 'on' : undefined} onClick={() => (isOn ? openDay() : setSelected(d.getTime()))} title={format(d, 'EEEE, MMMM d')}>
                 <span>{i === 0 ? 'Today' : format(d, 'EEE')}</span>
                 <b>{format(d, 'd')}</b>
+                <span className="sr-only">, {n.length} event{n.length === 1 ? '' : 's'}</span>
                 <i aria-hidden="true">{n.slice(0, 3).map((e) => <u key={e.id} style={{ background: COLORS[e.color] || COLORS.blue }} />)}</i>
               </button>
             )

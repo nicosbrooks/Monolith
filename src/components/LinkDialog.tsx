@@ -17,7 +17,7 @@ export function LinkDialog() {
     <AnimatePresence>
       {open && (
         <motion.div className="overlay" onMouseDown={close} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <motion.div className="modal link-modal" onMouseDown={(e) => e.stopPropagation()} initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}>
+          <motion.div className="modal link-modal" role="dialog" aria-modal="true" aria-label="Your phone" onMouseDown={(e) => e.stopPropagation()} initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}>
             <header>
               <h2>Your phone</h2>
               <button className="icon-btn" onClick={close} aria-label="Close"><X size={18} /></button>

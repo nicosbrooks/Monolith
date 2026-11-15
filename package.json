@@ -1,7 +1,7 @@
 {
   "name": "monolith",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.9.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,7 +14,8 @@
     "test:dates": "node scripts/test-dates.ts",
     "test:e2e": "playwright test --trace off",
     "test": "npm run test:dates && npm run test:e2e",
-    "check": "tsc -b && oxlint && npm run test:dates"
+    "check": "tsc -b && oxlint && npm run test:dates",
+    "budget": "node scripts/bundle-budget.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
@@ -50,6 +51,7 @@
     "zustand": "^5.1.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.64.1",
     "@types/node": "^24.19.2",
     "@types/qrcode": "^1.5.6",

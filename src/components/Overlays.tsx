@@ -29,7 +29,7 @@ function ConfirmHost() {
     <AnimatePresence>
       {cur && (
         <motion.div className="overlay top" onMouseDown={() => close(false)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}>
-          <motion.div className="confirm" role="alertdialog" aria-modal onMouseDown={(e) => e.stopPropagation()} initial={{ opacity: 0, scale: 0.96, y: 6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.14 }}>
+          <motion.div className="confirm" role="alertdialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()} initial={{ opacity: 0, scale: 0.96, y: 6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.14 }}>
             <h3>{cur.title}</h3>
             {cur.body && <p>{cur.body}</p>}
             <div className="row end">
@@ -178,7 +178,7 @@ function ShortcutsHost() {
     <AnimatePresence>
       {open && (
         <motion.div className="overlay" onMouseDown={() => useShortcuts.setState({ open: false })} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <motion.div className="modal keys" onMouseDown={(e) => e.stopPropagation()} initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}>
+          <motion.div className="modal keys" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" onMouseDown={(e) => e.stopPropagation()} initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}>
             <header><h2>Keyboard shortcuts</h2></header>
             <div className="modal-body keys-grid">
               {SHORTCUTS.map(([group, rows]) => (

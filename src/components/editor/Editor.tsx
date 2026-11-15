@@ -68,7 +68,7 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
     content: html,
     autofocus: autofocus ? 'end' : false,
     editorProps: {
-      attributes: { class: `prose ${className || ''}`, spellcheck: 'true' },
+      attributes: { class: `prose ${className || ''}`, spellcheck: 'true', 'aria-label': 'Doc body', 'aria-multiline': 'true' },
       handleKeyDown: (view, e) => {
         const s = slashRef.current
         if (!s) return false

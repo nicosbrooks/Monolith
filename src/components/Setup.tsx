@@ -98,7 +98,7 @@ export function Setup() {
           {step > 0 ? (
             <button className="icon-btn" onClick={() => (setStep(0), setError(''))} aria-label="Back"><ArrowLeft size={18} /></button>
           ) : <img className="su-logo" src="/favicon.svg" alt="" />}
-          <span className="su-steps" aria-label={`Step ${step + 1} of 2`}><i className={step === 0 ? 'on' : ''} /><i className={step === 1 ? 'on' : ''} /></span>
+          <span className="su-steps" role="img" aria-label={`Step ${step + 1} of 2`}><i className={step === 0 ? 'on' : ''} /><i className={step === 1 ? 'on' : ''} /></span>
           {again ? <button className="su-skip" onClick={() => useStore.setState({ setupOpen: false })}>Cancel</button> : <span className="su-skip" />}
         </div>
 

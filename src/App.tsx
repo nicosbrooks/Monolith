@@ -82,6 +82,7 @@ export default function App() {
     // Find the best engine this machine already has, quietly.
     void startAI()
     void import('./lib/fileUpkeep').then((m) => m.startFileUpkeep())
+    void import('./lib/safekeeping').then((m) => m.startSafekeeping())
     // System 1 (EmbeddingGemma): small, always on; quietly downloads once, then indexes when the browser is idle.
     void import('./ai/system1').then((m) => m.startSystem1())
     // Warm the editor and calendar in the background so the first open is instant.

@@ -1,6 +1,7 @@
 import { formatDistanceToNow } from 'date-fns'
 import { Cloud, FileArchive, FolderOpen, GitBranch, Laptop, Lock, Plus, RefreshCw, Unplug } from 'lucide-react'
 import { openBackup } from '../lib/backup'
+import { useSafekeeping } from '../lib/safekeeping'
 import { useVault } from '../lib/vault'
 import { useStore } from '../store'
 import type { Source } from '../types'
@@ -22,11 +23,17 @@ export function StorageSettings() {
   const locked = useVault((s) => s.state) === 'open'
   const change = () => useStore.setState({ settingsOpen: false, setupOpen: 1 })
   const lastBackup = useStore((s) => s.settings.lastBackup)
+  const persisted = useSafekeeping((s) => s.persisted)
 
   return (
     <section>
       <h3>Storage</h3>
       <p className="muted">Your work is saved here. You can also keep docs in a folder, GitHub or Google Drive.</p>
+      {persisted === false && (
+        <p className="small warn-line">
+          This browser hasn’t promised to keep Monolith’s data, so it may clear it when space runs low. Save a backup file from time to time{/Safari/.test(navigator.userAgent) && !/Chrome|Chromium/.test(navigator.userAgent) ? ', or add Monolith to your Dock or Home Screen, which keeps it' : ', or install Monolith as an app, which usually keeps it'}.
+        </p>
+      )}
       <div className="model-list">
         <div className="model">
           <Laptop size={16} />
