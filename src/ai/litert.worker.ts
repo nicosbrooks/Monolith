@@ -31,7 +31,7 @@ g.importScripts = (...urls: string[]) => {
  */
 type In =
   | { type: 'load'; repo: string; maxTokens: number }
-  | { type: 'chat'; messages: { role: string; content: string }[]; maxTokens: number; temperature: number }
+  | { type: 'chat'; messages: { role: string; content: string }[]; maxTokens: number; temperature: number; metrics?: boolean }
   | { type: 'stop' }
   | { type: 'unload' }
 
@@ -112,14 +112,15 @@ async function load(repo: string, maxTokens: number) {
 const textOf = (m: Message) =>
   typeof m.content === 'string' ? m.content : (m.content ?? []).map((p) => (p.type === 'text' ? (p as { text: string }).text : '')).join('')
 
-async function chat(messages: { role: string; content: string }[], maxTokens: number, temperature: number) {
+async function chat(messages: { role: string; content: string }[], maxTokens: number, temperature: number, metrics?: boolean) {
   if (!engine) throw new Error('The assistant is still getting ready.')
   const last = messages[messages.length - 1]
   const before = messages.slice(0, -1)
   const key = JSON.stringify(before)
   const settings = JSON.stringify([maxTokens, temperature])
   // Same chat, one new question: keep the conversation and its memory. Otherwise start again from the preface.
-  if (!convo || convo.history !== key || convo.settings !== settings) {
+  const reused = convo?.history === key && convo.settings === settings
+  if (!convo || !reused) {
     await dropConversation()
     const conv = await engine.createConversation({
       preface: { messages: before.map((m) => ({ role: m.role, content: m.content })) },
@@ -139,7 +140,14 @@ async function chat(messages: { role: string; content: string }[], maxTokens: nu
     throw e
   }
   if (convo) convo.history = JSON.stringify([...messages, { role: 'assistant', content: full }])
-  post({ type: 'done', full, window: windowSize })
+  let measured: { contextTokens?: number; prefillTokens?: number; reused: boolean } | undefined
+  if (metrics && convo) {
+    const [count, benchmark] = await Promise.allSettled([convo.conv.getTokenCount(), convo.conv.getBenchmarkInfo()])
+    measured = { reused }
+    if (count.status === 'fulfilled') measured.contextTokens = count.value
+    if (benchmark.status === 'fulfilled') measured.prefillTokens = benchmark.value.lastPrefillTokenCount
+  }
+  post({ type: 'done', full, window: windowSize, ...measured })
 }
 
 self.onmessage = async (e: MessageEvent<In>) => {
@@ -154,7 +162,7 @@ self.onmessage = async (e: MessageEvent<In>) => {
       return post({ type: 'unloaded' })
     }
     if (m.type === 'load') return await load(m.repo, m.maxTokens)
-    if (m.type === 'chat') return await chat(m.messages, m.maxTokens, m.temperature)
+    if (m.type === 'chat') return await chat(m.messages, m.maxTokens, m.temperature, m.metrics)
   } catch (err) {
     fail(err)
   }

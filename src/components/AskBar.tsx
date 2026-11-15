@@ -6,6 +6,9 @@ import { eventColor, parseQuickEvent, whenLabel } from '../lib/dates'
 import { htmlToText, itemEmoji } from '../lib/util'
 import { toast } from './Toast'
 
+// Match iOS: a date in a question or request for information should go to chat.
+const questionStart = /^(what|when|where|who|why|how|do|does|did|is|are|am|can|could|should|will|would|which|any|show|list|find|tell|summarize|explain)\b/i
+
 /**
  * The bar at the bottom of every page. It knows where you are: on the calendar, typing an event adds it; with a
  * note, doc or recording open, questions are about that page; elsewhere it asks, searches and adds.
@@ -50,11 +53,24 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
   }, [section, page?.id, page?.title, page?.kind]) // eslint-disable-line
 
   const text = q.trim()
-  const event = text.length > 3 ? parseQuickEvent(text.replace(/^\s*(add|schedule|book|new( event)?)\s+/i, '')) : null
-  // On the calendar anything with a date is an event; elsewhere it needs to read like one ("add …").
-  const isEvent = !!event && (section === 'calendar' || /^\s*(add|schedule|book|new)\b/i.test(text))
+  const canAddEvent = section === 'calendar' || /^(add|schedule|book|new)\b/i.test(text)
+  const isQuestion = text.includes('?') || questionStart.test(text)
+  const event = canAddEvent && !isQuestion && text.length > 3
+    ? parseQuickEvent(text.replace(/^(add|schedule|book|new( event)?)\s+/i, ''))
+    : null
+  const isEvent = !!event
   const ql = text.toLowerCase()
-  const hits = ql.length > 1 && !isEvent ? items.filter((i) => !i.deletedAt && (i.title.toLowerCase().includes(ql) || htmlToText(i.content).toLowerCase().includes(ql))).slice(0, 4) : []
+  const hits = useMemo(() => {
+    if (!focused || ql.length < 2 || isEvent) return []
+    const matches: typeof items = []
+    for (const item of items) {
+      if (item.deletedAt) continue
+      if (!item.title.toLowerCase().includes(ql) && !htmlToText(item.content).toLowerCase().includes(ql)) continue
+      matches.push(item)
+      if (matches.length === 4) break
+    }
+    return matches
+  }, [focused, isEvent, items, ql])
 
   const ask = (prompt: string) => {
     useStore.setState({ askDraft: prompt, aiOpen: true })
@@ -74,6 +90,7 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
     })
     toast(`Added “${title}” · ${whenLabel(event)}`, { action: { label: 'Undo', run: () => st.deleteEvent(ev.id) } })
     setQ('')
+    input.current?.blur()
   }
   const submit = () => {
     if (!text) return

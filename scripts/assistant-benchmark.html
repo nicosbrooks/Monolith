@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Monolith assistant benchmark</title>
+<h1>Monolith assistant benchmark</h1>
+<p>Serve with Vite on port 5210. Every case uses synthetic notes, transcripts, tasks and events.</p>
+<p>The prompt audit checks evidence and estimated token counts. Inference may download model weights on the first run.</p>
+<button id="audit">Run prompt audit</button>
+<button id="fast">Compare on Fast</button>
+<button id="default">Compare on Default</button>
+<pre id="results" aria-live="polite"></pre>
+<script type="module" src="./assistant-benchmark.ts"></script>

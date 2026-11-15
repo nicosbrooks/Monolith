@@ -3,6 +3,7 @@ import type { MLCEngineInterface } from '@mlc-ai/web-llm'
 import { useStore } from '../store'
 import { APP_NAME } from '../brand'
 import { cachedModel, removeModel } from './litert-cache'
+import { fit, tokensOf, type Msg } from './prompt'
 
 export type Tier = 'fast' | 'default' | 'enhanced' | 'more'
 export interface ModelInfo {
@@ -169,7 +170,7 @@ export function modelForTier(t: Exclude<Tier, 'more'>): ModelInfo {
   return usable
 }
 
-export type Msg = { role: 'system' | 'user' | 'assistant'; content: string }
+export type { Msg } from './prompt'
 
 interface AIState {
   status: 'idle' | 'loading' | 'ready' | 'error' | 'unsupported'
@@ -411,7 +412,9 @@ function onnxCall(msg: object, on: (m: OnnxOut) => boolean | void): Promise<void
   })
 }
 
-type LitertOut = OnnxOut | { type: 'unloaded' }
+type LitertOut = Exclude<OnnxOut, { type: 'done' }> | { type: 'unloaded' } | {
+  type: 'done'; full: string; contextTokens?: number; prefillTokens?: number; reused?: boolean
+}
 /** Send one request to the LiteRT-LM worker and follow its replies until `on` says it's finished. */
 function litertCall(msg: object, on: (m: LitertOut) => boolean | void): Promise<void> {
   litert ??= new Worker(new URL('./litert.worker.ts', import.meta.url), { type: 'module' })
@@ -561,61 +564,36 @@ export async function deleteModel(modelId: string) {
   refreshCache()
 }
 
-/** Rough token count, on the safe side: about 3.2 characters a token (English is nearer 4). */
-const tokensOf = (t: string) => Math.ceil(t.length / 3.2) + 4
 /** Tokens a model can see at once. WebLLM's builds of all three tiers use 4,096. The other engine reads a prompt in one
  *  pass, which costs memory in proportion to its length, so it's kept shorter there. */
 const windowOf = () => (loadedEngine === 'onnx' ? 2048 : loadedEngine === 'litert' ? LITERT_WINDOW : 4096)
-
-/**
- * Fit a chat inside the model's window, leaving room for the answer. The system message and the newest question always
- * stay; older turns go oldest first (a pair at a time, so the chat still starts with a question); if the newest
- * question alone is too long, its middle is cut, keeping the opening paragraph and the end.
- */
-export function fit(messages: Msg[], window: number, reserve: number): Msg[] {
-  const budget = window - reserve - 48
-  const sys = messages[0]?.role === 'system' ? messages[0] : null
-  const rest = sys ? messages.slice(1) : messages
-  if (!rest.length) return messages
-  const last = rest[rest.length - 1]
-  const used = (sys ? tokensOf(sys.content) : 0) + tokensOf(last.content)
-  if (used > budget) {
-    const room = Math.floor(Math.max(200, (budget - (sys ? tokensOf(sys.content) : 0)) * 3.2))
-    // Keep the opening paragraph (instructions come first in some prompts) and the end (the question comes last in
-    // chat); the middle, usually pasted material, is what gives way.
-    const para = last.content.indexOf('\n\n')
-    const head = para > 0 ? Math.min(para, Math.floor(room * 0.4)) : 0
-    return [...(sys ? [sys] : []), { ...last, content: last.content.slice(0, head) + '\n…\n' + last.content.slice(-(room - head - 3)) }]
-  }
-  let total = used
-  let from = rest.length - 1
-  while (from > 0 && total + tokensOf(rest[from - 1].content) <= budget) total += tokensOf(rest[--from].content)
-  while (from < rest.length - 1 && rest[from].role !== 'user') from++
-  return [...(sys ? [sys] : []), ...rest.slice(from)]
-}
 
 /** The GPU went away (sleep, a driver reset, another tab using all its memory); the model has to be loaded again. */
 const gpuLost = (e: unknown) => /device (was |is )?lost|devicelost|gpudevice|destroyed|instance reference no longer exists|dispose/i.test(message(e))
 const tooLong = (e: unknown) => /exceed context window|context window size/i.test(message(e))
 
+type ChatMetrics = { engine: string; estimatedInputTokens: number; inputTokens?: number; contextTokens?: number; prefillTokens?: number; reused?: boolean }
+type ChatOptions = { signal?: AbortSignal; temperature?: number; maxTokens?: number; onMetrics?: (metrics: ChatMetrics) => void }
+
 /** Stream a chat completion from the model running in this browser. Returns the full text. */
-export async function chat(messages: Msg[], onToken?: (full: string) => void, opts: { signal?: AbortSignal; temperature?: number; maxTokens?: number } = {}): Promise<string> {
+export async function chat(messages: Msg[] | ((window: number, reserve: number) => Msg[]), onToken?: (full: string) => void, opts: ChatOptions = {}): Promise<string> {
   useAI.setState({ busy: true })
   const reserve = opts.maxTokens ?? 1024
+  const prepare = (window: number) => fit(typeof messages === 'function' ? messages(window, reserve) : messages, window, reserve)
   try {
     try {
-      return await generate(fit(messages, windowOf(), reserve), onToken, opts)
+      return await generate(prepare(windowOf()), onToken, opts)
     } catch (e) {
       if (opts.signal?.aborted) throw e
       // The estimate was short for this text (code, other scripts): try again with a much smaller share of the window.
-      if (tooLong(e)) return await generate(fit(messages, Math.floor(windowOf() * 0.6), reserve), onToken, opts)
+      if (tooLong(e)) return await generate(prepare(Math.floor(windowOf() * 0.6)), onToken, opts)
       // Load the same model again (from the browser's cache, no download) and answer once more.
       if (gpuLost(e) || !isReady()) {
         const id = useAI.getState().loadedModel
         await resetEngines()
         await loadModel(id ?? undefined)
         if (!isReady()) throw new Error('The assistant stopped and couldn’t restart. Reload the page to try again.')
-        return await generate(fit(messages, windowOf(), reserve), onToken, opts)
+        return await generate(prepare(windowOf()), onToken, opts)
       }
       throw e
     }
@@ -637,18 +615,21 @@ async function resetEngines() {
   useAI.setState({ status: 'idle', loadedModel: null })
 }
 
-async function generate(messages: Msg[], onToken: ((full: string) => void) | undefined, opts: { signal?: AbortSignal; temperature?: number; maxTokens?: number }): Promise<string> {
+async function generate(messages: Msg[], onToken: ((full: string) => void) | undefined, opts: ChatOptions): Promise<string> {
+  const metrics = () => ({ engine: loadedEngine ?? 'unknown', estimatedInputTokens: messages.reduce((total, part) => total + tokensOf(part.content), 0) })
   if (loadedEngine === 'litert') {
     let full = ''
     const stop = () => litert?.postMessage({ type: 'stop' })
     opts.signal?.addEventListener('abort', stop)
     try {
-      await litertCall({ type: 'chat', messages, maxTokens: opts.maxTokens ?? 1024, temperature: opts.temperature ?? 0.6 }, (r) => {
+      await litertCall({ type: 'chat', messages, maxTokens: opts.maxTokens ?? 1024, temperature: opts.temperature ?? 0.6, metrics: !!opts.onMetrics }, (r) => {
         if (r.type === 'token' || r.type === 'done') {
           full = r.full
           onToken?.(clean(full))
         }
-        return r.type === 'done'
+        if (r.type !== 'done') return false
+        opts.onMetrics?.({ ...metrics(), contextTokens: r.contextTokens, prefillTokens: r.prefillTokens, reused: r.reused })
+        return true
       })
     } catch (e) {
       // Stopping mid-answer ends the stream with an error; what was written so far is the answer.
@@ -684,6 +665,7 @@ async function generate(messages: Msg[], onToken: ((full: string) => void) | und
     } finally {
       opts.signal?.removeEventListener('abort', stop)
     }
+    opts.onMetrics?.(metrics())
     return clean(full)
   }
   if (!engine) throw new Error('The assistant is still getting ready.')
@@ -692,18 +674,22 @@ async function generate(messages: Msg[], onToken: ((full: string) => void) | und
   const stream = await engine.chat.completions.create({
     messages: direct,
     stream: true,
+    stream_options: opts.onMetrics ? { include_usage: true } : undefined,
     temperature: opts.temperature ?? 0.6,
     max_tokens: opts.maxTokens ?? 1024,
   })
   let full = ''
+  let inputTokens: number | undefined
   for await (const chunk of stream) {
     if (opts.signal?.aborted) {
       engine.interruptGenerate()
       break
     }
+    if (chunk.usage) inputTokens = chunk.usage.prompt_tokens
     full += chunk.choices[0]?.delta?.content ?? ''
     onToken?.(clean(full))
   }
+  opts.onMetrics?.({ ...metrics(), inputTokens })
   return clean(full)
 }
 

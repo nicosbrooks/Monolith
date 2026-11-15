@@ -20,6 +20,7 @@ export interface ParsedEvent {
   matched: string
   /** A deadline ("due", "by Friday"), not something that takes up time. */
   due: boolean
+  explicitDuration: boolean
   /** "at Chipotle", "@ Room 204". */
   location?: string
   /** The sentence this was found in, when it came from free text. */
@@ -257,7 +258,7 @@ export function parseQuickEvent(input: string, now = new Date()): ParsedEvent | 
     s = day!
     e = addDays(s, 1)
   }
-  return { title, start: s, end: e, allDay: !hasTime, matched: matched.join(' '), due, location }
+  return { title, start: s, end: e, allDay: !hasTime, matched: matched.join(' '), due, explicitDuration: hasTime && (end !== null || minutes !== null), location }
 }
 
 /** Find lines in free text that look like they describe a dated commitment. */

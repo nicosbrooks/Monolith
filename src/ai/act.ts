@@ -21,12 +21,12 @@ export type Act =
 export const ACT_GUIDE = `The user asked you to do something in the app. Reply with only one line per change, nothing before or after, using these forms (fill in every <…>, times are local):
 @event {"title":"<what>","start":"<YYYY-MM-DDTHH:MM>","end":"<YYYY-MM-DDTHH:MM>"}
 @event {"title":"<what>","date":"<YYYY-MM-DD>"}
-@move {"event":"<title exactly as on the calendar>","start":"<YYYY-MM-DDTHH:MM>","end":"<YYYY-MM-DDTHH:MM>"}
+@move {"event":"<title exactly as on the calendar>","start":"<YYYY-MM-DDTHH:MM>"}
 @cancel {"event":"<title exactly as on the calendar>"}
 @task {"text":"<the task>"}
 @done {"task":"<task text exactly as under Open tasks>"}
 @doc {"title":"<title>","md":"<markdown body>"}
-Take dates from the Dates list. Only do what the user asked for.`
+Take dates from the Dates list. For @move, include an end only if the user asks to change the duration. Only do what the user asked for.`
 
 /**
  * Only a request to do something gets the action format; questions get plain answers. The verb has to be the request
@@ -150,11 +150,13 @@ export function pinToAsked(acts: Act[], request: string, now = new Date()): Act[
   const hasTime = !p.allDay
   return acts.map((a) => {
     if (a.kind !== 'event' && a.kind !== 'move') return a
-    const len = a.end - a.start
+    const len = a.kind === 'move' && !a.was.allDay
+      ? p.explicitDuration ? +p.end - +p.start : a.was.end - a.was.start
+      : a.end - a.start
     const old = new Date(a.start)
     const start = (hasTime ? p.start : set(p.start, { hours: old.getHours(), minutes: old.getMinutes() })).getTime()
-    if (start === a.start) return a
     const allDay = hasTime ? false : a.allDay
+    if (start === a.start && len === a.end - a.start && allDay === a.allDay) return a
     return { ...a, start, end: allDay ? start + 864e5 : start + len, allDay }
   })
 }

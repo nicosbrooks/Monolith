@@ -1,6 +1,7 @@
 import { format, isSameDay } from 'date-fns'
 import type { CalEvent, Item } from '../types'
 import { extractOpenTodos } from '../lib/util'
+import { betweenEventsAnswer } from './availability'
 
 // Some questions have an exact answer in the app's own data: what's on a day, what's next, what's left to do.
 // Those are answered on the spot, word for word from the calendar and docs, with no model involved: instantly,
@@ -38,6 +39,8 @@ export function instantAnswer(question: string, o: { events: CalEvent[]; items: 
   const now = o.now ?? new Date()
   const q = question.toLowerCase().replace(/[’']/g, "'").replace(/[?.!]+$/, '').trim()
   if (q.length > 70) return null
+  const gap = betweenEventsAnswer(q, o.events, now)
+  if (gap) return { text: gap, source: 'calendar' }
 
   // "what's next", "what's my next event", "when is my next class"
   if (/^(what's|what is|whats|when's|when is)( my)? next( event| thing| meeting| class)?( on my calendar)?$/.test(q)) {

@@ -6,9 +6,9 @@ import { useAI, background, chat, enqueue, isReady, ensureAI, SYSTEM, type Msg }
 import { useRuleSuggestions } from '../ai/suggestions'
 import { getActiveEditor } from '../ai/actions'
 import { ACT_GUIDE, describe, fresh, perform, pinToAsked, quickAct, splitActs, verbs, visible, wantsAction, type Act } from '../ai/act'
-import { passages, relevant, sharedContext } from '../ai/context'
+import { CHAT_RULES, evidenceQuery, packTurn, sameEvidence, turnEvidence, wantsDeviceContext, type Evidence, type Workspace } from '../ai/context'
 import { instantAnswer } from '../ai/instant'
-import { refreshDevice } from '../lib/integrations'
+import { deviceContext, refreshDevice } from '../lib/integrations'
 import { toast } from './Toast'
 import { Listen } from './Listen'
 import { htmlToText, mdToHtml } from '../lib/util'
@@ -214,9 +214,8 @@ function Chat() {
   const [useCtx, setUseCtx] = useState(true)
   const [streaming, setStreaming] = useState(false)
   const abort = useRef<AbortController | null>(null)
-  // The shared context for this conversation and exactly what each user turn sent. Sending the same prefix every
-  // turn lets the local model reuse what it has already read (its KV cache) and only read the new message.
-  const convo = useRef<{ day: string; sys: string; sent: Record<number, string>; seen: Record<number, string[]> } | null>(null)
+  // Keep the prompt prefix when its evidence is still current, so the runtime can reuse its cache.
+  const sent = useRef(new Map<number, { content: string; kept: Evidence[]; workspace: Workspace }>())
   const scroll = useRef<HTMLDivElement>(null)
   useEffect(() => { scroll.current?.scrollTo({ top: 1e9, behavior: 'smooth' }) }, [msgs, meta])
   // A question asked from Ask or search arrives here.
@@ -227,7 +226,6 @@ function Chat() {
     void send(draft)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft])
-  useEffect(() => void refreshDevice(), [])
 
   const send = async (text = q, base = msgs) => {
     if (!text.trim() || abort.current) return
@@ -257,35 +255,45 @@ function Chat() {
         put('', { sources: [], acts: [], status: 'Getting the assistant ready…' })
         if (!(await ensureAI())) throw new Error('The assistant couldn’t start. Try again in a moment.')
       }
-      const day = new Date().toDateString()
-      if (convo.current?.day !== day || base.length === 0) await Promise.race([refreshDevice(), new Promise((r) => setTimeout(r, 1500))])
-      if (convo.current?.day !== day || base.length === 0) convo.current = { day, sys: sharedContext({ items: st.items, events: st.events }), sent: {}, seen: {} }
-      const c = convo.current
-      // This question's passages ride on its own message, so the shared prefix never changes.
-      const skip = new Set(Object.entries(c.seen).filter(([i]) => Number(i) < base.length).flatMap(([, k]) => k))
-      const before = new Set(skip)
-      const found = relevant(text, { items: st.items, open: useCtx ? active : null, skip })
-      c.seen[base.length] = [...skip].filter((k) => !before.has(k))
       const act = wantsAction(text)
-      const opened = useCtx && active ? `The user has "${active.title || 'Untitled'}" open.\n` : ''
-      c.sent[base.length] = `${found.length ? `${passages(found)}\n\n` : ''}${opened}${found.length || opened ? 'Question: ' : ''}${text}${act ? `\n\n${ACT_GUIDE}` : ''}`
-      const sources: Source[] = [...new Map(found.map((f) => [f.item.id, { id: f.item.id, title: f.item.title || 'Untitled' }])).values()]
-      const titles = sources.slice(0, 2).map((x) => `“${x.title}”`)
-      put('', { sources, acts: [], status: titles.length ? `Reading ${titles.join(' and ')}…` : act ? 'Working it out…' : 'Thinking…' })
-      // Earlier turns read as plain conversation: their action instructions are dropped (or a small model keeps
-      // following them), and an answer that was only cards says in words what it offered.
-      const said = (i: number, m: Msg) =>
-        visible(m.content) || (meta[i]?.acts.length ? `Offered: ${meta[i].acts.map((a) => `${verbs(a)[0]} “${a.title}” (${describe(a)})`).join('; ')}` : '(No answer.)')
-      const history = next
-        .map((m, i): Msg =>
-          m.role === 'user'
-            ? { role: 'user', content: i === base.length ? c.sent[i] : (c.sent[i] ?? m.content).replace(`\n\n${ACT_GUIDE}`, '') }
-            : { role: 'assistant', content: said(i, m) },
-        )
-        .slice(-12)
-      const full = await enqueue(() =>
-        chat([{ role: 'system', content: c.sys }, ...history], (t) => setMsgs([...next, { role: 'assistant', content: t }]), { signal: controller.signal, temperature: 0.3, maxTokens: act ? 800 : 500 }),
-      )
+      const previous = base.findLast((m) => m.role === 'user')?.content
+      const query = evidenceQuery(text, previous)
+      if (wantsDeviceContext(query)) await Promise.race([refreshDevice(), new Promise((r) => setTimeout(r, 1500))])
+      const current = useStore.getState()
+      const workspace: Workspace = { items: current.items, events: current.events, now: new Date(), device: deviceContext() }
+      const open = useCtx && active ? current.items.find((item) => item.id === active.id && !item.deletedAt) : null
+      const evidence = turnEvidence(query, { ...workspace, open, action: act })
+      const start = Math.max(0, base.length - 10)
+      for (const i of sent.current.keys()) if (i < start || i >= base.length) sent.current.delete(i)
+      const history = base.slice(start).map((m, offset): Msg => {
+        const index = start + offset
+        if (m.role === 'user') {
+          const prior = sent.current.get(index)
+          const content = prior && sameEvidence(prior.kept, prior.workspace, workspace)
+            ? prior.content.replace(`${ACT_GUIDE}\n\n`, '')
+            : m.content
+          return { role: 'user', content }
+        }
+        const cards = meta[index]?.acts
+        const content = visible(m.content) || (cards?.length ? `Offered: ${cards.map((a) => `${verbs(a)[0]} “${a.title}” (${describe(a)})`).join('; ')}` : '(No answer.)')
+        return { role: 'assistant', content }
+      })
+      let sources: Source[] = []
+      let packed: ReturnType<typeof packTurn> | undefined
+      const full = await enqueue(() => chat((window, reserve) => {
+        packed = packTurn(text, evidence, { window, reserve, guide: act ? ACT_GUIDE : undefined, open })
+        const bySource = new Map<string, Source>()
+        for (const row of packed.kept) {
+          if (row.item) bySource.set(row.item.id, { id: row.item.id, title: row.item.title || 'Untitled' })
+          else if (row.kind === 'calendar') bySource.set('calendar', { id: null, title: 'Your calendar' })
+          else if (row.kind === 'tasks') bySource.set('tasks', { id: null, title: 'Your open tasks' })
+        }
+        sources = [...bySource.values()]
+        const titles = sources.filter((source) => source.id !== null).slice(0, 2).map((source) => `“${source.title}”`)
+        put('', { sources, acts: [], status: titles.length ? `Reading ${titles.join(' and ')}…` : act ? 'Working it out…' : 'Thinking…' })
+        return [{ role: 'system', content: CHAT_RULES }, ...history, { role: 'user', content: packed.content }]
+      }, (t) => setMsgs([...next, { role: 'assistant', content: t }]), { signal: controller.signal, temperature: 0.3, maxTokens: act ? 800 : 500 }))
+      if (packed && !controller.signal.aborted) sent.current.set(base.length, { ...packed, workspace })
       const now = useStore.getState()
       const acts = act ? fresh(pinToAsked(splitActs(full, { events: now.events, items: now.items, openId: useCtx ? active?.id : null }).acts, text), now.events) : []
       if (!visible(full) && !acts.length) put(act ? 'I couldn’t work out that change. Try saying it another way, with the day and time.' : 'No answer came back. Try asking another way.', { sources, acts: [], failed: true })
