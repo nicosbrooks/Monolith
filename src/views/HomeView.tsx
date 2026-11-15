@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { addDays, format, formatDistanceToNowStrict, isSameDay, isToday, startOfDay } from 'date-fns'
-import { FileText, Loader2, Mic, Sparkles, StickyNote } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, FileText, ListChecks, MapPin, Mic, StickyNote } from 'lucide-react'
 import { useMobile, useScrolled } from '../lib/useMobile'
 import { PhoneTitle } from '../components/Phone'
 import { useStore } from '../store'
-import { extractOpenTodos, htmlToText, itemEmoji, mdToHtml } from '../lib/util'
-import { chat, enqueue, isReady, SYSTEM, useAI } from '../ai/llm'
+import { extractOpenTodos, htmlToText, itemEmoji } from '../lib/util'
+import { isReady, useAI } from '../ai/llm'
 import { useRuleSuggestions } from '../ai/suggestions'
 import { useSubEvents } from '../lib/calendars'
 import { COLORS } from '../lib/colors'
@@ -13,10 +13,10 @@ import type { CalEvent } from '../types'
 import { toast } from '../components/Toast'
 import { openMenu } from '../components/Overlays'
 import { docMenu } from '../components/Sidebar'
+import { awayFor, greeting, startersTitle } from '../lib/greeting'
 
 const KindIcon = { note: StickyNote, doc: FileText, lecture: Mic }
 
-const greeting = (h: number) => (h < 5 || h >= 18 ? 'Good evening' : h < 12 ? 'Good morning' : 'Good afternoon')
 const same = (a: string, b: string) => a.replace(/\W+/g, '').toLowerCase() === b.replace(/\W+/g, '').toLowerCase()
 const SHOWN = 5
 
@@ -31,8 +31,10 @@ export function HomeView() {
   const suggestions = useRuleSuggestions()
   const mobile = useMobile()
   const [scrolled, onScroll] = useScrolled()
-  const [brief, setBrief] = useState<{ text: string; done: boolean } | null>(null)
   const [allTasks, setAllTasks] = useState(false)
+  const name = useStore((s) => s.settings.name)
+  const setupAt = useStore((s) => s.settings.setupAt)
+  const [away] = useState(() => awayFor(new Date()))
 
   const now = new Date()
   const today = startOfDay(now)
@@ -62,20 +64,6 @@ export function HomeView() {
     toast('Task done', { ms: 6000, action: { label: 'Undo', run: () => useStore.getState().updateItem(itemId, { content: before }) } })
   }
 
-  const makeBrief = async () => {
-    setBrief({ text: '', done: false })
-    const ctx = `Today: ${format(now, 'EEEE, MMMM d, h:mm a')}\nToday's events:\n${todays.map((e) => `- ${e.allDay ? 'all day' : format(e.start, 'h:mm a')} ${e.title}`).join('\n') || '(none)'}\nThis week:\n${upcoming.map((e) => `- ${format(e.start, 'EEE h:mm a')} ${e.title}`).join('\n') || '(none)'}\nOpen tasks:\n${todos.slice(0, 6).map((t) => `- ${t.text}`).join('\n') || '(none)'}\nRecently worked on:\n${recent.slice(0, 5).map((r) => `- ${r.title}: ${htmlToText(r.content).slice(0, 160)}`).join('\n')}`
-    try {
-      const out = await enqueue(() =>
-        chat([{ role: 'system', content: SYSTEM }, { role: 'user', content: `Write a calm daily brief in under 90 words: name the single most important thing today, then 2–3 bullets for a realistic plan with times when possible. No greeting, no exclamation marks.\n\n${ctx}` }], (t) => setBrief({ text: t, done: false }), { temperature: 0.4, maxTokens: 260 }),
-      )
-      setBrief({ text: out, done: true })
-    } catch {
-      setBrief(null)
-      toast('Couldn’t write a plan', { action: { label: 'Try again', run: () => void makeBrief() } })
-    }
-  }
-
   const restore = (id: string) => useStore.setState((s) => ({ dismissed: s.dismissed.filter((d) => d !== id) }))
   const notNow = (id: string) => {
     st.dismiss(id)
@@ -86,7 +74,18 @@ export function HomeView() {
     toast('Added to calendar', { ms: 6000, action: { label: 'Undo', run: () => (useStore.getState().deleteEvent(eventId), restore(id)) } })
   }
 
-  const canPlan = isReady()
+  // Starting points, built from what's actually on today. Each opens the assistant with the question asked,
+  // so the person can take it anywhere from there. Never a fixed plan.
+  const next = todays.find((e) => !e.allDay && e.end > now.getTime()) ?? todays.find((e) => e.end > now.getTime()) ?? upcoming[0]
+  const lastDoc = recent.find((r) => r.kind !== 'lecture' && htmlToText(r.content).trim())
+  const starters: { icon: typeof FileText; text: string }[] = isReady()
+    ? [
+        next && { icon: CalendarDays, text: `Help me get ready for “${next.title}”` },
+        todos.length > 1 ? { icon: ListChecks, text: `Which of my ${todos.length} tasks should I do first?` } : todos[0] && { icon: ListChecks, text: `Help me with “${todos[0].text}”` },
+        lastDoc && { icon: FileText, text: `Summarize “${lastDoc.title || 'Untitled'}”` },
+      ].filter((x): x is { icon: typeof FileText; text: string } => !!x)
+    : []
+  const ask = (prompt: string) => useStore.setState({ askDraft: prompt, aiOpen: true })
   const tasks = allTasks ? todos : todos.slice(0, SHOWN)
 
   return (
@@ -94,20 +93,14 @@ export function HomeView() {
       {mobile && <PhoneTitle title="" scrolled={scrolled} />}
       <div className="hm">
         <header className="hm-head">
-          <h1>{greeting(now.getHours())}</h1>
+          <h1>{greeting(now, name, away)}</h1>
           <time dateTime={format(now, 'yyyy-MM-dd')}>{format(now, 'EEEE, MMMM d')}</time>
         </header>
 
-        {/* The one place the assistant speaks on Home: a plan, a question with its exact source, or an offer to plan. */}
-        {brief ? (
-          <section className="hm-card hm-asst" aria-label="Assistant">
-            <div className="hm-asst-top"><Sparkles size={15} aria-hidden="true" /> Today’s plan{!brief.done && <Loader2 size={14} className="spin" aria-label="Writing" />}</div>
-            <div className="md" dangerouslySetInnerHTML={{ __html: mdToHtml(brief.text) || '<p class="muted">Thinking…</p>' }} />
-            {brief.done && <div className="hm-asst-actions"><button className="btn" onClick={() => setBrief(null)}>Done</button></div>}
-          </section>
-        ) : nudge ? (
+        {/* The one place the assistant speaks on Home: a question with its exact source, or a few places to start. */}
+        {nudge ? (
           <section className="hm-card hm-asst" aria-label="Assistant" key={nudge.id}>
-            <div className="hm-asst-top"><Sparkles size={15} aria-hidden="true" /> Suggestion</div>
+            <div className="hm-asst-top">Suggestion</div>
             {nudge.found ? (
               <>
                 <h2>Add “{nudge.found.what}” to your calendar?</h2>
@@ -132,12 +125,18 @@ export function HomeView() {
               <button className="btn" onClick={() => notNow(nudge.id)}>Not now</button>
             </div>
           </section>
-        ) : canPlan ? (
+        ) : starters.length ? (
           <section className="hm-card hm-asst" aria-label="Assistant">
-            <div className="hm-asst-top"><Sparkles size={15} aria-hidden="true" /> Assistant</div>
-            <h2>Plan your day</h2>
-            <p>A short plan from your calendar{todos.length ? ` and ${todos.length} open task${todos.length === 1 ? '' : 's'}` : ''}.</p>
-            <div className="hm-asst-actions"><button className="btn primary" onClick={makeBrief}>Plan my day</button></div>
+            <div className="hm-asst-top">{startersTitle({ now, setupAt, soon: !!next && !next.allDay && next.start - now.getTime() < 90 * 60_000, onlyDocs: starters.length === 1 && starters[0].icon === FileText })}</div>
+            <div className="hm-starters">
+              {starters.map(({ icon: Icon, text }) => (
+                <button key={text} className="hm-starter" onClick={() => ask(text)} title="Ask the assistant">
+                  <Icon size={16} strokeWidth={1.8} aria-hidden="true" />
+                  <span>{text}</span>
+                  <ArrowUpRight size={14} aria-hidden="true" />
+                </button>
+              ))}
+            </div>
           </section>
         ) : null}
 
@@ -198,8 +197,8 @@ function Week({ events, today }: { events: CalEvent[]; today: Date }) {
   return (
     <section className="hm-sec" aria-labelledby="hm-week">
       <div className="hm-label">
-        <h2 id="hm-week">{isSameDay(active, today) ? 'Today' : format(active, 'EEEE, MMMM d')}</h2>
-        <button onClick={openDay}>Open calendar</button>
+        <h2 id="hm-week">Calendar</h2>
+        <button onClick={openDay}>Open</button>
       </div>
       <div className="hm-card">
         <div className="hm-week" role="tablist" aria-label="Next seven days">
@@ -218,9 +217,16 @@ function Week({ events, today }: { events: CalEvent[]; today: Date }) {
         <div className="hm-list">
           {evs.slice(0, SHOWN).map((e) => (
             <button key={e.id} className="hm-row" onClick={openDay}>
-              <span className="hm-ico"><u className="hm-dot" style={{ background: COLORS[e.color] || COLORS.blue }} /></span>
-              <span className="hm-row-title">{e.title || 'Untitled event'}</span>
-              <small>{e.allDay ? 'All day' : format(e.start, 'h:mm a')}</small>
+              <u className="hm-bar" aria-hidden="true" style={{ background: COLORS[e.color] || COLORS.blue }} />
+              <span className="hm-ev">
+                <span className="hm-row-title">{e.title || 'Untitled event'}</span>
+                {e.location?.trim() && <small><MapPin size={12} aria-hidden="true" /> {e.location.trim()}</small>}
+              </span>
+              {e.allDay ? (
+                <span className="hm-ev-time">All day</span>
+              ) : (
+                <span className="hm-ev-time"><b>{format(e.start, 'h:mm a')}</b>{format(e.end, 'h:mm a')}</span>
+              )}
             </button>
           ))}
           {!evs.length && <p className="hm-empty">Nothing scheduled.</p>}

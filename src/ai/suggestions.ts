@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { differenceInMinutes, format, isSameDay } from 'date-fns'
 import { useStore } from '../store'
 import type { Suggestion } from '../types'
-import { findDatedCommitments } from '../lib/dates'
+import { eventColor, findDatedCommitments } from '../lib/dates'
 import { htmlToText } from '../lib/util'
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim()
@@ -39,7 +39,7 @@ export function useRuleSuggestions(): Suggestion[] {
         if (exists || dismissed.includes(id)) continue
         /** Adds the event and returns its id, so the caller can offer Undo. */
         const add = () => {
-          const ev = st.addEvent({ title: p.title, start: p.start.getTime(), end: p.end.getTime(), allDay: p.allDay, color: /due|exam|quiz|test|deadline|final|midterm/i.test(p.title) ? 'rose' : 'blue', linkedItemId: it!.id })
+          const ev = st.addEvent({ title: p.title, start: p.start.getTime(), end: p.end.getTime(), allDay: p.allDay, color: eventColor(p), location: p.location, linkedItemId: it!.id })
           st.dismiss(id)
           return ev.id
         }

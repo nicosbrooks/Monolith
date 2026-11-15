@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowUp, BookOpen, CalendarPlus, Check, CheckSquare, Clock, FileInput, List, Loader2, Sparkles, Square, X, Wand2, HelpCircle, RefreshCw } from 'lucide-react'
+import { ArrowUp, BookOpen, CalendarClock, CalendarPlus, CalendarX, Check, CheckSquare, Clock, FileInput, List, Loader2, Lightbulb, ListPlus, Square, X, Wand2, HelpCircle, RefreshCw } from 'lucide-react'
 import { useStore } from '../store'
-import { useAI, chat, enqueue, isReady, ensureAI, SYSTEM, type Msg } from '../ai/llm'
+import { useAI, background, chat, enqueue, isReady, ensureAI, SYSTEM, type Msg } from '../ai/llm'
 import { useRuleSuggestions } from '../ai/suggestions'
 import { getActiveEditor } from '../ai/actions'
-import { ACT_GUIDE, describe, fresh, itemText, mentioned, perform, quickAct, splitActs, wantsAction, type Act } from '../ai/act'
+import { ACT_GUIDE, describe, fresh, perform, pinToAsked, quickAct, splitActs, verbs, visible, wantsAction, type Act } from '../ai/act'
+import { passages, relevant, sharedContext } from '../ai/context'
+import { instantAnswer } from '../ai/instant'
+import { refreshDevice } from '../lib/integrations'
+import { toast } from './Toast'
 import { Listen } from './Listen'
-import { extractOpenTodos, htmlToText, mdToHtml } from '../lib/util'
+import { htmlToText, mdToHtml } from '../lib/util'
 import type { Suggestion } from '../types'
 
-const ICONS = { calendar: CalendarPlus, check: CheckSquare, sparkles: Sparkles, clock: Clock, book: BookOpen, list: List }
+const ICONS = { calendar: CalendarPlus, check: CheckSquare, sparkles: Lightbulb, clock: Clock, book: BookOpen, list: List }
 
 export function AIPanel() {
   const ai = useAI()
@@ -38,7 +42,7 @@ export function AIPanel() {
       const key = active.id + text.length
       setInsights({ id: key, items: [], loading: true })
       try {
-        const out = await enqueue(() =>
+        const out = await background((signal) =>
           chat(
             [
               { role: 'system', content: SYSTEM },
@@ -48,7 +52,7 @@ export function AIPanel() {
               },
             ],
             undefined,
-            { temperature: 0.5, maxTokens: 220 },
+            { temperature: 0.5, maxTokens: 220, signal },
           ),
         )
         const lines = out.split('\n').map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim()).filter((l) => l.length > 8).slice(0, 3)
@@ -83,7 +87,7 @@ export function AIPanel() {
           {settings.proactive && active && ready && (insights?.loading || insights?.items.length) ? (
             <section>
               <div className="ai-label">
-                <Sparkles size={12} /> Insights on “{active.title || 'Untitled'}”
+                <Lightbulb size={12} /> Insights on “{active.title || 'Untitled'}”
                 <button className="icon-btn sm" title="Refresh" onClick={() => setInsights(null)}><RefreshCw size={12} /></button>
               </div>
               {insights?.loading ? (
@@ -197,84 +201,114 @@ function QuickActions() {
   )
 }
 
+type Source = { id: string | null; title: string }
+/** What the app knows about each answer: where it came from, what it offers to do, what it's doing now. */
+type Meta = { sources: Source[]; acts: Act[]; status?: string; failed?: boolean }
+
 function Chat() {
   const active = useStore((s) => s.items.find((i) => i.id === s.activeId && !i.deletedAt))
-  const events = useStore((s) => s.events)
-  const items = useStore((s) => s.items)
   const [msgs, setMsgs] = useState<Msg[]>([])
+  const [meta, setMeta] = useState<Record<number, Meta>>({})
   const [done, setDone] = useState<Record<string, boolean>>({})
   const [q, setQ] = useState('')
   const [useCtx, setUseCtx] = useState(true)
   const [streaming, setStreaming] = useState(false)
   const abort = useRef<AbortController | null>(null)
-  // The system prompt for this conversation and exactly what each user turn sent. Sending the same prefix every turn
-  // lets the local model reuse what it has already read (its KV cache) and only read the new message.
-  const convo = useRef<{ key: string; sys: string; sent: Record<number, string> } | null>(null)
+  // The shared context for this conversation and exactly what each user turn sent. Sending the same prefix every
+  // turn lets the local model reuse what it has already read (its KV cache) and only read the new message.
+  const convo = useRef<{ day: string; sys: string; sent: Record<number, string>; seen: Record<number, string[]> } | null>(null)
   const scroll = useRef<HTMLDivElement>(null)
-  const ready = isReady()
-  useEffect(() => { scroll.current?.scrollTo({ top: 1e9, behavior: 'smooth' }) }, [msgs])
+  useEffect(() => { scroll.current?.scrollTo({ top: 1e9, behavior: 'smooth' }) }, [msgs, meta])
   // A question asked from Ask or search arrives here.
   const draft = useStore((s) => s.askDraft)
   useEffect(() => {
     if (!draft || useStore.getState().askDraft !== draft) return
     useStore.setState({ askDraft: null })
-    if (ready || quickAct(draft)) void send(draft)
-    else setQ(draft)
+    void send(draft)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft])
+  useEffect(() => void refreshDevice(), [])
 
-  /** Everything the assistant should know, built once per conversation. */
-  const buildSystem = () => {
-    const now = Date.now()
-    const upcoming = events
-      .filter((e) => e.end > now && e.start < now + 7 * 864e5)
-      .sort((a, b) => a.start - b.start)
-      .slice(0, 10)
-      .map((e) => `- ${new Date(e.start).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: e.allDay ? undefined : 'numeric', minute: e.allDay ? undefined : '2-digit' })}: ${e.title}`)
-    const live = items.filter((i) => !i.deletedAt)
-    const todos = live.flatMap((i) => extractOpenTodos(i.content, i.id).map((t) => `- ${t.text} (${i.title || 'Untitled'})`)).slice(0, 10)
-    const recent = [...live].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6).map((i) => `- ${i.title || 'Untitled'} (${i.kind === 'lecture' ? 'recording' : i.kind})`)
-    const page = useCtx && active ? `\n\nThe user has this page open — "${active.title}":\n${(htmlToText(active.content) + ' ' + (active.lecture?.transcript.map((s) => s.text).join(' ') || '')).slice(0, 6000)}` : ''
-    return `${SYSTEM}\nAnswer in plain text. Only add events, notes or docs when a message includes the format for them.\nToday: ${new Date().toDateString()}.\nUpcoming calendar (next 7 days):\n${upcoming.join('\n') || '(none)'}\nOpen tasks:\n${todos.join('\n') || '(none)'}\nRecently edited:\n${recent.join('\n') || '(none)'}${page}`
-  }
-
-  const send = async (text = q) => {
+  const send = async (text = q, base = msgs) => {
     if (!text.trim() || abort.current) return
     setQ('')
-    const next: Msg[] = [...msgs, { role: 'user', content: text }]
-    // A plain "add … thu 4pm" is understood on the spot, no model needed.
-    const quick = quickAct(text)
-    if (quick && quick.kind === 'event') {
-      setMsgs([...next, { role: 'assistant', content: `Adding **${quick.title}**.\n@event ${JSON.stringify({ title: quick.title, ...(quick.allDay ? { date: new Date(quick.start).toISOString().slice(0, 10) } : { start: toLocalISO(quick.start), end: toLocalISO(quick.end) }) })}` }])
-      return
+    const st = useStore.getState()
+    const at = base.length + 1 // index of the answer
+    const next: Msg[] = [...base, { role: 'user', content: text }]
+    // A retried answer starts with fresh cards.
+    setDone((d) => Object.fromEntries(Object.entries(d).filter(([k]) => !k.startsWith(`${at}:`))))
+    const put = (content: string, m: Meta) => {
+      setMsgs([...next, { role: 'assistant', content }])
+      setMeta((x) => ({ ...x, [at]: m }))
     }
-    setMsgs([...next, { role: 'assistant', content: '' }])
-    setStreaming(true)
+
+    // Exact answers from the app's own data need no model: a plain "add … thu 4pm", or "what's on tomorrow".
+    const quick = quickAct(text)
+    if (quick?.kind === 'event') return put('', { sources: [], acts: [quick] })
+    const instant = !wantsAction(text) && instantAnswer(text, { events: st.events, items: st.items })
+    if (instant) return put(instant.text, { sources: [{ id: null, title: instant.source === 'calendar' ? 'Your calendar' : 'Your open tasks' }], acts: [] })
+
     const controller = new AbortController()
     abort.current = controller
+    setStreaming(true)
+    put('', { sources: [], acts: [], status: 'Thinking…' }) // the question shows the moment it's sent
     try {
-      const key = `${useCtx && active ? active.id : ''}|${new Date().toDateString()}`
-      if (convo.current?.key !== key || !msgs.length) convo.current = { key, sys: buildSystem(), sent: {} }
+      if (!isReady()) {
+        put('', { sources: [], acts: [], status: 'Getting the assistant ready…' })
+        if (!(await ensureAI())) throw new Error('The assistant couldn’t start. Try again in a moment.')
+      }
+      const day = new Date().toDateString()
+      if (convo.current?.day !== day || base.length === 0) await Promise.race([refreshDevice(), new Promise((r) => setTimeout(r, 1500))])
+      if (convo.current?.day !== day || base.length === 0) convo.current = { day, sys: sharedContext({ items: st.items, events: st.events }), sent: {}, seen: {} }
       const c = convo.current
-      // Per-turn extras ride on the user message, so the shared prefix never changes.
-      const named = mentioned(text, items).filter((i) => i.id !== active?.id)
-      c.sent[msgs.length] = `${text}${named.map((i) => `\n\n(I mean ${itemText(i)})`).join('')}${wantsAction(text) ? `\n\n${ACT_GUIDE}` : ''}`
+      // This question's passages ride on its own message, so the shared prefix never changes.
+      const skip = new Set(Object.entries(c.seen).filter(([i]) => Number(i) < base.length).flatMap(([, k]) => k))
+      const before = new Set(skip)
+      const found = relevant(text, { items: st.items, open: useCtx ? active : null, skip })
+      c.seen[base.length] = [...skip].filter((k) => !before.has(k))
+      const act = wantsAction(text)
+      const opened = useCtx && active ? `The user has "${active.title || 'Untitled'}" open.\n` : ''
+      c.sent[base.length] = `${found.length ? `${passages(found)}\n\n` : ''}${opened}${found.length || opened ? 'Question: ' : ''}${text}${act ? `\n\n${ACT_GUIDE}` : ''}`
+      const sources: Source[] = [...new Map(found.map((f) => [f.item.id, { id: f.item.id, title: f.item.title || 'Untitled' }])).values()]
+      const titles = sources.slice(0, 2).map((x) => `“${x.title}”`)
+      put('', { sources, acts: [], status: titles.length ? `Reading ${titles.join(' and ')}…` : act ? 'Working it out…' : 'Thinking…' })
+      // Earlier turns read as plain conversation: their action instructions are dropped (or a small model keeps
+      // following them), and an answer that was only cards says in words what it offered.
+      const said = (i: number, m: Msg) =>
+        visible(m.content) || (meta[i]?.acts.length ? `Offered: ${meta[i].acts.map((a) => `${verbs(a)[0]} “${a.title}” (${describe(a)})`).join('; ')}` : '(No answer.)')
       const history = next
-        .map((m, i): Msg => (m.role === 'user' ? { role: 'user', content: c.sent[i] ?? m.content } : { role: 'assistant', content: splitActs(m.content).text || '(Suggested some items.)' }))
+        .map((m, i): Msg =>
+          m.role === 'user'
+            ? { role: 'user', content: i === base.length ? c.sent[i] : (c.sent[i] ?? m.content).replace(`\n\n${ACT_GUIDE}`, '') }
+            : { role: 'assistant', content: said(i, m) },
+        )
         .slice(-12)
-      await enqueue(() =>
-        chat([{ role: 'system', content: c.sys }, ...history], (t) => setMsgs([...next, { role: 'assistant', content: t }]), { signal: controller.signal, maxTokens: 600 }),
+      const full = await enqueue(() =>
+        chat([{ role: 'system', content: c.sys }, ...history], (t) => setMsgs([...next, { role: 'assistant', content: t }]), { signal: controller.signal, temperature: 0.3, maxTokens: act ? 800 : 500 }),
       )
+      const now = useStore.getState()
+      const acts = act ? fresh(pinToAsked(splitActs(full, { events: now.events, items: now.items, openId: useCtx ? active?.id : null }).acts, text), now.events) : []
+      if (!visible(full) && !acts.length) put(act ? 'I couldn’t work out that change. Try saying it another way, with the day and time.' : 'No answer came back. Try asking another way.', { sources, acts: [], failed: true })
+      else put(full, { sources, acts })
     } catch (e) {
       if (!controller.signal.aborted) {
         const detail = typeof e === 'string' ? e : e instanceof Error ? e.message : 'The assistant couldn’t answer. Try again.'
-        setMsgs([...next, { role: 'assistant', content: `⚠️ ${detail}` }])
-      }
+        put(detail, { sources: [], acts: [], failed: true })
+      } else setMeta((x) => ({ ...x, [at]: { ...x[at], status: undefined } }))
     } finally {
       abort.current = null
       setStreaming(false)
     }
   }
+
+  /** Ask the last question again. */
+  const retry = () => {
+    const last = msgs.length - 2
+    if (last < 0 || msgs[last].role !== 'user') return
+    void send(msgs[last].content, msgs.slice(0, last))
+  }
+
+  const starters = [active ? 'Summarize this page' : 'What should I focus on today?', 'What’s on this week?', 'Add study session tomorrow 4pm', 'What’s left to do?']
 
   return (
     <div className="chat">
@@ -282,39 +316,63 @@ function Chat() {
         {!msgs.length && (
           <div className="chat-empty">
             <p className="muted small">Ask about this page, your week, or anything else.</p>
-            {['What should I focus on this week?', 'Add study session tomorrow 4pm', 'Summarize this page into a note', 'Plan my week around my deadlines'].map((s) => (
-              <button key={s} className="starter" disabled={!ready} onClick={() => send(s)}>{s}</button>
+            {starters.map((s) => (
+              <button key={s} className="starter" onClick={() => send(s)}>{s}</button>
             ))}
           </div>
         )}
-        {msgs.map((m, i) => (
-          <div key={i} className={`msg ${m.role}`}>
-            {m.role === 'assistant' ? (
-              <>
-                {m.content ? <div className="md" dangerouslySetInnerHTML={{ __html: mdToHtml(splitActs(m.content).text) }} /> : <div className="typing"><i /><i /><i /></div>}
-                {!(streaming && i === msgs.length - 1) &&
-                  splitActs(m.content).acts.map((a, k) => {
-                    const key = `${i}:${k}`
-                    // Hide what's already on the calendar, unless it was added from this card.
-                    if (!done[key] && !fresh([a], events).length) return null
-                    return <ActCard key={key} act={a} done={!!done[key]} onDo={() => (perform(a), setDone((d) => ({ ...d, [key]: true })))} />
-                  })}
-                {m.content && !(streaming && i === msgs.length - 1) && (
-                  <div className="msg-actions">
-                    <Listen id={`chat:${i}:${m.content.length}`} text={() => splitActs(m.content).text} className="mini" label="Listen" />
-                    {getActiveEditor() && (
-                      <button className="mini" onClick={() => getActiveEditor()?.chain().focus('end').insertContent(mdToHtml(splitActs(m.content).text)).run()}>
-                        <FileInput size={11} /> Insert
-                      </button>
-                    )}
-                  </div>
-                )}
-              </>
-            ) : (
-              m.content
-            )}
-          </div>
-        ))}
+        {msgs.map((m, i) => {
+          const mt = meta[i]
+          const live = streaming && i === msgs.length - 1
+          const shown = visible(m.content)
+          return (
+            <div key={i} className={`msg ${m.role}${mt?.failed ? ' failed' : ''}`}>
+              {m.role === 'assistant' ? (
+                <>
+                  {shown ? (
+                    <div className="md" dangerouslySetInnerHTML={{ __html: mdToHtml(shown) }} />
+                  ) : live || !mt?.acts.length ? (
+                    <div className="ai-status"><span className="typing"><i /><i /><i /></span>{mt?.status && <span>{mt.status}</span>}</div>
+                  ) : null}
+                  {!live &&
+                    mt?.acts.map((a, k) => {
+                      const key = `${i}:${k}`
+                      return (
+                        <ActCard key={key} act={a} done={!!done[key]} onDo={() => {
+                          const undo = perform(a)
+                          setDone((d) => ({ ...d, [key]: true }))
+                          toast(`${verbs(a)[1]} “${a.title.length > 32 ? a.title.slice(0, 31) + '…' : a.title}”`, { ms: 8000, action: { label: 'Undo', run: () => (undo(), setDone((d) => ({ ...d, [key]: false }))) } })
+                        }} />
+                      )
+                    })}
+                  {!live && !!mt?.sources.length && (
+                    <div className="msg-sources">
+                      <span>From</span>
+                      {mt.sources.slice(0, 3).map((x) =>
+                        x.id ? <button key={x.id} className="src" onClick={() => useStore.getState().open(x.id!)}>{x.title}</button> : <span key={x.title} className="src">{x.title}</span>,
+                      )}
+                    </div>
+                  )}
+                  {(shown || !!mt?.acts.length) && !live && (
+                    <div className="msg-actions">
+                      {shown && <Listen id={`chat:${i}:${m.content.length}`} text={() => shown} className="mini" label="Listen" />}
+                      {shown && getActiveEditor() && !mt?.failed && (
+                        <button className="mini" onClick={() => getActiveEditor()?.chain().focus('end').insertContent(mdToHtml(shown)).run()}>
+                          <FileInput size={11} /> Insert
+                        </button>
+                      )}
+                      {i === msgs.length - 1 && !streaming && (
+                        <button className="mini" onClick={retry}><RefreshCw size={11} /> Retry</button>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                m.content
+              )}
+            </div>
+          )
+        })}
       </div>
       <div className="composer">
         {active && (
@@ -326,15 +384,14 @@ function Chat() {
           <textarea
             rows={1}
             value={q}
-            disabled={!ready}
-            placeholder={ready ? 'Ask anything…' : 'Getting ready…'}
+            placeholder="Ask anything…"
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), send())}
           />
           {streaming ? (
-            <button className="send" onClick={() => abort.current?.abort()}><Square size={12} fill="currentColor" /></button>
+            <button className="send" onClick={() => abort.current?.abort()} aria-label="Stop"><Square size={12} fill="currentColor" /></button>
           ) : (
-            <button className="send" disabled={!q.trim() || !ready} onClick={() => send()}><ArrowUp size={15} /></button>
+            <button className="send" disabled={!q.trim()} onClick={() => send()} aria-label="Send"><ArrowUp size={15} /></button>
           )}
         </div>
       </div>
@@ -342,14 +399,12 @@ function Chat() {
   )
 }
 
-const toLocalISO = (t: number) => {
-  const d = new Date(t)
-  return new Date(t - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-}
+const ACT_ICONS = { event: CalendarPlus, move: CalendarClock, cancel: CalendarX, task: ListPlus, done: CheckSquare, note: FileInput, doc: BookOpen }
 
-/** Something the assistant offers to do. One tap does it. */
+/** Something the assistant offers to do. One tap does it; the toast that follows can undo it. */
 function ActCard({ act, done, onDo }: { act: Act; done: boolean; onDo: () => void }) {
-  const I = act.kind === 'event' ? CalendarPlus : act.kind === 'note' ? FileInput : BookOpen
+  const I = ACT_ICONS[act.kind]
+  const [verb, did] = verbs(act)
   return (
     <div className={`act-card ${done ? 'done' : ''}`}>
       <span className="act-ico"><I size={15} /></span>
@@ -358,9 +413,9 @@ function ActCard({ act, done, onDo }: { act: Act; done: boolean; onDo: () => voi
         <small>{describe(act)}</small>
       </span>
       {done ? (
-        <span className="act-done"><Check size={14} /> {act.kind === 'event' ? 'Added' : 'Created'}</span>
+        <span className="act-done"><Check size={14} /> {did}</span>
       ) : (
-        <button className="btn sm primary" onClick={onDo}>{act.kind === 'event' ? 'Add' : 'Create'}</button>
+        <button className={`btn sm ${act.kind === 'cancel' ? '' : 'primary'}`} onClick={onDo}>{verb}</button>
       )}
     </div>
   )

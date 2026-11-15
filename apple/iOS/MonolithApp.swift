@@ -9,6 +9,7 @@ struct MonolithApp: App {
     @Environment(\.scenePhase) private var phase
 
     init() {
+        Profile.markExistingInstall(hasItems: ((try? Storage.container.mainContext.fetchCount(FetchDescriptor<Item>())) ?? 0) > 0)
         Storage.seedIfEmpty(Storage.container.mainContext)
         Storage.mergeNotesIntoDocs(Storage.container.mainContext)
         Storage.dropBlankDocs(Storage.container.mainContext)
@@ -46,10 +47,21 @@ struct MonolithApp: App {
 
 struct RootView: View {
     @AppStorage("appearance") private var appearance = "dark"
+    @AppStorage(Profile.setupAt) private var setupAt = 0.0
     @Environment(\.horizontalSizeClass) private var width
+    @Environment(\.scenePhase) private var phase
+    @State private var lock = AppLock.shared
     var body: some View {
         // iPhone: one screen at a time, with the sections in a drawer. iPad and wide windows: the split view.
-        Group { if width == .compact { PhoneRoot() } else { PadRoot().bottomBar() } }
+        Group {
+            if setupAt == 0 { SetupView().transition(.opacity) }
+            else if width == .compact { PhoneRoot() } else { PadRoot().bottomBar() }
+        }
+        .animation(.easeOut(duration: 0.25), value: setupAt == 0)
+            // With the lock on, nothing shows until it's opened, including in the app switcher.
+            .overlay { if lock.enabled && (lock.locked || phase != .active) { LockScreen().transition(.opacity) } }
+            .animation(.easeOut(duration: 0.2), value: lock.locked)
+            .onChange(of: phase) { if phase == .background { lock.lockIfEnabled() } }
             .preferredColorScheme(appearance == "light" ? .light : appearance == "system" ? nil : .dark)
     }
 }
@@ -105,6 +117,13 @@ private struct BottomBar: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }
             .sheet(item: $chat) { ChatView(first: $0.text, about: $0.about) }
+            // Tapping into the Ask field loads the model while the question is typed.
+            .onChange(of: focused) { if focused { Assistant.warm() } }
+            .onChange(of: router.ask) {
+                guard let q = router.ask else { return }
+                router.ask = nil
+                chat = ChatStart(text: q, about: nil)
+            }
     }
 
     /// One place to start something new, like ChatGPT's +.
@@ -144,12 +163,15 @@ private struct BottomBar: ViewModifier {
         text = ""
         // On the calendar, "calc review thu 4pm" is an event; a question still goes to chat.
         if router.onCalendar, !Self.isQuestion(t), let p = QuickAdd.parse(t) {
-            let e = Event(title: p.title, start: p.start, end: p.end)
+            let e = Event(title: p.title, start: p.start, end: p.end, allDay: p.allDay, location: p.location)
+            e.color = p.color
             ctx.insert(e)
             PhoneLink.shared.sendAgenda()
             router.openCalendar(p.start)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            Toaster.shared.show("Added \(e.title)", detail: e.start.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()),
+            let when = p.allDay ? e.start.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+                : e.start.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+            Toaster.shared.show("Added \(e.title)", detail: (p.due ? "Due " : "") + when + (p.location.map { " · \($0)" } ?? ""),
                                 action: ("Undo", { [ctx] in ctx.delete(e); PhoneLink.shared.sendAgenda() }))
             return
         }
@@ -188,6 +210,8 @@ final class Router {
     var newEvent = false
     /// The doc on screen, if any: the bottom bar asks about it.
     var reading: Item?
+    /// Set to open chat with this question already sent (Home's starting points).
+    var ask: String?
 
     func open(_ item: Item) {
         pending = item
@@ -283,7 +307,7 @@ struct PhoneRoot: View {
     var body: some View {
         // A sidebar that sits beside the page: opening it slides the page over, the page stays in view.
         GeometryReader { geo in
-            let w = min(290, geo.size.width * 0.78)
+            let w = min(310, geo.size.width * 0.8)
             ZStack(alignment: .leading) {
                 menu
                     .frame(width: w)
@@ -339,6 +363,7 @@ struct PhoneRoot: View {
         case .docs: DocsView()
         case .calendar: CalendarScreen()
         case .search: SearchView()
+        case .integrations: IntegrationsView()
         }
     }
 
@@ -359,11 +384,12 @@ struct PhoneRoot: View {
                     .buttonStyle(.plain)
                     .glassEffect(.regular, in: .capsule)
                 }
-                .padding(.leading, 12).padding(.bottom, 14)
+                .padding(.leading, 12).padding(.bottom, 20)
                 row("Home", "square.grid.2x2", .today)
                 row("Docs", "doc.text", .docs)
                 row("Recordings", "mic", .lectures)
                 row("Calendar", "calendar", .calendar)
+                row("Integrations", "puzzlepiece.extension", .integrations)
                 if !folders.isEmpty {
                     heading("Folders")
                     ForEach(folders, id: \.self) { f in row(f, "folder", .folder(f)).folderActions(f) { router.open($0); close() } }
@@ -373,7 +399,7 @@ struct PhoneRoot: View {
                     ForEach(recents.prefix(5)) { item in
                         Button { router.open(item); close() } label: {
                             Text(item.displayTitle).lineLimit(1)
-                                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                                .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
                                 .padding(.horizontal, 12)
                                 .contentShape(.rect)
                         }
@@ -383,16 +409,16 @@ struct PhoneRoot: View {
                     if recents.count > 5 {
                         Button { allRecents = true } label: {
                             Label("See all", systemImage: "clock").foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                                .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
                                 .padding(.horizontal, 12).contentShape(.rect)
                         }
                         .buttonStyle(.plain)
                     }
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.top, 8)
-            .padding(.bottom, 90)
+            .padding(.horizontal, 10)
+            .padding(.top, 12)
+            .padding(.bottom, 100)
         }
         .scrollIndicators(.hidden)
         .overlay(alignment: .bottomTrailing) {
@@ -408,15 +434,19 @@ struct PhoneRoot: View {
     }
 
     private func heading(_ t: String) -> some View {
-        Text(t).font(.headline).padding(.leading, 12).padding(.top, 24).padding(.bottom, 6)
+        Text(t).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 12).padding(.top, 30).padding(.bottom, 8)
     }
 
     private func row(_ title: String, _ symbol: String, _ s: PadSection) -> some View {
         Button { section = s; close() } label: {
-            Label(title, systemImage: symbol)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                .padding(.horizontal, 12)
-                .background(section == s ? Theme.wash : .clear, in: .rect(cornerRadius: 12))
+            // A fixed icon column, so every label starts at the same x whatever the symbol's width.
+            HStack(spacing: 12) {
+                Image(systemName: symbol).frame(width: 24)
+                Text(title)
+            }
+                .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
+                .padding(.horizontal, 14)
+                .background(section == s ? Theme.wash : .clear, in: .rect(cornerRadius: 14))
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)

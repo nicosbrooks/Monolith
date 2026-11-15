@@ -42,9 +42,13 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Scan the code on your computer to link it to this phone.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Unlock Monolith after Sync mode.</string>
+	<string>Unlock Monolith when the lock is on, and after Sync mode.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Sync with Monolith running on a computer on your network during development.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>With Location history on, Monolith notes the places you spend time so the assistant can refer to them. They stay on this iPhone, and you can clear them at any time.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Integrations use where you are to give the assistant local context, like the weather and travel time to your next event. It stays on this iPhone.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Monolith records audio so it can write a transcript for you.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

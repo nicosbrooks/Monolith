@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/core'
 import {
-  CheckSquare, Code2, Heading1, Heading2, Heading3, ImageIcon, List, ListOrdered, Minus, PenTool, Quote, Sparkles, Table, Type, Wand2, ListChecks,
+  CheckSquare, Code2, Heading1, Heading2, Heading3, ImageIcon, List, ListOrdered, Minus, PenTool, Quote, PenLine, Table, Type, Wand2, ListChecks,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -49,7 +49,7 @@ export const BLOCKS: Block[] = [
   { id: 'quote', label: 'Quote', hint: 'Block quote', icon: Quote, keywords: 'quote blockquote', run: (e) => e.chain().focus().toggleBlockquote().run() },
   { id: 'code', label: 'Monospaced', hint: 'Code block', icon: Code2, keywords: 'code mono monospaced', run: (e) => e.chain().focus().toggleCodeBlock().run() },
   { id: 'hr', label: 'Divider', hint: 'Horizontal line', icon: Minus, keywords: 'divider hr line separator', run: (e) => e.chain().focus().setHorizontalRule().run() },
-  { id: 'ai-continue', label: 'Continue writing', hint: 'Local AI', icon: Sparkles, keywords: 'ai continue write', ai: true, run: () => {} },
+  { id: 'ai-continue', label: 'Continue writing', hint: 'Local AI', icon: PenLine, keywords: 'ai continue write', ai: true, run: () => {} },
   { id: 'ai-summary', label: 'Summarize', hint: 'Local AI', icon: Wand2, keywords: 'ai summary summarize tldr', ai: true, run: () => {} },
   { id: 'ai-tasks', label: 'Extract tasks', hint: 'Local AI', icon: ListChecks, keywords: 'ai tasks todo action items', ai: true, run: () => {} },
 ]

@@ -76,9 +76,10 @@ extension View {
     /// Plain list: no dividing lines; rows are told apart by height and spacing, like the web app.
     func compactList() -> some View {
         listStyle(.plain)
-            .environment(\.defaultMinListRowHeight, 44)
+            .environment(\.defaultMinListRowHeight, Space.row)
             .listSectionSpacing(.compact)
-            .contentMargins(.top, 4, for: .scrollContent)
+            .contentMargins(.top, 8, for: .scrollContent)
+            .contentMargins(.horizontal, 4, for: .scrollContent)
             .paper()
     }
 }
@@ -141,12 +142,12 @@ struct ItemRow: View {
     var item: Item
     var showKind = false
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 14) {
             Group {
                 if let e = item.displayEmoji { Text(e) }
                 else { Image(systemName: item.pinned ? (item.kind == .lecture ? "pin" : "star") : item.kind.symbol).foregroundStyle(.secondary) }
             }
-            .font(.subheadline).frame(width: 20)
+            .font(.body).frame(width: 22)
             Text(item.displayTitle).lineLimit(1)
                 .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
             Spacer(minLength: 8)
@@ -353,6 +354,7 @@ struct ChatView: View {
     @State private var query = ""
     @State private var request: Task<Void, Never>?
     @State private var settings = false
+    @State private var conversation = Assistant.Conversation()
 
     private var text: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -485,7 +487,7 @@ struct ChatView: View {
         if let model = Assistant.openModel(for: choice), models.preparingID == model.id, case .loading(let fraction) = models.phase {
             ProgressView(value: fraction) { Text("Preparing \(model.name)").font(.footnote) }
         } else {
-            Label { Text("Thinking") } icon: { Image(systemName: "sparkles") }
+            Text("Thinking")
                 .font(.subheadline).foregroundStyle(.secondary)
                 .symbolEffect(.pulse, options: .repeating)
                 .phaseAnimator([0.45, 1]) { v, o in v.opacity(o) } animation: { _ in .easeInOut(duration: 0.9) }
@@ -505,18 +507,26 @@ struct ChatView: View {
         // Only what actually matched counts as a source, plus the doc it was asked from.
         var sources = ranking.filter { $0.score > 0 }.prefix(3).map(\.item)
         if let about { sources.removeAll { $0.id == about.id }; sources.insert(about, at: 0) }
-        let notes = picked.map { item in
-            "\(item.displayTitle): \(String((item.body + " " + item.transcript.prefix(12).map(\.text).joined(separator: " ")).prefix(600)))"
-        }.joined(separator: "\n")
+        let notes = picked.filter { $0.id != about?.id }.map { item in
+            "From \(item.displayTitle): \(String((item.body + " " + item.transcript.prefix(12).map(\.text).joined(separator: " ")).prefix(600)))"
+        }
         let start = Calendar.current.startOfDay(for: .now)
         let end = Calendar.current.date(byAdding: .day, value: 7, to: start) ?? start
         let schedule = agenda(events, from: start, to: end).prefix(16).map {
-            "\($0.start.formatted(date: .abbreviated, time: $0.allDay ? .omitted : .shortened)): \($0.title)"
+            "- \(Assistant.day($0.start))\($0.allDay ? " all day" : " " + $0.start.formatted(date: .omitted, time: .shortened) + "–" + $0.end.formatted(date: .omitted, time: .shortened)): \($0.title)\(($0.location ?? "").isEmpty ? "" : " @ " + ($0.location ?? ""))"
         }.joined(separator: "\n")
-        // Follow-ups need the last couple of exchanges.
-        let earlier = turns.suffix(2).compactMap { t in t.a.map { "Q: \(t.q)\nA: \(String($0.prefix(500)))" } }.joined(separator: "\n")
-        let open = about.map { "Open doc, \($0.displayTitle):\n\(String($0.body.prefix(2400)))\n" } ?? ""
-        let context = open + "Today: \(Date.now.formatted(date: .complete, time: .shortened))\nCalendar:\n\(schedule)\nWorkspace:\n\(notes)" + (earlier.isEmpty ? "" : "\nEarlier in this chat:\n\(earlier)")
+        let tasks = items.filter { $0.kind != .lecture }
+            .flatMap { i in Tasks.open(in: i.body).map { "- \(MD.plain($0)) (in \(i.displayTitle))" } }
+            .prefix(12).joined(separator: "\n")
+        let open = about.map { "Open doc, \($0.displayTitle):\n\(String($0.body.prefix(2400)))" }
+        // What the turned-on integrations know (place, weather, travel time, recent places).
+        let device = Integrations.shared.context
+        // Short, exact things first so trimming never cuts them. They're sent once per conversation; the
+        // session remembers them, and earlier turns, so follow-ups only carry the question and new notes.
+        let fixed = Assistant.dates + "\n" + (device.isEmpty ? "" : device + "\n")
+            + "Calendar:\n\(schedule.isEmpty ? "(nothing scheduled)" : schedule)\n" + (tasks.isEmpty ? "" : "Open tasks:\n\(tasks)\n")
+        let pieces = (open.map { [$0] } ?? []) + notes
+        Integrations.shared.refresh()
         query = ""
         turns.append(Turn(q: prompt, a: nil, sources: Array(sources)))
         let index = turns.count - 1
@@ -524,7 +534,7 @@ struct ChatView: View {
             defer { if !Task.isCancelled { request = nil } }
             do {
                 // Show the answer word by word as the model writes it.
-                let r = try await Assistant.ask(prompt, context: context) { partial in
+                let r = try await conversation.ask(prompt, fixed: fixed, pieces: pieces) { partial in
                     if !partial.isEmpty, !Task.isCancelled, turns.indices.contains(index) { turns[index].a = partial }
                 }
                 if !Task.isCancelled {

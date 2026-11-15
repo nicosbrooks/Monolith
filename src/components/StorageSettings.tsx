@@ -1,5 +1,7 @@
 import { formatDistanceToNow } from 'date-fns'
-import { Cloud, FolderOpen, GitBranch, Laptop, Plus, RefreshCw, Unplug } from 'lucide-react'
+import { Cloud, FileArchive, FolderOpen, GitBranch, Laptop, Lock, Plus, RefreshCw, Unplug } from 'lucide-react'
+import { openBackup } from '../lib/backup'
+import { useVault } from '../lib/vault'
 import { useStore } from '../store'
 import type { Source } from '../types'
 import { APP_NAME } from '../brand'
@@ -16,6 +18,10 @@ export function StorageSettings() {
   const sync = useSync((s) => s.st)
   const gh = useAccounts((s) => s.github)
   const localCount = items.filter((i) => !i.sourceId && !i.deletedAt).length
+  const home = useStore((s) => s.settings.home)
+  const locked = useVault((s) => s.state) === 'open'
+  const change = () => useStore.setState({ settingsOpen: false, setupOpen: 1 })
+  const lastBackup = useStore((s) => s.settings.lastBackup)
 
   return (
     <section>
@@ -26,7 +32,7 @@ export function StorageSettings() {
           <Laptop size={16} />
           <div className="col">
             <b>This browser</b>
-            <small>{localCount} items</small>
+            <small>{localCount} items{!home || !sources.some((s) => s.id === home) ? ' · New docs go here' : ''}</small>
           </div>
         </div>
 
@@ -40,6 +46,7 @@ export function StorageSettings() {
                 <b>{s.name}</b>
                 <small>
                   {s.kind === 'folder' ? 'Folder on this device' : kindLabel[s.kind]}
+                  {s.id === home ? ' · New docs go here' : ''}
                   {s.config.readOnly ? ' · read-only' : ''}
                   {' · '}
                   {st === 'syncing' ? 'Syncing…' : st === 'needs-auth' ? 'Needs access' : st === 'error' ? sync[s.id]?.error : s.lastSync ? `Synced ${formatDistanceToNow(s.lastSync, { addSuffix: true })}` : 'Not synced yet'}
@@ -66,6 +73,21 @@ export function StorageSettings() {
             </div>
           )
         })}
+
+        <div className="model">
+          <FileArchive size={16} />
+          <div className="col">
+            <b>Backup file</b>
+            <small>{lastBackup ? `Last backed up ${formatDistanceToNow(lastBackup, { addSuffix: true })}` : 'Everything in one encrypted file, for safekeeping or another browser'}</small>
+          </div>
+          <button className="btn sm" onClick={() => (useStore.getState().setUI({ settingsOpen: false }), openBackup('export'))}>Back up</button>
+          <button className="btn sm" onClick={() => (useStore.getState().setUI({ settingsOpen: false }), openBackup('import'))}>Restore</button>
+        </div>
+
+        <button className="model add" onClick={change}>
+          <Lock size={16} />
+          <div className="col"><b>{locked ? 'Locked with a passcode' : 'Not locked'}</b><small>{locked ? 'Change the passcode, turn it off, or choose where new docs go' : 'Add a passcode, or choose where new docs go'}</small></div>
+        </button>
 
         <button className="model add" onClick={() => useStore.getState().setUI({ settingsOpen: false, connectOpen: true })}>
           <Plus size={16} />

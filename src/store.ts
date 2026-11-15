@@ -5,6 +5,7 @@ import { addDays, addHours, set as setDate, startOfDay } from 'date-fns'
 import type { CalEvent, FileMeta, Folder, Item, ItemKind, Section, Source } from './types'
 import { extractTags, htmlToText, uid, withoutLegacyTitle } from './lib/util'
 import { APP_NAME } from './brand'
+import { openBlob, openText, sealBlob, sealText, vaultReady } from './lib/vault'
 
 // Writes are batched: typing changes state several times a second, and each save serializes
 // everything. We save at most every 500 ms, and immediately when the tab is hidden or closed.
@@ -17,14 +18,27 @@ const flushSave = () => {
   if (!pending) return
   const { k, v } = pending
   pending = null
-  void set(k, v)
+  // In order, so a slow encrypt can't let an older copy land after a newer one.
+  saving = saving.then(async () => set(k, await sealText(v))).catch(() => {})
+}
+let saving: Promise<unknown> = Promise.resolve()
+/** Save everything now, e.g. right after the passcode is turned on or off so the stored copy matches. */
+export function saveNow() {
+  useStore.setState({})
+  flushSave()
+  return saving
 }
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', flushSave)
   document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flushSave())
 }
 const idbStorage: StateStorage = {
-  getItem: async (k) => (await get(k)) ?? null,
+  // With a passcode on, nothing can be read until it's entered.
+  getItem: async (k) => {
+    await vaultReady
+    const raw = await get<string>(k)
+    return raw == null ? null : openText(raw)
+  },
   setItem: (k, v) => {
     // Never save before the stored data has loaded: that would overwrite it with the starter content.
     if (!loaded) return
@@ -39,12 +53,23 @@ export interface Settings {
   provider: 'auto' | 'mlx' | 'webllm' | 'ollama'
   llmModel: string
   ollamaModel: string
+  /** The speech-to-text model (named for the first one the app used). */
   whisperModel: string
   proactive: boolean
   accent: string
   theme: 'system' | 'light' | 'dark'
   googleClientId: string
   glass: boolean
+  /** What to call the person in greetings. Empty: no name. */
+  name: string
+  /** A connected folder that new docs are saved in, or null for this browser. */
+  home: string | null
+  /** When first-time setup was finished, or null to show it. */
+  setupAt: number | null
+  /** When the workspace was last saved to a backup file. */
+  lastBackup?: number
+  /** Integrations turned on in this browser (Settings › Integrations). */
+  integrations?: ('location' | 'weather')[]
 }
 
 interface State {
@@ -60,6 +85,8 @@ interface State {
   /** A question typed into Ask or search, waiting for the assistant panel to pick it up. */
   askDraft: string | null
   paletteOpen: boolean
+  /** Setup shown again from Settings, opened at this step. */
+  setupOpen: false | 0 | 1
   settingsOpen: boolean
   connectOpen: boolean
   drawerOpen: boolean
@@ -158,6 +185,7 @@ export const useStore = create<State>()(
       events: seedEvents,
       section: 'home',
       activeId: null,
+      setupOpen: false,
       calendarDate: null,
       folderId: null,
       tagFilter: null,
@@ -174,12 +202,15 @@ export const useStore = create<State>()(
         // 'default' means the Default tier, resolved per device (see modelForTier). Existing installs keep their pick.
         llmModel: 'default',
         ollamaModel: '',
-        whisperModel: 'Xenova/whisper-base.en',
+        whisperModel: 'onnx-community/moonshine-base-ONNX',
         proactive: true,
         accent: '#7c5cff',
         theme: 'dark',
         googleClientId: '',
         glass: true,
+        name: '',
+        home: null,
+        setupAt: null,
       },
       sources: [],
 
@@ -219,6 +250,10 @@ export const useStore = create<State>()(
           createdAt: t,
           updatedAt: t,
           ...(kind === 'lecture' ? { lecture: { duration: 0, transcript: [], hasAudio: false, status: 'idle' as const } } : {}),
+          // New docs go to the folder picked in setup, unless they're being put somewhere specific.
+          ...(kind === 'doc' && !('sourceId' in patch) && !patch.parentId && getS().sources.some((x) => x.id === getS().settings.home)
+            ? { sourceId: getS().settings.home!, folderId: null, file: { baseHtml: '', baseTitle: '' } }
+            : {}),
           ...patch,
         }
         setS((s) => ({
@@ -294,7 +329,7 @@ export const useStore = create<State>()(
     }),
     {
       name: 'socratic-v1',
-      version: 8,
+      version: 9,
       migrate: (persisted: unknown, v: number) => {
         const p = persisted as Partial<State>
         if (v < 2) p.aiOpen = false
@@ -307,6 +342,8 @@ export const useStore = create<State>()(
         if (v < 7 && p.items) p.items = p.items.map((i) => i.kind === 'note' || i.id === 'doc-guide' ? { ...i, content: withoutLegacyTitle(i.content, i.title) } : i)
         // Notes and docs are one thing now.
         if (v < 8 && p.items) p.items = p.items.map((i) => (i.kind === 'note' ? { ...i, kind: 'doc' } : i))
+        // First-time setup is for new installs; anyone already using the app has been set up.
+        if (v < 9 && p.settings) p.settings = { ...p.settings, name: '', home: null, setupAt: p.settings.setupAt ?? 1 }
         return p as State
       },
       storage: createJSONStorage(() => idbStorage),
@@ -327,5 +364,5 @@ export const useStore = create<State>()(
 if (useStore.persist.hasHydrated()) loaded = true
 useStore.persist.onFinishHydration(() => (loaded = true))
 
-export const saveAudio = (id: string, blob: Blob) => set(`audio:${id}`, blob)
-export const loadAudio = (id: string) => get<Blob>(`audio:${id}`)
+export const saveAudio = async (id: string, blob: Blob) => set(`audio:${id}`, await sealBlob(blob))
+export const loadAudio = async (id: string) => openBlob(await get(`audio:${id}`))

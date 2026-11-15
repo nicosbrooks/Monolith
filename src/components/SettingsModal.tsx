@@ -3,10 +3,11 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Check, Monitor, Moon, Sun, Trash2, X } from 'lucide-react'
 import { useStore } from '../store'
 import { chooseModel, deleteModel, detectMLX, detectOllama, fits, modelForTier, models, refreshCache, resolvedModel, useAI } from '../ai/llm'
-import { WHISPER_MODELS } from '../ai/whisper'
+import { STT_MODELS, sttModel } from '../ai/stt'
 import { StorageSettings } from './StorageSettings'
 import { openLink } from './LinkDialog'
 import { useLink } from '../link/link'
+import { deviceSummary, setIntegration, useDevice } from '../lib/integrations'
 
 export function SettingsModal() {
   const open = useStore((s) => s.settingsOpen)
@@ -30,6 +31,12 @@ export function SettingsModal() {
               </button>
             </header>
             <div className="modal-body">
+              <section>
+                <h3>You</h3>
+                <input className="input su-name-field" value={settings.name} onChange={(e) => set({ name: e.target.value })} placeholder="Your first name" aria-label="Your name" maxLength={40} />
+                <p className="small muted">Used in greetings. Leave it blank if you’d rather not.</p>
+              </section>
+
               <section>
                 <h3>Appearance</h3>
                 <div className="seg">
@@ -123,15 +130,18 @@ export function SettingsModal() {
                 <p className="muted small">Open models download the first time you pick them, then work offline.</p>
               </section>
 
+              <Integrations />
+
               <details className="advanced">
-                <summary>Transcription quality</summary>
+                <summary>Transcription</summary>
                 <div className="seg" style={{ marginTop: 6 }}>
-                  {WHISPER_MODELS.map((m) => (
-                    <button key={m.id} className={settings.whisperModel === m.id ? 'on' : ''} onClick={() => set({ whisperModel: m.id })}>
+                  {STT_MODELS.map((m) => (
+                    <button key={m.id} className={sttModel(settings.whisperModel) === m.id ? 'on' : ''} onClick={() => set({ whisperModel: m.id })} title={`${m.name}, ${m.size}`}>
                       {m.note}
                     </button>
                   ))}
                 </div>
+                <p className="muted small">{STT_MODELS.find((m) => m.id === sttModel(settings.whisperModel))!.name} · {STT_MODELS.find((m) => m.id === sttModel(settings.whisperModel))!.size}, downloaded once. Speech is transcribed on this device as it’s said; nothing is sent anywhere.</p>
               </details>
             </div>
           </motion.div>
@@ -161,5 +171,36 @@ function ModelRow({ name, note, on, progress, onPick, onRemove }: { name: string
         </button>
       )}
     </div>
+  )
+}
+
+/** What this browser can tell the assistant. Each one is off until it's turned on here. */
+function Integrations() {
+  const on = useStore((s) => s.settings.integrations) ?? []
+  const device = useDevice()
+  const rows = [
+    { k: 'location' as const, title: 'Location', note: 'Your town, so answers can be about where you are. Your position is rounded to about a kilometre first.' },
+    { k: 'weather' as const, title: 'Weather', note: 'Today’s forecast from Open-Meteo, for planning and answers.' },
+  ]
+  const status =
+    device.status === 'denied' ? 'This browser isn’t allowed to share your location. Allow it in the address bar, then turn this on again.'
+    : device.status === 'failed' ? 'Couldn’t find where you are just now. It tries again next time you ask.'
+    : device.status === 'locating' ? 'Finding where you are…'
+    : on.length ? deviceSummary() : ''
+  return (
+    <section className="integ">
+      <h3>Integrations</h3>
+      {rows.map((r) => (
+        <label key={r.k} className="toggle">
+          <input type="checkbox" checked={on.includes(r.k)} onChange={(e) => setIntegration(r.k, e.target.checked)} />
+          <span />
+          <div>
+            {r.title}
+            <small>{r.note}</small>
+          </div>
+        </label>
+      ))}
+      {status && <p className="small muted integ-status">{status}</p>}
+    </section>
   )
 }

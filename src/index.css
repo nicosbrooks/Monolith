@@ -1875,7 +1875,7 @@ kbd {
   padding: 8px 10px 6px;
   border-bottom: 1px solid var(--border);
 }
-.md {
+.month > .md {
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   padding: 4px;
@@ -1885,7 +1885,7 @@ kbd {
   gap: 2px;
   overflow: hidden;
 }
-.md:nth-child(7n) {
+.month > .md:nth-child(7n) {
   border-right: 0;
 }
 .md.out {

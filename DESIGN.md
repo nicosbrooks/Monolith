@@ -15,7 +15,8 @@ Status of each area is in [Coverage](#coverage) at the end: not every screen fol
 7. **No dividing lines.** Space, soft fills and a hover or press wash separate things.
 8. **About five, then the rest elsewhere.** Lists on Home show 5 items, then "Show all" / "See all".
 9. **No visible plumbing.** Raw Markdown never appears. Counts and search appear only when there is something to count or search.
-10. **Same product on every device.** iOS uses the web's icons, menu order and wording, done the native way.
+10. **No "AI" decoration.** No sparkles (✨) anywhere. The assistant is labelled with words, and actions get an icon for what they do: a speech bubble to ask, a pen to write notes, a lightbulb for insights.
+11. **Same product on every device.** iOS uses the web's icons, menu order and wording, done the native way.
 
 ## Colour
 
@@ -71,6 +72,21 @@ No uppercase labels and no mono labels.
 
 Cards have no border. In light mode they carry a 1px-soft shadow; in dark the fill alone lifts them.
 
+### iOS spacing (`Space` in `apple/iOS/Theme.swift`)
+iPhone screens felt cramped at web sizes, so iOS runs a little roomier. Use the tokens, not new numbers.
+
+| Token | Value | Use |
+|---|---|---|
+| `Space.page` | 20pt | side padding of a screen |
+| `Space.section` | 32pt | gap between sections |
+| `Space.card` | 18pt | inner padding of a card |
+| `Space.row` | 54pt | minimum row height in cards and lists |
+
+The drawer is min(310pt, 80% of the width), with 50pt rows, a 24pt icon column so every label starts at the same x, and 30pt above each heading.
+
+### Fills inside a card
+`Theme.wash` (iOS) and `--card-hover` (web) are for the page. Anything filled *inside* a card (an icon tile, a status row, a secondary pill) uses `Theme.tile`: white 7% in dark, black 4.5% in light. A wash on a card is too close to read.
+
 ## Components
 
 ### Card and rows (`.hm-card`, `.hm-list`, `.hm-row`)
@@ -80,8 +96,16 @@ A card holds a short list. Each row is one target: a 20px icon column, the title
 A quiet label above a card, with at most one text link on the right ("Open calendar", "See all").
 
 ### Assistant card (`.hm-asst`)
-Order, top to bottom:
-1. Sparkles icon and a one-word role: "Suggestion", "Today's plan" or "Assistant".
+The card shows one of two things: a suggestion found in your docs (below), or **starting points**.
+
+**Starting points** (`.hm-starters` / iOS `starters`). Up to three rows that each open the assistant with that question already asked, so the person can take the conversation anywhere. They are built from what is really there: the next event ("Help me get ready for “calc review”"), the open tasks ("Which of my 2 tasks should I do first?"), and the last doc worked on ("Summarize “…”"). Each row has an icon, the question, and a small ↗. They are shown only when a model is ready.
+
+The card's title changes so a daily app never repeats itself (`startersTitle` in `src/lib/greeting.ts`, iOS `Greeting.startersTitle`): "Start from here" only on the first day after setup, then "Coming up" when an event starts within 90 minutes, "Pick up where you left off" when the only starting point is a doc, otherwise "For this morning" / "For this afternoon" / "For tonight".
+
+The assistant never hands over a fixed plan or brief on Home. That was "Plan my day", removed Nov 15 because it was too rigid. Anything like it is just a question someone can ask.
+
+A suggestion card, top to bottom:
+1. A one-word role in words only: "Suggestion". No icon.
 2. The question or headline, as a sentence.
 3. One supporting line (the full date and time).
 4. The source (`.hm-source`): doc title in bold, the quoted line under it. Clicking opens the doc. Never a vague "from a doc".
@@ -91,6 +115,16 @@ Data: `Suggestion.found` in `src/types.ts` (`what`, `when`, `itemId`, `docTitle`
 
 ### Checkbox
 A 20px rounded square (6px radius) with a 1.6px outline, on web and iOS. Checking a task on Home completes it and offers Undo; clicking the words opens the doc instead.
+
+### Home section names
+Home's sections are **Calendar**, **Tasks** and **Recent**, named for what they hold (not "Today", "Up next" or "Schedule"). The Calendar label's link says "Open".
+
+### Event row (`.hm-ev`, iOS `eventRow`)
+- The event's colour as a 4px rounded bar down the left side, as tall as the row's text and centred in the icon column (web `.hm-bar`). Not a dot. The week strip keeps its small dots, which count events per day.
+- The title, with the place under it (a small pin, then the location).
+- Start over end on the right, with the start a step brighter. All-day events say "All day".
+- On iOS, an event on another day puts the weekday at the front of the second line ("Thu · Room 204") so the times stay short.
+- No location means no second line. Never print an empty placeholder.
 
 ### Week row (`.hm-week`)
 Seven equal day buttons: weekday, date, up to three event-colour dots. The selected day gets a filled pill and lists its events below. Selecting it again opens that day in Calendar.
@@ -118,6 +152,59 @@ One 48px pill at the bottom of every page; its placeholder says what it will do 
 ### Sidebar
 Its own rounded surface (18px). Rows are icon + label, 38px tall (34px for sub-rows), with a soft fill for the current page. Add buttons appear on hover or while you are in that section.
 
+### Switches
+On iOS a switch is tinted the status green (`Theme.local`). The app tint is the text colour, which makes an "on" switch white with a white knob. On/off is a status, so green is allowed (Principle 2).
+On web (`.toggle`) it's the same: a 40×24 track on `--raised-fill-2` (visible on any card or modal), green `--ok` when on, a white knob with a small shadow. Never the accent colour: in the dark theme that's near-white, which hid the knob.
+
+### Integration card (iOS `IntegrationsView`)
+One card per device service (Location, Weather, Maps, Location history), in this order:
+1. A 40pt icon tile on `Theme.tile`, the name, and one line saying what it gives the assistant. A switch on the right.
+2. When on: one status row on `Theme.tile` saying what it knows now ("Near San Francisco, CA", "Calc review: 12 min walk, leave by 3:43 PM") or why not ("Add a place to an event to see travel time").
+3. At most a row of pills for its own actions (history: See places, Clear history).
+
+Rules:
+- Everything is off until the person turns it on. Turning on something that needs a permission asks for it at that moment, never at launch.
+- While a system permission prompt is open, the screen shows "Waiting for permission" and no warnings.
+- A problem with one service is shown in that service's card, with its fix (Open Settings). Only a full "no" to location gets a notice at the top of the page.
+- The page ends with plain privacy lines: what stays on the device, and what asks Apple's services.
+
+### Integrations on web (Settings › Integrations, `src/lib/integrations.ts`)
+Location and Weather, as switches with one line each saying what they give the assistant. Turning Weather on turns Location on too; turning Location off turns Weather off. One quiet status line underneath says what it knows ("Near London, England · 7°C and cloudy") or why not (location blocked, with how to allow it). The position is rounded to about a kilometre before it goes to Open-Meteo (forecast) and BigDataCloud (town name); neither needs an account. Off until turned on.
+
+### Quick add (`parseQuickEvent` in `src/lib/dates.ts`; iOS `QuickAdd.swift`)
+- The title is what's left once the date, time, length and place are read: "math 19a homework due tomorrow 9pm" → **Math 19a homework**. Words that only tie the date to the sentence ("due", "on", "at", "by", "from") never stay in the title.
+- "due" or "by <date>" makes it a **deadline**: rose, 30 minutes from the due time (or all day without a time), and the preview says "Due Mon, Nov 16 · 9:00 PM".
+- A place goes into the event's location, not the title: "@ Room 204", "at Chipotle" (capital letter), "at the library", "in Room 101".
+- Bare numbers aren't times unless something says so ("at 3", "3pm", "3:30", "from 3 to 5", "tonight 7-9"), so course codes and room numbers stay put. Without am/pm, 1–6 is afternoon, 7–11 morning, and evening plans ("dinner at 7:30") are PM.
+- Weeks run Sunday to Saturday: "Friday" is the next one coming, "Friday next week" is the one after.
+- Every preview and toast uses the same label (`whenLabel`). New phrasings go in `scripts/test-dates.ts` (`npm run test:dates`), and the iOS port is checked against the same cases.
+
+### Assistant chat (`Chat` in `AIPanel.tsx`)
+- **Exact answers are instant.** "What's on tomorrow", "what's next", "what's left to do" are answered from the calendar and docs on the spot (`src/ai/instant.ts`), even before the model has loaded, and never with a wrong date. Anything that needs judgement ("am I free", "what should I focus on") goes to the model.
+- **While waiting, say what's happening**, in grey beside the dots: "Getting the assistant ready…", "Reading “Biology notes”…", "Thinking…". Never a bare spinner.
+- **Sources under the answer**: "From" and up to three pills, each a doc the answer read (click to open it), or "Your calendar" / "Your open tasks". Nothing is listed that wasn't actually given to the model.
+- **Actions are cards, with no sentence above them** (the card already says it; a sentence was the same thing twice). One card per change: an icon for what it does, the title, a second line with exactly what will happen ("Sun 2:00 PM → Tue, Nov 17 · 3:00 PM – 4:00 PM", "Add to “Week plan”", "Check off in …"), and one button (Add, Move, Remove, Check off, Create). Remove is the only non-primary button. After the tap the button becomes a green "Added"/"Moved"/…, and the toast says what happened, with **Undo**.
+- Under the last answer: Listen, Insert (when a doc is open), Retry. No copy of these anywhere else.
+- The composer is always usable; sending before the model is ready starts it and answers when it can.
+
+### First-time setup (`.su-*`, `src/components/Setup.tsx`; iOS `SetupView` in `Setup.swift`)
+Two short steps on one calm card (web) or full screen (iOS), with a step indicator of two short bars and a back button on step 2.
+1. **Name.** "Welcome to Monolith", one line about the app, "What should we call you?", and "Used in greetings. Leave it blank if you'd rather not." Continue works with it empty.
+2. **Where your work lives.**
+   - Web: radio cards, "A folder on this computer" (marked Recommended) or "This browser". Where the browser can't save to folders, the folder card is greyed out and says why ("Needs Chrome, Edge or Arc"). Then a "Lock with a passcode" switch; turning it on shows two fields and one plain warning that a forgotten passcode can't be recovered.
+   - iOS: "On this iPhone" (iOS already encrypts it) and a "Lock with Face ID" switch (or Touch ID / Passcode, named for the device). Turning the lock on asks once, so a lock that can't be opened is never saved; if that fails, one line says the lock is still off.
+- The primary button says what happens: "Choose folder…", "Start using Monolith", or "Save" when run again.
+- Existing installs never see setup. Web: Settings › Storage › the lock row reopens step 2. iOS: Settings › You holds the name and the lock.
+
+### Backup file (`BackupDialog`, `src/lib/backup.ts`)
+- Settings › Storage › "Backup file" row: "Last backed up 2 days ago" (or what it is, if never), with **Back up** and **Restore** buttons. Setup step 2 has a quiet "Restore from a backup" link beside the main button, for someone arriving on a new computer.
+- Back up: a title, one line on what's inside, a password typed twice (8+ characters), and one plain warning that without it the file can't be opened. The button says "Download backup", then "Encrypting…".
+- Restore: a file card that shows the file's name, when it was made, and what's in it ("12 docs · 3 recordings · 8 events") before any password is asked; then the password, and one line saying it replaces what's here and that connected folders stay connected.
+- A wrong password clears the field and says "That password doesn't open this backup."
+
+### Lock screen (`Unlock` on web, `LockScreen` on iOS)
+A lock icon in a soft circle, "Monolith is locked", one line, a password field (web) and one full-width Unlock button. A wrong passcode clears the field and says "That passcode isn't right." On iOS it asks for Face ID as soon as the app is in front, and covers the app in the app switcher.
+
 ### Menus and dialogs
 - Menu order for a doc: Add sub-doc, favourite, Move to, then Delete in red after a gap. iOS copies this order.
 - Confirm dialogs: a question as the title, one consequence line, a verb on the confirm button, and the main button disabled until the form is valid.
@@ -134,7 +221,7 @@ Its own rounded surface (18px). Rows are icon + label, 38px tall (34px for sub-r
 - Suggestions are a gentle question: "Add “Problem set due” to your calendar?"
 - Say what happened, not what the system did: "Task done", not "Item updated".
 - Relative times: "Just now" under a minute, then "5 minutes ago", "1 day ago".
-- Greeting by hour: morning before 12, afternoon before 18, otherwise evening (including after midnight).
+- Greetings use the person's first name when they gave one, and vary so they never feel canned: a few phrases per part of the day (night before 5, morning, afternoon, evening), plus "Happy Friday" / "Happy Saturday" mixed in, and "Welcome back" after two days away. The choice is fixed for a day and part of day, so it doesn't flicker. Web `src/lib/greeting.ts` and iOS `Greeting` share the same phrases.
 
 ## Where the styles live (web)
 
@@ -150,7 +237,11 @@ Three files load in order: `src/index.css` (base), `src/theme.css`, `src/soft.cs
 | Web Home | Yes (Nov 15) |
 | Web notifications | Yes (Nov 15) |
 | Web empty states: Recordings, Recently Deleted, no doc open | Yes (Nov 15) |
-| Web Docs, doc editor, Recordings detail, Calendar, Settings, assistant panel, command palette | Not yet reviewed against this file |
-| iOS Home, drawer, chat, menus | Follows the principles from the Nov 14 passes; sizes differ slightly (cards 22–26pt, rows 50pt) |
+| Web assistant chat, Settings switches and Integrations | Reviewed Nov 15 (pass 5) |
+| Web Docs, doc editor, Recordings detail, Calendar, rest of Settings, assistant For you tab, command palette | Not yet reviewed against this file |
+| iOS Home, drawer, Docs and Recordings lists | Yes (Nov 15, pass 2): `Space` tokens, drawer icon column. Checked in the iPhone 17 simulator, dark only |
+| iOS Integrations | Yes (Nov 15): seen in the iPhone 17 simulator with every switch on. iPad and light mode not checked |
+| iOS chat, menus, doc editor | Follows the principles from the Nov 14 passes; not re-checked against the iOS spacing tokens |
+| Web Integrations | Not built (web would need browser location and a weather source) |
 | iOS notifications | Yes (Nov 15): top-right pill under the title bar, seen in the iPhone 17 simulator. iPad not checked |
 | iPad, Watch | Not reviewed |

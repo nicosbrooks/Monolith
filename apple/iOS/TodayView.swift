@@ -8,11 +8,11 @@ struct TodayView: View {
     @Query(filter: #Predicate<Item> { $0.deletedAt == nil }, sort: \Item.updatedAt, order: .reverse) private var items: [Item]
     @Query(sort: \Event.start) private var events: [Event]
     @State private var path: [Item] = []
-    @State private var brief: String?
-    @State private var briefing = false
-    @State private var briefError: String?
     /// Dismissed and accepted suggestions, kept across launches so nothing is offered twice.
     @AppStorage("dismissedSuggestions") private var dismissedRaw = ""
+    @AppStorage(Profile.name) private var userName = ""
+    @AppStorage(Profile.setupAt) private var setupAt = 0.0
+    @State private var away = Greeting.away()
     private var dismissed: Set<String> { Set(dismissedRaw.split(separator: "\n").map(String.init)) }
     private func dismiss(_ id: String) {
         // Keep the newest 500, oldest dropped first.
@@ -24,16 +24,36 @@ struct TodayView: View {
     }
     @Environment(\.horizontalSizeClass) private var size
     private var compact: Bool { size == .compact }
+    private var integrations: Integrations { .shared }
     @State private var allTasksShown = false
     /// Tasks just ticked, waiting a moment before they leave the list.
     @State private var checking: Set<String> = []
-    private var canPlan: Bool { Assistant.isAvailable && (!todays.isEmpty || !tasks.isEmpty) }
-    private var planButton: some View {
-        Button { Task { await planDay() } } label: {
-            if briefing { ProgressView().controlSize(.small) } else if compact { Image(systemName: "sparkles") } else { Text("Plan my day") }
+    /// Starting points for a conversation, built from what's actually on today. Each one opens chat with
+    /// the question asked, so the person can take it anywhere from there. Never a fixed plan.
+    /// "Start from here" on the first day; after that, what the starting points are about.
+    private var startersTitle: String {
+        let soon = comingUp.first.map { !$0.allDay && $0.start.timeIntervalSinceNow < 90 * 60 } ?? false
+        return Greeting.startersTitle(setupAt: setupAt, soon: soon, onlyDocs: starters.count == 1 && starters[0].symbol == "doc.text")
+    }
+
+    private var starters: [(symbol: String, text: String)] {
+        guard Assistant.isAvailable else { return [] }
+        var out: [(String, String)] = []
+        if let next = comingUp.first(where: { !$0.allDay }) ?? comingUp.first {
+            out.append(("calendar", "Help me get ready for \u{201C}\(next.title)\u{201D}"))
         }
-        .disabled(briefing)
-        .accessibilityLabel("Plan my day")
+        if derived.taskCount > 1 {
+            out.append(("checkmark.square", "Which of my \(derived.taskCount) tasks should I do first?"))
+        } else if let t = tasks.first {
+            out.append(("checkmark.square", "Help me with \u{201C}\(MD.plain(t.line))\u{201D}"))
+        }
+        if let doc = items.first(where: { $0.kind == .doc && !$0.body.isEmpty }) {
+            out.append(("doc.text", "Summarize \u{201C}\(doc.displayTitle)\u{201D}"))
+        } else if let rec = items.first(where: { $0.kind == .lecture }) {
+            out.append(("mic", "What were the key points of \u{201C}\(rec.displayTitle)\u{201D}?"))
+        }
+        if out.isEmpty { out.append(("bubble.left", "What can you help me with?")) }
+        return Array(out.prefix(3))
     }
 
     /// Derived lists, rebuilt shortly after notes or events change rather than on every redraw:
@@ -79,40 +99,27 @@ struct TodayView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                VStack(alignment: .leading, spacing: compact ? 26 : 14) {
+                VStack(alignment: .leading, spacing: compact ? Space.section : 14) {
                     if compact { phoneHome } else {
                     if compact {
-                        // iPhone: the date is the title; Plan my day sits in the toolbar.
                         Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
                             .font(.title2.bold()).accessibilityAddTraits(.isHeader)
                     } else {
                         HStack(alignment: .top) {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("Home").font(.title.bold()).accessibilityAddTraits(.isHeader)
+                                Text(Greeting.text(name: userName, away: away)).font(.title.bold()).accessibilityAddTraits(.isHeader)
                                 Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
                                     .font(.subheadline).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            if canPlan { planButton.buttonStyle(.bordered) }
                         }
                         .padding(.bottom, 6)
                     }
 
-                    if let briefError {
-                        panel("Daily plan", icon: "sparkles") {
-                            Text(briefError).font(.subheadline).foregroundStyle(.secondary)
-                            Button("Dismiss") { self.briefError = nil }.font(.footnote)
-                        }
-                    } else if let brief {
-                        panel("Daily plan", icon: "sparkles") {
-                            MarkdownBlocks(markdown: brief)
-                            Button("Dismiss") { self.brief = nil }.font(.footnote)
-                        }
-                    }
+                    if showsAssistant { assistantCard }
 
-                    panel("Schedule", icon: "calendar", status: scheduleStatus) {
+                    panel("Calendar", icon: "calendar", status: scheduleStatus) {
                         WeekStrip(events: events)
-                        if let s = nudge { suggestionRow(s) }
                     }
 
                     let layout = size == .regular ? AnyLayout(HStackLayout(alignment: .top, spacing: 14)) : AnyLayout(VStackLayout(spacing: 14))
@@ -129,9 +136,9 @@ struct TodayView: View {
                 }
                 .frame(maxWidth: 960, alignment: .leading)
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 18)
-                .padding(.top, compact ? 0 : 28)
-                .padding(.bottom, compact ? 110 : 28)
+                .padding(.horizontal, Space.page)
+                .padding(.top, compact ? 8 : 28)
+                .padding(.bottom, compact ? 120 : 28)
             }
             .paper()
             .navigationTitle(compact ? Date.now.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) : "")
@@ -147,6 +154,8 @@ struct TodayView: View {
                 guard !Task.isCancelled else { return }
                 rederive()
                 derivedOnce = true
+                integrations.upcoming(events.map { ($0.title, $0.location ?? "", $0.start) })
+                integrations.refresh()
             }
         }
     }
@@ -161,25 +170,35 @@ struct TodayView: View {
     }
 
     @ViewBuilder private var phoneHome: some View {
+        Text(Greeting.text(name: userName, away: away))
+            .font(.title.bold()).accessibilityAddTraits(.isHeader)
+            .padding(.bottom, -Space.section + 12)
         if showsAssistant { assistantCard }
 
-        section("Today") {
+        // Weather sits beside the label, quietly, when that integration is on.
+        let weather = integrations.isOn(.weather) ? integrations.weather : nil
+        section("Calendar", trailing: weather?.line, symbol: weather?.symbol) {
             if comingUp.isEmpty {
-                Text("Nothing else today").font(.subheadline).foregroundStyle(.secondary)
+                Text("Nothing coming up").font(.subheadline).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
             }
             ForEach(comingUp) { e in
-                Button { router.openCalendar(e.start) } label: {
+                Button { router.openCalendar(e.start) } label: { eventRow(e) }
+                    .buttonStyle(.row)
+            }
+            // Maps: when to leave for the next event that has a place.
+            if integrations.isOn(.maps), let t = integrations.trip {
+                Button { router.openCalendar(t.start) } label: {
                     row {
-                        Circle().fill(e.color).frame(width: 8, height: 8)
-                    } title: { Text(e.title) } trailing: {
-                        Text(e.allDay ? "All day" : Calendar.current.isDateInToday(e.start)
-                             ? e.start.formatted(date: .omitted, time: .shortened)
-                             : e.start.formatted(.dateTime.weekday(.abbreviated).hour().minute()))
-                            .font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+                        Image(systemName: t.walking ? "figure.walk" : "car").font(.subheadline).foregroundStyle(.secondary)
+                    } title: {
+                        Text("Leave by \(t.leaveBy.formatted(date: .omitted, time: .shortened))").foregroundStyle(.secondary)
+                    } trailing: {
+                        Text(t.line).font(.footnote).foregroundStyle(.secondary)
                     }
                 }
                 .buttonStyle(.row)
+                .accessibilityLabel("Leave by \(t.leaveBy.formatted(date: .omitted, time: .shortened)) for \(t.event), \(t.line)")
             }
         }
 
@@ -227,7 +246,7 @@ struct TodayView: View {
 
     // MARK: Assistant card: the one place the assistant speaks on Home.
 
-    private var showsAssistant: Bool { nudge != nil || brief != nil || briefing || briefError != nil || canPlan }
+    private var showsAssistant: Bool { nudge != nil || !starters.isEmpty }
 
     /// Tasks, minus the one the assistant is already asking about (no saying the same thing twice).
     private var visibleTasks: [(item: Item, line: String)] {
@@ -237,38 +256,39 @@ struct TodayView: View {
 
     @ViewBuilder private var assistantCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let brief {
-                header("Your day")
-                MarkdownBlocks(markdown: brief).font(.subheadline)
-                HStack { pill("Done", primary: false) { withAnimation(.snappy) { self.brief = nil } } }
-            } else if briefing {
-                header("Planning your day…")
-                ProgressView().frame(maxWidth: .infinity, alignment: .leading)
-            } else if let s = nudge {
+            if let s = nudge {
                 suggestionCard(s)
-            } else if let briefError {
-                header("Couldn’t plan your day")
-                Text(briefError).font(.subheadline).foregroundStyle(.secondary)
-                HStack(spacing: 10) {
-                    pill("Try again", primary: true) { Task { await planDay() } }
-                    pill("Dismiss", primary: false) { self.briefError = nil }
-                }
             } else {
-                header("Plan your day")
-                Text("A short plan from your calendar and \(derived.taskCount) open task\(derived.taskCount == 1 ? "" : "s").")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                HStack { pill("Plan my day", primary: true) { Task { await planDay() } } }
+                header(startersTitle)
+                VStack(spacing: 8) {
+                    ForEach(starters, id: \.text) { s in
+                        Button { router.ask = s.text } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: s.symbol).font(.subheadline).foregroundStyle(.secondary).frame(width: 20)
+                                Text(s.text).font(.subheadline).multilineTextAlignment(.leading).lineLimit(2)
+                                Spacer(minLength: 6)
+                                Image(systemName: "arrow.up.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 12)
+                            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                            .background(Theme.tile, in: .rect(cornerRadius: 16, style: .continuous))
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Asks the assistant")
+                    }
+                }
             }
         }
-        .padding(18)
+        .padding(Space.card + 2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.card, in: .rect(cornerRadius: 26, style: .continuous))
         .animation(.snappy, value: nudge?.id)
     }
 
     private func header(_ t: String) -> some View {
-        Label { Text(t).font(.subheadline.weight(.semibold)) } icon: { Image(systemName: "sparkles") }
-            .foregroundStyle(.secondary)
+        // Words only: a sparkle reads as "AI" rather than saying anything.
+        Text(t).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
     }
 
     /// A date the assistant found in a doc: what, when, exactly where it came from, and two clear choices.
@@ -290,7 +310,7 @@ struct TodayView: View {
                         }
                         Spacer(minLength: 0)
                     }
-                    .padding(12)
+                    .padding(14)
                     .background(Theme.wash, in: .rect(cornerRadius: 16, style: .continuous))
                 }
                 .buttonStyle(.plain)
@@ -316,21 +336,66 @@ struct TodayView: View {
 
     /// One Home row: a 20pt icon column (so every section lines up), the title, and a quiet detail on the right.
     private func row<Icon: View, Title: View, Trailing: View>(@ViewBuilder icon: () -> Icon, @ViewBuilder title: () -> Title, @ViewBuilder trailing: () -> Trailing) -> some View {
-        HStack(spacing: 10) {
-            icon().frame(width: 20)
+        HStack(spacing: 14) {
+            icon().frame(width: 22)
             title().lineLimit(1)
             Spacer(minLength: 8)
             trailing()
         }
-        .frame(minHeight: 50).contentShape(.rect)
+        .frame(minHeight: Space.row).contentShape(.rect)
     }
 
-    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 4)
-                .accessibilityAddTraits(.isHeader)
+    /// An event on Home: title with its place underneath, start and end on the right.
+    /// A day other than today leads the second line ("Thu · Room 204") so the times stay short.
+    private func eventRow(_ e: AgendaItem) -> some View {
+        let place = e.location?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmptyOrNil
+        let day = Calendar.current.isDateInToday(e.start) ? nil : e.start.formatted(.dateTime.weekday(.abbreviated))
+        let detail = [day, place].compactMap { $0 }.joined(separator: " · ")
+        return HStack(alignment: .center, spacing: 14) {
+            RoundedRectangle(cornerRadius: 2).fill(e.color)
+                .frame(width: 4).frame(maxHeight: .infinity).frame(width: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(e.title).lineLimit(1)
+                if !detail.isEmpty {
+                    HStack(spacing: 4) {
+                        if place != nil { Image(systemName: "mappin").imageScale(.small) }
+                        Text(detail).lineLimit(1)
+                    }
+                    .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 2) {
+                if e.allDay {
+                    Text("All day")
+                } else {
+                    Text(e.start.formatted(date: .omitted, time: .shortened)).foregroundStyle(.primary)
+                    Text(e.end.formatted(date: .omitted, time: .shortened))
+                }
+            }
+            .font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.vertical, 8)
+        .frame(minHeight: Space.row).contentShape(.rect)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func section<Content: View>(_ title: String, trailing: String? = nil, symbol: String? = nil, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                if let trailing {
+                    if let symbol { Image(systemName: symbol).symbolRenderingMode(.multicolor) }
+                    Text(trailing).foregroundStyle(.secondary)
+                }
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 6)
             VStack(alignment: .leading, spacing: 2) { content() }
-                .padding(.horizontal, 14).padding(.vertical, 6)
+                .padding(.horizontal, 16).padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Theme.card, in: .rect(cornerRadius: 22, style: .continuous))
         }
@@ -341,7 +406,7 @@ struct TodayView: View {
     private func taskRow(_ task: (item: Item, line: String)) -> some View {
         let key = "\(task.item.id)|\(task.line)"
         let done = checking.contains(key)
-        return HStack(spacing: 10) {
+        return HStack(spacing: 14) {
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 if done { withAnimation(.snappy) { _ = checking.remove(key) }; return }
@@ -357,7 +422,7 @@ struct TodayView: View {
             } label: {
                 Image(systemName: done ? "checkmark.square.fill" : "square").font(.body)
                     .foregroundStyle(done ? .primary : .secondary)
-                    .frame(width: 20, height: 44).contentShape(.rect)
+                    .frame(width: 22, height: Space.row).contentShape(.rect)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(done ? "Undo" : "Mark complete")
@@ -366,14 +431,14 @@ struct TodayView: View {
                     Text(MD.inline(task.line)).lineLimit(1).strikethrough(done).foregroundStyle(done ? .secondary : .primary)
                     Spacer(minLength: 0)
                 }
-                .frame(minHeight: 44).contentShape(.rect)
+                .frame(minHeight: Space.row).contentShape(.rect)
             }
             .buttonStyle(.row)
         }
     }
 
     private func quiet(_ t: String) -> some View {
-        Text(t).font(.subheadline).foregroundStyle(.tertiary).frame(minHeight: 40, alignment: .leading).padding(.leading, 30)
+        Text(t).font(.subheadline).foregroundStyle(.tertiary).frame(minHeight: 44, alignment: .leading).padding(.leading, 36)
     }
 
     private var scheduleStatus: String {
@@ -400,20 +465,6 @@ struct TodayView: View {
         .padding(compact ? 0 : 14)
         .background(compact ? Color.clear : Theme.panel, in: .rect(cornerRadius: 16))
         .overlay { if !compact { RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.rule).allowsHitTesting(false) } }
-    }
-
-    private func suggestionRow(_ suggestion: Suggestion) -> some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(suggestion.title).font(.subheadline)
-                Text(suggestion.date.formatted(.dateTime.weekday(.abbreviated).day().hour().minute()))
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-            Button("Add") { add(suggestion) }.buttonStyle(.bordered)
-            Button { dismiss(suggestion.id) } label: { Image(systemName: "xmark").font(.footnote.weight(.semibold)) }
-                .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Not needed")
-        }
     }
 
     @ViewBuilder private var taskRows: some View {
@@ -478,25 +529,6 @@ struct TodayView: View {
                             action: ("Undo", { [ctx] in ctx.delete(e); PhoneLink.shared.sendAgenda(); undismiss(s.id) }))
     }
 
-    private func planDay() async {
-        briefing = true
-        briefError = nil
-        defer { briefing = false }
-        let ctxText = """
-        Today: \(Date.now.formatted(date: .complete, time: .shortened))
-        Events: \(todays.map { "\($0.start.formatted(date: .omitted, time: .shortened)) \($0.title)" }.joined(separator: "; "))
-        This week: \(upcoming.map { "\($0.start.formatted(.dateTime.weekday().hour().minute())) \($0.title)" }.joined(separator: "; "))
-        Open tasks: \(tasks.map(\.line).joined(separator: "; "))
-        """
-        do {
-            let out = try await Assistant.ask(
-                "Write a calm daily brief in under 80 words: the single most important thing today, then 2–3 short bullets for a realistic plan with times. Use only what is listed. No greeting.",
-                context: ctxText)
-            withAnimation { brief = out }
-        } catch {
-            briefError = error.localizedDescription
-        }
-    }
 }
 
 /// The selected date opens in place and can jump directly to Calendar.
@@ -588,4 +620,8 @@ struct AllRecentsView: View {
         .navigationTitle("Recent")
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+private extension String {
+    var nonEmptyOrNil: String? { isEmpty ? nil : self }
 }

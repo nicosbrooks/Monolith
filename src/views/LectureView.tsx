@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Editor as TEditor } from '@tiptap/react'
 import { format } from 'date-fns'
-import { Mic, Square, Pause, Play, Sparkles, Upload, Trash2, Layers, Loader2, Captions, RotateCcw, MoreHorizontal } from 'lucide-react'
+import { Mic, Square, Pause, Play, PenLine, Upload, Trash2, Layers, Loader2, Captions, RotateCcw, MoreHorizontal } from 'lucide-react'
 import { openMenu } from '../components/Overlays'
 import { motion } from 'motion/react'
 import { loadAudio, saveAudio, useStore } from '../store'
 import { MobileBack } from '../components/MobileBack'
 import type { Item, Segment } from '../types'
 import { Editor } from '../components/editor/Editor'
-import { liveCaptions, transcribe } from '../ai/whisper'
+import { liveTranscribe, transcribe, type Live } from '../ai/stt'
 import { chat, enqueue, ensureAI, isReady, SYSTEM } from '../ai/llm'
 import { formatDuration, mdToHtml } from '../lib/util'
 import { toast } from '../components/Toast'
@@ -20,7 +20,7 @@ export function LectureView({ item }: { item: Item }) {
   const [tab, setTab] = useState<'notes' | 'transcript'>(lec.transcript.length ? 'notes' : 'transcript')
   const [rec, setRec] = useState<'idle' | 'rec' | 'paused'>('idle')
   const [elapsed, setElapsed] = useState(0)
-  const [live, setLive] = useState({ final: '', interim: '' })
+  const [live, setLive] = useState<{ lines: Segment[]; interim: string }>({ lines: [], interim: '' })
   const [status, setStatus] = useState<{ text: string; p?: number } | null>(null)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [t, setT] = useState(0)
@@ -30,7 +30,7 @@ export function LectureView({ item }: { item: Item }) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const mr = useRef<MediaRecorder | null>(null)
   const chunks = useRef<Blob[]>([])
-  const caps = useRef<{ stop: () => void } | null>(null)
+  const caps = useRef<Live | null>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const raf = useRef(0)
   const streamRef = useRef<MediaStream | null>(null)
@@ -60,6 +60,7 @@ export function LectureView({ item }: { item: Item }) {
   function stopAll() {
     cancelAnimationFrame(raf.current)
     caps.current?.stop()
+    caps.current = null
     streamRef.current?.getTracks().forEach((t) => t.stop())
   }
 
@@ -74,9 +75,17 @@ export function LectureView({ item }: { item: Item }) {
         const blob = new Blob(chunks.current, { type: m.mimeType })
         await saveAudio(item.id, blob)
         setAudioUrl(URL.createObjectURL(blob))
-        setLec({ hasAudio: true, duration: accumulated.current, status: 'idle' })
+        // The live lines are the transcript: each phrase was read on the device as it was spoken.
+        const lines = (await caps.current?.stop()) ?? []
+        caps.current = null
         stopAll()
-        runTranscribe(blob)
+        if (lines.length) {
+          setLec({ hasAudio: true, duration: accumulated.current, transcript: lines, status: 'done' })
+          toast('Transcript ready', isReady() ? { action: { label: 'Write study notes', run: () => generate() } } : {})
+        } else {
+          setLec({ hasAudio: true, duration: accumulated.current, status: 'idle' })
+          runTranscribe(blob)
+        }
       }
       m.start(1000)
       mr.current = m
@@ -85,7 +94,11 @@ export function LectureView({ item }: { item: Item }) {
       setRec('rec')
       setLec({ status: 'recording' })
       setTab('transcript')
-      caps.current = liveCaptions((final, interim) => setLive({ final, interim }))
+      setLive({ lines: [], interim: '' })
+      caps.current = liveTranscribe(stream, settings.whisperModel, {
+        update: (lines, interim) => setLive({ lines, interim }),
+        status: (text, p) => setStatus(text ? { text, p } : null),
+      })
       visualize(stream)
     } catch (e) {
       toast('Microphone access was blocked: ' + (e as Error).message)
@@ -131,10 +144,12 @@ export function LectureView({ item }: { item: Item }) {
     if (!mr.current) return
     if (rec === 'rec') {
       mr.current.pause()
+      caps.current?.pause(true)
       accumulated.current += (Date.now() - startedAt.current) / 1000
       setRec('paused')
     } else {
       mr.current.resume()
+      caps.current?.pause(false)
       startedAt.current = Date.now()
       setRec('rec')
     }
@@ -169,13 +184,7 @@ export function LectureView({ item }: { item: Item }) {
     }
   }
 
-  function liveToSegments(): Segment[] {
-    const text = live.final.trim()
-    if (!text) return []
-    const sentences = text.split(/(?<=[.!?])\s+/)
-    const per = (accumulated.current || 1) / sentences.length
-    return sentences.map((s, i) => ({ start: i * per, end: (i + 1) * per, text: s }))
-  }
+  const liveToSegments = () => live.lines
 
   async function importAudio() {
     const input = document.createElement('input')
@@ -346,7 +355,7 @@ export function LectureView({ item }: { item: Item }) {
             <span className="grow" />
             {lec.transcript.length > 0 && !recording && (
               <button className="btn sm ai" onClick={generate} disabled={gen}>
-                {gen ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />} Write notes
+                {gen ? <Loader2 size={14} className="spin" /> : <PenLine size={14} />} Write notes
               </button>
             )}
           </div>}
@@ -363,9 +372,10 @@ export function LectureView({ item }: { item: Item }) {
             <div className="transcript">
               {recording && (
                 <p className="live-cap">
-                  {live.final}
+                  {live.lines.map((l) => l.text).join(' ')}
+                  {live.lines.length > 0 && ' '}
                   <span className="interim">{live.interim}</span>
-                  {!live.final && !live.interim && <span className="muted">Listening… The full transcript appears when you stop.</span>}
+                  {!live.lines.length && !live.interim && <span className="muted">Listening… Words appear here as they’re said, transcribed on this device.</span>}
                 </p>
               )}
               {!recording &&

@@ -106,6 +106,7 @@ final class OpenModels {
             container = c
             loadedID = id
             phase = .ready
+            Self.remember(id)
             return c
         } catch {
             if request == token {
@@ -116,17 +117,42 @@ final class OpenModels {
         }
     }
 
-    /// Answer `prompt`, calling `onText` with the text so far as each piece arrives.
-    func respond(model id: String, instructions: String, prompt: String, onText: (@MainActor (String) -> Void)? = nil) async throws -> String {
+    /// Models that have loaded on this device before, so warming one up never starts a surprise download.
+    private static let loadedKey = "openModelsLoaded"
+    static func onDevice(_ id: String) -> Bool { (UserDefaults.standard.stringArray(forKey: loadedKey) ?? []).contains(id) }
+    private static func remember(_ id: String) {
+        var ids = UserDefaults.standard.stringArray(forKey: loadedKey) ?? []
+        if !ids.contains(id) { ids.append(id); UserDefaults.standard.set(ids, forKey: loadedKey) }
+    }
+
+    /// Load the model into memory ahead of the first question, if it's already downloaded.
+    /// Loading takes a few seconds; doing it while someone types means the answer starts right away.
+    func warm(_ id: String) {
+        guard Self.onDevice(id), !isLoaded(id), preparingID != id || pending == nil else { return }
+        Task { _ = try? await container(for: id) }
+    }
+
+    /// A chat session that keeps what the model has already read. Follow-ups in the same conversation
+    /// only process the new words instead of rereading the whole context, so they start much faster.
+    func session(model id: String, instructions: String) async throws -> ChatSession {
         let c = try await container(for: id)
         // Hybrid reasoning models (Qwen, LFM3) answer directly; notes and briefs don't need a visible chain of thought.
-        let session = ChatSession(c, instructions: instructions, generateParameters: GenerateParameters(maxTokens: 384), additionalContext: ["enable_thinking": false])
+        return ChatSession(c, instructions: instructions, generateParameters: GenerateParameters(maxTokens: 384, temperature: 0.3), additionalContext: ["enable_thinking": false])
+    }
+
+    /// Answer `prompt`, calling `onText` with the text so far as each piece arrives.
+    func respond(model id: String, instructions: String, prompt: String, onText: (@MainActor (String) -> Void)? = nil) async throws -> String {
+        try await Self.stream(try await session(model: id, instructions: instructions), prompt: prompt, onText: onText)
+    }
+
+    static func stream(_ session: ChatSession, prompt: String, onText: (@MainActor (String) -> Void)?) async throws -> String {
         var raw = ""
         for try await chunk in session.streamResponse(to: prompt) {
             raw += chunk
-            if let onText { onText(Self.visible(raw)) }
+            try Task.checkCancellation()
+            if let onText { onText(visible(raw)) }
         }
-        return Self.visible(raw)
+        return visible(raw)
     }
 
     /// The answer without any reasoning block, including one still being written.

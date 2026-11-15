@@ -13,7 +13,7 @@ settings:
     SWIFT_APPROACHABLE_CONCURRENCY: YES
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    DEVELOPMENT_TEAM: "" # set your team in Xcode → Signing & Capabilities
+    DEVELOPMENT_TEAM: 422K9C2579 # kept here so `xcodegen generate` doesn't drop the team chosen in Xcode
 # Open models run on the device through Apple's MLX. Pinned to releases at least two weeks old.
 packages:
   mlx-swift-lm:
@@ -51,7 +51,9 @@ targets:
         NSSpeechRecognitionUsageDescription: Recordings are transcribed on this device.
         NSCalendarsFullAccessUsageDescription: Your other calendars appear next to your events in Monolith. Nothing is changed in them.
         NSCameraUsageDescription: Scan the code on your computer to link it to this phone.
-        NSFaceIDUsageDescription: Unlock Monolith after Sync mode.
+        NSFaceIDUsageDescription: Unlock Monolith when the lock is on, and after Sync mode.
+        NSLocationWhenInUseUsageDescription: Integrations use where you are to give the assistant local context, like the weather and travel time to your next event. It stays on this iPhone.
+        NSLocationAlwaysAndWhenInUseUsageDescription: With Location history on, Monolith notes the places you spend time so the assistant can refer to them. They stay on this iPhone, and you can clear them at any time.
         NSLocalNetworkUsageDescription: Sync with Monolith running on a computer on your network during development.
         NSAppTransportSecurity: { NSAllowsLocalNetworking: true }
         CFBundleURLTypes:

@@ -22,9 +22,23 @@ enum Theme {
     static let card = pair(0x161616, 0xFFFFFF)
     /// Quiet fills behind icons and chips.
     static let wash = pair(0x1A1A1A, 0xECEBE7)
+    /// A fill that shows on a card (icon tiles, status rows inside a card). `wash` is for the page.
+    static let tile = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.07) : UIColor(white: 0, alpha: 0.045) })
     /// Signals: on-device and private, calendar time, recording.
     static let local = pair(0x7FD69E, 0x2F9E62)
     static let time = pair(0x86B3FF, 0x2F6FDB)
+}
+
+/// Spacing shared by the iPhone and iPad screens (DESIGN.md → Shape and space).
+enum Space {
+    /// Side margin of a page.
+    static let page: CGFloat = 20
+    /// Between sections on a page.
+    static let section: CGFloat = 32
+    /// Inside a card.
+    static let card: CGFloat = 18
+    /// A tappable row.
+    static let row: CGFloat = 54
 }
 
 extension Font {

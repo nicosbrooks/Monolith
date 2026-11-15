@@ -67,7 +67,7 @@ struct CreateCommands: Commands {
 // MARK: - iPad root
 
 enum PadSection: Hashable {
-    case today, folder(String), lectures, docs, calendar, search
+    case today, folder(String), lectures, docs, calendar, search, integrations
 }
 
 /// iPad and wide windows: sidebar, then a list, then the editor.
@@ -95,6 +95,7 @@ struct PadRoot: View {
                     Label("Docs", systemImage: "doc.text").tag(PadSection.docs).sideRow(size)
                     Label("Recordings", systemImage: "mic").tag(PadSection.lectures).sideRow(size)
                     Label("Calendar", systemImage: "calendar").tag(PadSection.calendar).sideRow(size)
+                    Label("Integrations", systemImage: "puzzlepiece.extension").tag(PadSection.integrations).sideRow(size)
                 }
                 if !folders.isEmpty {
                     Section {
@@ -128,6 +129,7 @@ struct PadRoot: View {
                 case .docs: DocsView()
                 case .calendar: CalendarScreen()
                 case .search: SearchView()
+                case .integrations: IntegrationsView()
                 }
             }
             .id(section)

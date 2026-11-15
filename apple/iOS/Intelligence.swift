@@ -1,5 +1,6 @@
 import Foundation
 import FoundationModels
+import MLXLMCommon
 
 /// The assistant. Someone picks a model in Settings (or leaves it on Automatic) and it just works:
 /// Apple's built-in model where the device has it, otherwise an open model run with MLX.
@@ -33,17 +34,51 @@ enum Assistant {
         }
     }
 
+    // Small models are only as accurate as what they're given: rules they can follow, and dates spelled out,
+    // since they can't do date arithmetic. Mirrors CHAT_RULES in src/ai/context.ts.
     private static let instructions = """
-    You are a calm, precise assistant inside a notes app. Use Markdown. Be brief. \
-    Use emoji only if the user requests them or they are part of text you need to preserve. \
-    Never invent facts that aren't in the provided material.
+    You are Monolith, a calm, precise study and productivity assistant on the user's own device.
+    Rules:
+    - Answer from the material given and nothing else. If the answer isn't there, say in one plain, friendly sentence that it isn't in their notes or calendar. Never guess.
+    - Use dates and times exactly as listed under Dates and Calendar. Never work out a date yourself.
+    - Answer first, then stop: 1–4 sentences or a short list. No preamble, and don't repeat the question.
+    - Short Markdown is fine (lists, bold). No tables. No emoji unless asked.
     """
+
+    /// "today: Sunday 2026-11-15", "tomorrow: …", then the next twelve days by name, for the model to look up.
+    private static let dayFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "EEE yyyy-MM-dd"
+        return f
+    }()
+    /// "Sun 2026-11-15": the same form as the Dates list, so the model can match them up.
+    static func day(_ d: Date) -> String { dayFormat.string(from: d) }
+
+    static var dates: String {
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: .now)
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "EEEE yyyy-MM-dd"
+        let name = DateFormatter()
+        name.locale = Locale(identifier: "en_US_POSIX")
+        name.dateFormat = "EEEE"
+        let lines = (0..<14).compactMap { i -> String? in
+            guard let d = cal.date(byAdding: .day, value: i, to: start) else { return nil }
+            // "Tuesday" means the next one coming, as in quick add; the week after is spelled out.
+            let label = i == 0 ? "today, " : i == 1 ? "tomorrow, " : i >= 7 ? "the week after, " : ""
+            return "- \(label)\(name.string(from: d)): \(f.string(from: d).split(separator: " ").last ?? "")"
+        }
+        return "Now: \(Date.now.formatted(date: .complete, time: .shortened))\nDates:\n" + lines.joined(separator: "\n")
+    }
 
     /// Answer `prompt` from `context`. Pass `onText` to get the answer so far as it is written.
     static func ask(_ prompt: String, context: String, onText: (@MainActor (String) -> Void)? = nil) async throws -> String {
-        // Small on-device models have small context windows, so long material is trimmed.
+        // Small on-device models have small context windows, so long material is trimmed. The question goes last,
+        // right before the answer, where small models pay it the most attention.
         let material = String(context.prefix(9000))
-        let full = "\(prompt)\n\n---\n\(material)"
+        let full = "\(material)\n\n---\nQuestion: \(prompt)"
         if let id = openModelID {
             return try await OpenModels.shared.respond(model: id, instructions: instructions, prompt: full, onText: onText)
         }
@@ -56,6 +91,71 @@ enum Assistant {
             onText(text)
         }
         return text
+    }
+
+    /// Get the chosen model ready while someone is still typing: loads an open model that's already downloaded,
+    /// or asks Apple's model to load its weights.
+    static func warm() {
+        if let id = openModelID { OpenModels.shared.warm(id) }
+        else if isAvailable { LanguageModelSession(instructions: instructions).prewarm() }
+    }
+
+    /// One chat, one model session. The first question sends the full material; follow-ups send only the
+    /// question and anything newly relevant, and the model keeps what it already read, so they start fast.
+    final class Conversation {
+        private var mlx: ChatSession?
+        private var mlxID: String?
+        private var apple: LanguageModelSession?
+        /// Material already sent in this conversation, so it isn't sent twice.
+        private var sent: Set<String> = []
+        /// The day the material was written for: the Dates list goes stale at midnight.
+        private var day = Calendar.current.startOfDay(for: .now)
+
+        /// `fixed` is the material that only needs sending once (dates, calendar, tasks); `pieces` are
+        /// notes and docs, each sent the first time it's relevant.
+        func ask(_ prompt: String, fixed: String, pieces: [String], onText: (@MainActor (String) -> Void)? = nil) async throws -> String {
+            let today = Calendar.current.startOfDay(for: .now)
+            if today != day || (openModelID != nil && mlxID != openModelID) { reset(); day = today }
+            let first = sent.isEmpty
+            let fresh = pieces.filter { !sent.contains($0) }
+            // Small models have small context windows: the first turn is trimmed like a one-off question.
+            var material = first ? String(fixed.prefix(5000)) + "\n" : ""
+            var budget = first ? 9000 - material.count : 3000
+            for p in fresh where budget > 0 {
+                let cut = String(p.prefix(budget))
+                material += cut + "\n"
+                budget -= cut.count
+                sent.insert(p)
+            }
+            if first { sent.insert(fixed) }
+            let full = material.isEmpty ? prompt : "\(material)\n---\nQuestion: \(prompt)"
+            do {
+                if let id = openModelID {
+                    if mlx == nil { mlx = try await OpenModels.shared.session(model: id, instructions: instructions); mlxID = id }
+                    return try await OpenModels.stream(mlx!, prompt: full, onText: onText)
+                }
+                guard isAvailable else { throw ModelError.unavailable }
+                let session = apple ?? LanguageModelSession(instructions: instructions)
+                apple = session
+                guard let onText else { return try await session.respond(to: full).content }
+                var text = ""
+                for try await snapshot in session.streamResponse(to: full) {
+                    text = snapshot.content
+                    onText(text)
+                }
+                return text
+            } catch {
+                // A stopped or failed turn can leave the session mid-answer; start clean next time.
+                reset()
+                // A long chat can outgrow a small context window: start over with the full material once.
+                if !first, !(error is CancellationError), !Task.isCancelled {
+                    return try await ask(prompt, fixed: fixed, pieces: pieces, onText: onText)
+                }
+                throw error
+            }
+        }
+
+        func reset() { mlx = nil; mlxID = nil; apple = nil; sent = [] }
     }
 
     static func studyNotes(for transcript: String) async throws -> String {
@@ -120,26 +220,5 @@ struct Suggestion: Identifiable {
             }
         }
         return out
-    }
-}
-
-/// "calc review thu 4pm for 2h" → title, start, end
-enum QuickAdd {
-    static func parse(_ text: String) -> (title: String, start: Date, end: Date)? {
-        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue) else { return nil }
-        let ns = text as NSString
-        guard let m = detector.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)), let start = m.date else { return nil }
-        var title = ns.replacingCharacters(in: m.range, with: "")
-        var length: TimeInterval = 3600
-        if let r = title.range(of: #"for (\d+(?:\.\d+)?)\s*(h|hr|hrs|hours?|m|min|mins|minutes?)"#, options: .regularExpression) {
-            let parts = title[r].split(separator: " ", maxSplits: 1)
-            let n = Double(parts[1].prefix { $0.isNumber || $0 == "." }) ?? 1
-            length = parts[1].contains("m") ? n * 60 : n * 3600
-            title.removeSubrange(r)
-        }
-        title = title.trimmingCharacters(in: .whitespaces)
-        // "calc review" → "Calc review"
-        if let f = title.first { title = f.uppercased() + title.dropFirst() }
-        return (title.isEmpty ? "New event" : title, start, start.addingTimeInterval(length))
     }
 }

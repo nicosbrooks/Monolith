@@ -10,9 +10,8 @@
 		0DA57106631BA0C41CAAE036 /* Lectures.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2D4B401B89538C22CFFF154 /* Lectures.swift */; };
 		0E642AB4579E13F77DD62763 /* LinkViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867DCD6E3975781CD7E2027D /* LinkViews.swift */; };
 		14F0E0A2E17F75038A0A4897 /* OpenModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 458DA780324B1F5FA7E52C7F /* OpenModels.swift */; };
-		4C3F0A1E7D2B4E9A8F61C201 /* LFM3.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C3F0A1E7D2B4E9A8F61C202 /* LFM3.swift */; };
-		5E1D0F2A7C3B4E8A9F61D301 /* Feedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1D0F2A7C3B4E8A9F61D302 /* Feedback.swift */; };
 		1C16C914F08CB1E21E10B678 /* CalendarScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCE7D1973601C822D6DED58E /* CalendarScreen.swift */; };
+		1E64B88A3D7AFC9C61331E02 /* Integrations.swift in Sources */ = {isa = PBXBuildFile; fileRef = C99EBA442C4F0BD300DDA5E8 /* Integrations.swift */; };
 		2BD2626D03D1C4BCFCCEFD3E /* Linker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7503D1A5C6B07543D2A0136 /* Linker.swift */; };
 		4531D583A0F5425846E1079B /* LinkCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB9F91936797DDAC312193CC /* LinkCrypto.swift */; };
 		46D0525879F4DF196E89160F /* Pad.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09734D694A49C9E85D3E7E60 /* Pad.swift */; };
@@ -24,14 +23,18 @@
 		73DE171040967EF837F2304E /* Markdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B32EC03DD25A8DCDBFDD313 /* Markdown.swift */; };
 		755F6DABCB9537A377D7898B /* DocViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92A3845769F8470D37A2AD5C /* DocViews.swift */; };
 		819657BE10A2676EF6369EF7 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 260A395667821A44BC7DB2E2 /* MLXLMCommon */; };
+		8484FFB086AF7C04890F6C42 /* LFM3.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC55DD0CE1F03973ECD96CA2 /* LFM3.swift */; };
 		87B228FFFDCAE29ED89A6882 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = E74AABE9F54163826A6AA7F7 /* MLXLLM */; };
 		881BA816E0815D6D16C02583 /* LineField.swift in Sources */ = {isa = PBXBuildFile; fileRef = F76B95B1D409A6F24D3EFBE3 /* LineField.swift */; };
 		8E6721CBA9FDCE6015523821 /* BlockEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 947A1CF1606B31529EE173A9 /* BlockEditor.swift */; };
 		9F49A43C6821955DABB98E6F /* Link.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F47B2F02A3B9EE6D5B0E9A9 /* Link.swift */; };
 		A2733ADA547F31A53DE1186E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A306B8806207F5250338C4F /* Models.swift */; };
+		B5366A0837869AB289B889D1 /* Setup.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD4E5BE753582111F82C25E8 /* Setup.swift */; };
+		B775A379EEB9FFBBCE0EB702 /* QuickAdd.swift in Sources */ = {isa = PBXBuildFile; fileRef = B16543669E4058D71BCD4002 /* QuickAdd.swift */; };
 		B7A94B4661AA4A01B1385986 /* PhoneLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCF2B2B96F84B50B4753D0E7 /* PhoneLink.swift */; };
 		BD0AFD541213651A5EB2B464 /* WatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688F4EBE0DC85A3F469DE168 /* WatchApp.swift */; };
 		C4EAA01D97E024DA817D0624 /* MonolithApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 620001F6D2FC06E4372CB8F6 /* MonolithApp.swift */; };
+		C95FC5B5EEB4EF924F1C0303 /* Feedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7120C08120D7582975221B91 /* Feedback.swift */; };
 		CB554E3931446B6077351DD6 /* Link.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F47B2F02A3B9EE6D5B0E9A9 /* Link.swift */; };
 		D223D49C8B3B844F7BC9D67F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A5F8F14E91F5C47027E20779 /* Assets.xcassets */; };
 		D4045EB6A39FDCEA741E68DA /* Sketch.swift in Sources */ = {isa = PBXBuildFile; fileRef = E549775A1A47631516082085 /* Sketch.swift */; };
@@ -69,12 +72,10 @@
 
 /* Begin PBXFileReference section */
 		09734D694A49C9E85D3E7E60 /* Pad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pad.swift; sourceTree = "<group>"; };
-		0AB834927ACE30F7FBFAAD13 /* Monolith.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Monolith.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0AB834927ACE30F7FBFAAD13 /* Monolith.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Monolith.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D689AC30313CDC6D48ED210 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3A306B8806207F5250338C4F /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		458DA780324B1F5FA7E52C7F /* OpenModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenModels.swift; sourceTree = "<group>"; };
-		4C3F0A1E7D2B4E9A8F61C202 /* LFM3.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFM3.swift; sourceTree = "<group>"; };
-		5E1D0F2A7C3B4E8A9F61D302 /* Feedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Feedback.swift; sourceTree = "<group>"; };
 		51990FE7D0E32A7DCCF5FC40 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		579C8ACAD39BA7619977EEC1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5B32EC03DD25A8DCDBFDD313 /* Markdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Markdown.swift; sourceTree = "<group>"; };
@@ -82,6 +83,7 @@
 		688F4EBE0DC85A3F469DE168 /* WatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchApp.swift; sourceTree = "<group>"; };
 		690BBDFCBAFE3A94CEB88D90 /* Rich.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rich.swift; sourceTree = "<group>"; };
 		6DE43F2652211418925A613C /* DeviceCalendars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceCalendars.swift; sourceTree = "<group>"; };
+		7120C08120D7582975221B91 /* Feedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Feedback.swift; sourceTree = "<group>"; };
 		867DCD6E3975781CD7E2027D /* LinkViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkViews.swift; sourceTree = "<group>"; };
 		8F47B2F02A3B9EE6D5B0E9A9 /* Link.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Link.swift; sourceTree = "<group>"; };
 		92A3845769F8470D37A2AD5C /* DocViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocViews.swift; sourceTree = "<group>"; };
@@ -89,9 +91,12 @@
 		9CDBA1666A4BC72DC014B1EB /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		9D435ED9BBEF776988BB6602 /* Monolith.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Monolith.entitlements; sourceTree = "<group>"; };
 		A5F8F14E91F5C47027E20779 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AC55DD0CE1F03973ECD96CA2 /* LFM3.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFM3.swift; sourceTree = "<group>"; };
 		AF1294AC92E085F67F85F776 /* Intelligence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Intelligence.swift; sourceTree = "<group>"; };
+		B16543669E4058D71BCD4002 /* QuickAdd.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAdd.swift; sourceTree = "<group>"; };
 		BCE7D1973601C822D6DED58E /* CalendarScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarScreen.swift; sourceTree = "<group>"; };
 		BCF2B2B96F84B50B4753D0E7 /* PhoneLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneLink.swift; sourceTree = "<group>"; };
+		C99EBA442C4F0BD300DDA5E8 /* Integrations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Integrations.swift; sourceTree = "<group>"; };
 		D2D4B401B89538C22CFFF154 /* Lectures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Lectures.swift; sourceTree = "<group>"; };
 		D3A12EE7433EF5F9AAEDBDDA /* MonolithWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MonolithWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA467BB04287BF0FF959B48E /* ItemViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemViews.swift; sourceTree = "<group>"; };
@@ -100,6 +105,7 @@
 		F6822F9FA9FB39FF239E88C0 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		F7503D1A5C6B07543D2A0136 /* Linker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Linker.swift; sourceTree = "<group>"; };
 		F76B95B1D409A6F24D3EFBE3 /* LineField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineField.swift; sourceTree = "<group>"; };
+		FD4E5BE753582111F82C25E8 /* Setup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Setup.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -173,21 +179,24 @@
 				BCE7D1973601C822D6DED58E /* CalendarScreen.swift */,
 				6DE43F2652211418925A613C /* DeviceCalendars.swift */,
 				92A3845769F8470D37A2AD5C /* DocViews.swift */,
+				7120C08120D7582975221B91 /* Feedback.swift */,
 				51990FE7D0E32A7DCCF5FC40 /* Info.plist */,
+				C99EBA442C4F0BD300DDA5E8 /* Integrations.swift */,
 				AF1294AC92E085F67F85F776 /* Intelligence.swift */,
 				DA467BB04287BF0FF959B48E /* ItemViews.swift */,
 				D2D4B401B89538C22CFFF154 /* Lectures.swift */,
+				AC55DD0CE1F03973ECD96CA2 /* LFM3.swift */,
 				F76B95B1D409A6F24D3EFBE3 /* LineField.swift */,
 				5B32EC03DD25A8DCDBFDD313 /* Markdown.swift */,
 				3A306B8806207F5250338C4F /* Models.swift */,
 				9D435ED9BBEF776988BB6602 /* Monolith.entitlements */,
 				620001F6D2FC06E4372CB8F6 /* MonolithApp.swift */,
 				458DA780324B1F5FA7E52C7F /* OpenModels.swift */,
-				4C3F0A1E7D2B4E9A8F61C202 /* LFM3.swift */,
-				5E1D0F2A7C3B4E8A9F61D302 /* Feedback.swift */,
 				09734D694A49C9E85D3E7E60 /* Pad.swift */,
 				BCF2B2B96F84B50B4753D0E7 /* PhoneLink.swift */,
+				B16543669E4058D71BCD4002 /* QuickAdd.swift */,
 				690BBDFCBAFE3A94CEB88D90 /* Rich.swift */,
+				FD4E5BE753582111F82C25E8 /* Setup.swift */,
 				E549775A1A47631516082085 /* Sketch.swift */,
 				F6822F9FA9FB39FF239E88C0 /* Theme.swift */,
 				9CDBA1666A4BC72DC014B1EB /* TodayView.swift */,
@@ -251,6 +260,14 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					E10C0D6BFC29FCF80E62B58D = {
+						DevelopmentTeam = 422K9C2579;
+					};
+					F727DD584CF3BD62C5D42BAD = {
+						DevelopmentTeam = 422K9C2579;
+					};
+				};
 			};
 			buildConfigurationList = D6F7D0D3B32972AD2A813B3F /* Build configuration list for PBXProject "Monolith" */;
 			developmentRegion = en;
@@ -314,8 +331,11 @@
 				1C16C914F08CB1E21E10B678 /* CalendarScreen.swift in Sources */,
 				FD3E69DE780103393FE6D95A /* DeviceCalendars.swift in Sources */,
 				755F6DABCB9537A377D7898B /* DocViews.swift in Sources */,
+				C95FC5B5EEB4EF924F1C0303 /* Feedback.swift in Sources */,
+				1E64B88A3D7AFC9C61331E02 /* Integrations.swift in Sources */,
 				F1B9F572AF54F4F32752D22B /* Intelligence.swift in Sources */,
 				6AFF66CD76A90264704969A1 /* ItemViews.swift in Sources */,
+				8484FFB086AF7C04890F6C42 /* LFM3.swift in Sources */,
 				0DA57106631BA0C41CAAE036 /* Lectures.swift in Sources */,
 				881BA816E0815D6D16C02583 /* LineField.swift in Sources */,
 				9F49A43C6821955DABB98E6F /* Link.swift in Sources */,
@@ -326,11 +346,11 @@
 				A2733ADA547F31A53DE1186E /* Models.swift in Sources */,
 				C4EAA01D97E024DA817D0624 /* MonolithApp.swift in Sources */,
 				14F0E0A2E17F75038A0A4897 /* OpenModels.swift in Sources */,
-				4C3F0A1E7D2B4E9A8F61C201 /* LFM3.swift in Sources */,
-				5E1D0F2A7C3B4E8A9F61D301 /* Feedback.swift in Sources */,
 				46D0525879F4DF196E89160F /* Pad.swift in Sources */,
 				B7A94B4661AA4A01B1385986 /* PhoneLink.swift in Sources */,
+				B775A379EEB9FFBBCE0EB702 /* QuickAdd.swift in Sources */,
 				471619847F0276311BAFEEEA /* Rich.swift in Sources */,
+				B5366A0837869AB289B889D1 /* Setup.swift in Sources */,
 				D4045EB6A39FDCEA741E68DA /* Sketch.swift in Sources */,
 				F1B725528517E404E905E401 /* Theme.swift in Sources */,
 				D6F037FB0B309C1977486012 /* TodayView.swift in Sources */,
@@ -384,7 +404,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 422K9C2579;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -422,7 +442,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = iOS/Monolith.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = 422K9C2579;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -471,7 +490,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 422K9C2579;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -500,7 +519,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				DEVELOPMENT_TEAM = 422K9C2579;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Watch/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.socratic.app.watchkitapp;
@@ -514,7 +532,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				DEVELOPMENT_TEAM = 422K9C2579;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Watch/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.socratic.app.watchkitapp;
@@ -530,7 +547,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = iOS/Monolith.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = 422K9C2579;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

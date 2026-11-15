@@ -274,10 +274,43 @@ kbd {
   color: var(--text-2);
   font-size: 15px;
 }
-.hm-asst .md {
-  margin-top: 12px;
+/* starting points: each one opens the assistant with that question */
+.hm-starters {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.hm-starter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--card-hover);
+  color: var(--text);
   font-size: 15px;
-  line-height: 1.6;
+  text-align: left;
+  transition: background 0.15s;
+}
+.hm-starter:hover {
+  background: var(--raised-fill-2);
+}
+.hm-starter:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: -2px;
+}
+.hm-starter > svg {
+  flex: none;
+  color: var(--text-2);
+}
+.hm-starter > svg:last-child {
+  color: var(--text-3);
+}
+.hm-starter span {
+  flex: 1;
+  min-width: 0;
 }
 .hm-source {
   display: flex;
@@ -364,10 +397,13 @@ kbd {
   width: 20px;
   color: var(--text-2);
 }
-.hm-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+/* an event's colour as a bar down its left side, centred in the 20px icon column */
+.hm-bar {
+  flex: none;
+  align-self: stretch;
+  width: 4px;
+  margin: 10px 8px;
+  border-radius: 2px;
 }
 .hm-row-title {
   flex: 1;
@@ -384,6 +420,40 @@ kbd {
 }
 .hm-task {
   padding-block: 8px;
+}
+/* an event: title with its place underneath, start over end on the right */
+.hm-ev {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  padding-block: 8px;
+}
+.hm-ev small {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hm-ev small svg {
+  flex: none;
+}
+.hm-ev-time {
+  display: grid;
+  flex: none;
+  justify-items: end;
+  gap: 2px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.hm-ev-time b {
+  color: var(--text-2);
+  font-weight: 500;
 }
 .hm-task input {
   appearance: none;
@@ -1338,4 +1408,438 @@ body {
   color: inherit;
   opacity: 0.55;
   font: inherit;
+}
+
+/* ── First-time setup and the passcode lock: one calm card on the page ground, two short steps ── */
+.su {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 24px 16px;
+  background: var(--bg);
+}
+.su-card {
+  width: min(100%, 480px);
+  padding: 22px 28px 28px;
+  border-radius: 28px;
+  background: var(--card);
+}
+:root[data-theme='light'] .su-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 40px rgba(0, 0, 0, 0.06);
+}
+.su-top {
+  display: grid;
+  grid-template-columns: 40px 1fr 64px;
+  align-items: center;
+  min-height: 40px;
+  margin-bottom: 18px;
+}
+.su-logo {
+  width: 28px;
+  height: 28px;
+}
+.su-steps {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.su-steps i {
+  width: 18px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--raised-fill-2);
+  transition: background 0.2s, width 0.2s;
+}
+.su-steps i.on {
+  width: 28px;
+  background: var(--text);
+}
+.su-skip {
+  justify-self: end;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.su-skip:hover {
+  color: var(--text);
+}
+.su-step {
+  display: grid;
+  gap: 0;
+}
+.su h1 {
+  margin: 0;
+  font: 650 26px/1.2 var(--font);
+  letter-spacing: -0.025em;
+}
+.su h1 + p {
+  margin: 8px 0 22px;
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.su-label {
+  margin-bottom: 8px;
+  font-size: 15px;
+  font-weight: 550;
+}
+.su-input,
+.su-name-field {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--raised-fill);
+  color: var(--text);
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.su-input:focus,
+.su-name-field:focus {
+  border-color: var(--text-3);
+  background: var(--raised-fill-2);
+}
+.su-input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+.su-hint,
+.su-warn {
+  display: block;
+  margin-top: 8px;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.su-warn {
+  color: var(--text-2);
+}
+.su-error {
+  margin: 14px 0 0;
+  color: var(--danger);
+  font-size: 14px;
+}
+.su-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+.su-actions .btn {
+  justify-content: center;
+  min-width: 132px;
+  min-height: 44px;
+  border-radius: 999px;
+  font-size: 15px;
+}
+.su-options {
+  display: grid;
+  gap: 8px;
+}
+.su-opt,
+.su-lock-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 16px;
+  border: 1.5px solid transparent;
+  border-radius: 18px;
+  background: var(--card-hover);
+  color: var(--text);
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+}
+.su-opt > svg,
+.su-lock-row > svg {
+  flex: none;
+  color: var(--text-2);
+}
+.su-opt > span,
+.su-lock-row > span:not(.su-switch) {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+}
+.su-opt b,
+.su-lock-row b {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 550;
+}
+.su-opt em {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--raised-fill-2);
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 550;
+}
+.su-opt small,
+.su-lock-row small {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.su-opt:hover:not(:disabled),
+.su-lock-row:hover {
+  background: var(--raised-fill-2);
+}
+.su-opt[aria-checked='true'] {
+  border-color: var(--text);
+}
+.su-opt:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+/* the radio mark on the right */
+.su-opt > i {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--text-3);
+  border-radius: 50%;
+  transition: border 0.15s;
+}
+.su-opt[aria-checked='true'] > i {
+  border: 6px solid var(--text);
+}
+.su-opt:focus-visible,
+.su-lock-row:focus-visible,
+.su-skip:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: 2px;
+}
+.su-lock {
+  margin-top: 16px;
+  border-radius: 18px;
+  background: var(--card-hover);
+}
+.su-lock .su-lock-row {
+  background: transparent;
+}
+.su-switch {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--raised-fill-2);
+  transition: background 0.2s;
+}
+.su-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
+}
+.su-lock-row[aria-checked='true'] .su-switch {
+  background: var(--ok);
+}
+.su-lock-row[aria-checked='true'] .su-switch::after {
+  transform: translateX(16px);
+}
+.su-pass {
+  display: grid;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+.su-pass .su-hint,
+.su-pass .su-warn {
+  margin-top: 0;
+}
+.su-unlock {
+  display: grid;
+  justify-items: center;
+  gap: 0;
+  padding: 36px 28px 28px;
+  text-align: center;
+}
+.su-unlock h1 + p {
+  margin-bottom: 20px;
+}
+.su-unlock .btn {
+  justify-content: center;
+  width: 100%;
+  min-height: 46px;
+  margin-top: 14px;
+  border-radius: 999px;
+}
+.su-lock-ico {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  background: var(--raised-fill);
+  color: var(--text-2);
+}
+.su-name-field {
+  margin-bottom: 8px;
+}
+@media (max-width: 480px) {
+  .su {
+    place-items: start center;
+  }
+  .su-card {
+    padding: 18px 20px 24px;
+  }
+}
+
+/* ── Backup file: back up / restore dialog, above setup ── */
+.bk-overlay {
+  z-index: 300;
+}
+.modal.bk {
+  position: relative;
+  width: min(100% - 32px, 440px);
+  padding: 28px;
+  border-radius: 24px;
+}
+.bk-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
+.bk-body {
+  display: grid;
+  gap: 10px;
+}
+.bk-body h2 {
+  margin: 0;
+  padding-right: 32px;
+  font: 650 22px/1.25 var(--font);
+  letter-spacing: -0.02em;
+}
+.bk-body h2 + p {
+  margin: 0 0 8px;
+  color: var(--text-2);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.bk-body .su-warn,
+.bk-body .su-error {
+  margin: 0;
+}
+.bk-body .su-actions {
+  margin-top: 12px;
+}
+.bk-file b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.su-actions:has(.su-link) {
+  justify-content: space-between;
+  align-items: center;
+}
+.su-link {
+  color: var(--text-2);
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--text-3);
+}
+.su-link:hover {
+  color: var(--text);
+}
+.su-link:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* ── assistant: what it's doing, and where an answer came from ── */
+.ai-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-3);
+  font-size: 13px;
+}
+.ai-status .typing {
+  padding: 0;
+}
+.msg-sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.msg-sources .src {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--btn);
+  color: var(--text-2);
+  font-size: 12px;
+}
+.msg-sources button.src:hover {
+  color: var(--text);
+}
+.msg.assistant.failed .md {
+  color: var(--text-2);
+}
+
+/* ── settings: integrations ── */
+.integ {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.integ .toggle small {
+  display: block;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.integ-status {
+  margin-top: 6px;
+}
+
+/* ── switches: the track must show against any surface, and "on" reads at a glance (same as setup's) ── */
+.toggle > span {
+  width: 40px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--raised-fill-2);
+}
+.toggle > span::after {
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.toggle input:checked + span {
+  background: var(--ok);
+}
+.toggle input:checked + span::after {
+  transform: translateX(16px);
+}
+/* A task or event title can take two lines before it's cut. */
+.act-card b {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }

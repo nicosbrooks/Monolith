@@ -5,5 +5,8 @@
 	<!-- Open models need more memory than an app gets by default. -->
 	<key>com.apple.developer.kernel.increased-memory-limit</key>
 	<true/>
+	<!-- Weather integration: Apple's weather service. Needs WeatherKit on the App ID (automatic signing adds it). -->
+	<key>com.apple.developer.weatherkit</key>
+	<true/>
 </dict>
 </plist>

@@ -14,6 +14,11 @@ import { useMobile } from './lib/useMobile'
 import { useNavigationHistory } from './lib/navigation'
 import { startLink, useLink } from './link/link'
 import { PhoneDocList, TabBar } from './components/Phone'
+import { Setup, Unlock } from './components/Setup'
+import { BackupDialog } from './components/BackupDialog'
+import { checkVault, useVault } from './lib/vault'
+
+void checkVault()
 
 // Each screen loads its own code the first time it's needed, so the app starts fast.
 const views = {
@@ -57,6 +62,8 @@ export default function App() {
   const aiOpen = useStore((s) => s.aiOpen)
   const collapsed = useStore((s) => s.sidebarCollapsed)
   const settings = useStore((s) => s.settings)
+  const vault = useVault((s) => s.state)
+  const setupOpen = useStore((s) => s.setupOpen)
 
   useEffect(() => useStore.persist.onFinishHydration(() => setHydrated(true)), [])
   useEffect(() => {
@@ -116,6 +123,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', k)
   }, [])
 
+  if (vault === 'locked') return <Unlock />
   if (!hydrated) return <div className="boot"><img src="/favicon.svg" alt="" /></div>
 
   const showActive = active && (section === 'trash' ? !!active.deletedAt : !active.deletedAt)
@@ -180,6 +188,8 @@ export default function App() {
         {connectSeen && <ConnectDialog />}
         {linkSeen && <LinkDialog />}
       </Suspense>
+      {(settings.setupAt === null || setupOpen !== false) && <Setup />}
+      <BackupDialog />
       <Overlays />
       <Toaster />
     </div>

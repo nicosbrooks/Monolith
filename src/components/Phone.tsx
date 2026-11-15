@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { format } from 'date-fns'
-import { CalendarDays, ChevronRight, FileText, Folder, Mic, PanelLeft, Plus, Search, Sparkles, Sun, ArrowUp, HardDriveUpload, GitCommitHorizontal, RefreshCw } from 'lucide-react'
+import { CalendarDays, ChevronRight, FileText, Folder, Mic, PanelLeft, Plus, Search, MessageCircle, Sun, ArrowUp, HardDriveUpload, GitCommitHorizontal, RefreshCw } from 'lucide-react'
 import { create } from 'zustand'
 import { useStore } from '../store'
 import { AskBar } from './AskBar'
@@ -151,7 +151,7 @@ function CreateSheet({ open, close }: { open: boolean; close: () => void }) {
               ))}
             </div>
             <div className="p-opts row2">
-              <button onClick={run(() => st.setUI({ aiOpen: true }))}><Sparkles size={16} /> Ask assistant</button>
+              <button onClick={run(() => st.setUI({ aiOpen: true }))}><MessageCircle size={16} /> Ask assistant</button>
               <button onClick={run(() => st.setUI({ paletteOpen: true }))}><Search size={16} /> Search</button>
             </div>
           </motion.div>

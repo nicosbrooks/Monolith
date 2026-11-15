@@ -178,7 +178,7 @@ struct EventEditor: View {
             Form {
                 TextField("Event title", text: $title).font(.title3)
                 Section {
-                    Toggle("All-day", isOn: $allDay)
+                    Toggle("All-day", isOn: $allDay).tint(Theme.local)
                     DatePicker("Starts", selection: $start, displayedComponents: allDay ? .date : [.date, .hourAndMinute])
                     DatePicker("Ends", selection: $end, in: start..., displayedComponents: allDay ? .date : [.date, .hourAndMinute])
                 }

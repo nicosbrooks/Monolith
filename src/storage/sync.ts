@@ -12,6 +12,7 @@ import { folderProvider, forgetHandle, hasPermission, loadHandle, pickFolder, sa
 import { forgetToken, githubProvider, inspectRepo, loadToken, parseRepo, saveToken } from './github'
 import { cachedToken, driveProvider, ensureRoot, signInDrive, signOutDrive } from './gdrive'
 import { googleClientId } from './accounts'
+import { FILE_HEADER, openText, sealText } from '../lib/vault'
 
 export type SyncStatus = 'idle' | 'syncing' | 'needs-auth' | 'error'
 export const useSync = create<{ st: Record<string, { status: SyncStatus; error?: string }> }>(() => ({ st: {} }))
@@ -43,7 +44,10 @@ async function provider(s: Source, interactive = false): Promise<Provider | null
   let p: Provider | null = null
   if (s.kind === 'folder') {
     const h = await loadHandle(s.id)
-    if (h && (await hasPermission(h, interactive))) p = folderProvider(h)
+    if (h && (await hasPermission(h, interactive))) {
+      rawFolders.set(s.id, folderProvider(h))
+      p = sealed(rawFolders.get(s.id)!)
+    }
   } else if (s.kind === 'github') {
     const token = await loadToken(s.id)
     const c = s.config
@@ -55,6 +59,42 @@ async function provider(s: Source, interactive = false): Promise<Provider | null
   }
   if (p) providers.set(s.id, p)
   return p
+}
+
+/** With a passcode on, files written to a folder are encrypted. Plain files (older ones, or added by hand) still read. */
+function sealed(p: FileProvider): FileProvider {
+  return {
+    ...p,
+    read: async (e) => {
+      const text = await p.read(e)
+      return openText(text.startsWith(FILE_HEADER) ? text.slice(FILE_HEADER.length) : text)
+    },
+    write: async (path, text, prev, force) => {
+      const out = await sealText(text)
+      return p.write(path, out === text ? text : FILE_HEADER + out, prev, force)
+    },
+  }
+}
+
+/** The folder as it is on disk, without decryption, to tell which files Monolith encrypted. */
+const rawFolders = new Map<string, FileProvider>()
+
+/**
+ * After the passcode is turned off or changed: write the files Monolith encrypted again, in the clear or under the
+ * new passcode. Files it never encrypted are left exactly as they are. Run while the content is still in memory.
+ */
+export async function rewriteSealedFiles() {
+  const st = useStore.getState()
+  for (const s of st.sources.filter((x) => x.kind === 'folder')) {
+    const raw = rawFolders.get(s.id)
+    if (!raw) continue
+    for (const i of itemsOf(s.id)) {
+      if (!i.file?.path || i.file.dir || i.deletedAt) continue
+      const text = await raw.read({ path: i.file.path, rev: i.file.rev || '' }).catch(() => '')
+      if (text.startsWith(FILE_HEADER)) st.patchFile(i.id, { baseHtml: '\u0000rewrite' })
+    }
+    await flush(s.id)
+  }
 }
 
 function fail(id: string, e: unknown) {

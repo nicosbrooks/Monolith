@@ -642,12 +642,25 @@ function clean(t: string) {
   return t.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trimStart()
 }
 
-// Requests run one at a time on a single local model; queue them.
+// Requests run one at a time on a single local model; queue them. What the person asks for goes first: anything
+// running in the background (page insights) is stopped, and background work still waiting is dropped.
 let queue: Promise<unknown> = Promise.resolve()
+let behind: AbortController | null = null
 export function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+  behind?.abort()
+  behind = null
   const p = queue.then(fn, fn)
   queue = p.catch(() => {})
   return p
+}
+/** Work nobody is waiting for. It gives way the moment someone asks something. */
+export function background<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const c = new AbortController()
+  behind = c
+  const run = () => (c.signal.aborted ? Promise.reject(new DOMException('Gave way', 'AbortError')) : fn(c.signal))
+  const p = queue.then(run, run)
+  queue = p.catch(() => {})
+  return p.finally(() => behind === c && (behind = null))
 }
 
 export const SYSTEM = `You are ${APP_NAME}, a concise study and productivity assistant that runs fully on the user's device. Be direct and practical. Use short Markdown (headings, bullet lists, **bold**). Use emoji only if the user requests them or they are part of text you need to preserve. Never invent facts about the user's notes beyond what is given.`

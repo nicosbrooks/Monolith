@@ -3,7 +3,7 @@ import { BubbleMenu } from '@tiptap/react/menus'
 import { Placeholder } from '@tiptap/extension-placeholder'
 import { baseExtensions } from './extensions'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bold, Italic, Underline, Strikethrough, Code, Link2, Highlighter, Sparkles, ChevronDown } from 'lucide-react'
+import { Bold, Italic, Underline, Strikethrough, Code, Link2, Highlighter, MessageCircle, ChevronDown } from 'lucide-react'
 import { Sketch } from './SketchNode'
 import { BLOCKS, insertImageFile, type Block } from './blocks'
 import { runAIBlock, setActiveEditor, transformSelection } from '../../ai/actions'
@@ -228,7 +228,7 @@ function FormatButtons({ editor }: { editor: TEditor }) {
       <span className="sep" />
       <div className="bubble-drop">
         <button className="ai-btn" onMouseDown={(e) => (e.preventDefault(), setMenu(menu === 'ai' ? null : 'ai'))}>
-          <Sparkles size={14} /> Ask AI <ChevronDown size={12} />
+          <MessageCircle size={14} /> Ask AI <ChevronDown size={12} />
         </button>
         {menu === 'ai' && (
           <div className="drop">

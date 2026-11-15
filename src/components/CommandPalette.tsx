@@ -1,12 +1,12 @@
 import { Command } from 'cmdk'
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { CalendarDays, CalendarPlus, FileText, Home, Mic, Moon, Settings, Sparkles, StickyNote, Sun, HardDriveUpload, Smartphone, Keyboard } from 'lucide-react'
+import { CalendarDays, CalendarPlus, FileText, Home, Mic, Moon, Settings, MessageCircle, StickyNote, Sun, HardDriveUpload, Smartphone, Keyboard } from 'lucide-react'
 import { useShortcuts } from './Overlays'
 import { AnimatePresence, motion } from 'motion/react'
 import { useStore } from '../store'
 import { htmlToText, itemEmoji } from '../lib/util'
-import { parseQuickEvent } from '../lib/dates'
+import { eventColor, parseQuickEvent, whenLabel } from '../lib/dates'
 
 export function CommandPalette() {
   const open = useStore((s) => s.paletteOpen)
@@ -53,17 +53,17 @@ export function CommandPalette() {
                 {q.trim().length > 2 && (
                   <Command.Group heading="Ask">
                     <Command.Item value="ask" onSelect={run(() => useStore.setState({ askDraft: q.trim(), aiOpen: true }))}>
-                      <Sparkles size={16} />
+                      <MessageCircle size={16} />
                       <span>Ask “{q.trim()}”</span>
                     </Command.Item>
                   </Command.Group>
                 )}
                 {parsed && (
                   <Command.Group heading="Schedule">
-                    <Command.Item onSelect={run(() => { st.addEvent({ title: parsed.title, start: parsed.start.getTime(), end: parsed.end.getTime(), allDay: parsed.allDay, color: 'blue' }); st.go('calendar') })}>
+                    <Command.Item onSelect={run(() => { st.addEvent({ title: parsed.title, start: parsed.start.getTime(), end: parsed.end.getTime(), allDay: parsed.allDay, location: parsed.location, color: eventColor(parsed) }); st.go('calendar') })}>
                       <CalendarPlus size={16} />
                       <span>Add “{parsed.title}”</span>
-                      <small>{format(parsed.start, parsed.allDay ? 'EEE MMM d' : 'EEE MMM d, h:mm a')}</small>
+                      <small>{whenLabel(parsed)}</small>
                     </Command.Item>
                   </Command.Group>
                 )}
@@ -100,7 +100,7 @@ export function CommandPalette() {
                     { l: 'Start recording', i: Mic, f: () => st.createItem('lecture', { title: q || `Recording · ${format(new Date(), 'MMM d')}` }) },
                     { l: 'Go home', i: Home, f: () => st.go('home') },
                     { l: 'Go to Calendar', i: CalendarDays, f: () => st.go('calendar') },
-                    { l: 'Open the assistant', i: Sparkles, k: '⌘J', f: () => st.setUI({ aiOpen: !st.aiOpen }) },
+                    { l: 'Open the assistant', i: MessageCircle, k: '⌘J', f: () => st.setUI({ aiOpen: !st.aiOpen }) },
                     { l: document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode', i: document.documentElement.dataset.theme === 'dark' ? Sun : Moon, f: () => st.setSettings({ theme: document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark' }) },
                     { l: 'Settings', i: Settings, k: '⌘,', f: () => st.setUI({ settingsOpen: true }) },
                     { l: 'Keep docs in a folder or Drive', i: HardDriveUpload, f: () => st.setUI({ connectOpen: true }) },

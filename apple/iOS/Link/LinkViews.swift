@@ -14,6 +14,7 @@ struct SettingsSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                YouSection()
                 AssistantModelSection()
 
                 Section {

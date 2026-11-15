@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { format } from 'date-fns'
-import { ArrowUp, CalendarPlus, FileText, Mic, Sparkles, StickyNote } from 'lucide-react'
+import { ArrowUp, ArrowUpRight, CalendarPlus, FileText, MessageCircle, Mic, StickyNote } from 'lucide-react'
 import { useStore } from '../store'
-import { parseQuickEvent } from '../lib/dates'
+import { eventColor, parseQuickEvent, whenLabel } from '../lib/dates'
 import { htmlToText, itemEmoji } from '../lib/util'
 import { toast } from './Toast'
 
@@ -70,9 +69,10 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
       start: event.start.getTime(),
       end: event.end.getTime(),
       allDay: event.allDay,
-      color: /due|exam|quiz|test|deadline/i.test(title) ? 'rose' : 'blue',
+      location: event.location,
+      color: eventColor({ title, due: event.due }),
     })
-    toast(`Added “${title}” · ${format(event.start, event.allDay ? 'EEE, MMM d' : 'EEE, MMM d · h:mm a')}`, { action: { label: 'Undo', run: () => st.deleteEvent(ev.id) } })
+    toast(`Added “${title}” · ${whenLabel(event)}`, { action: { label: 'Undo', run: () => st.deleteEvent(ev.id) } })
     setQ('')
   }
   const submit = () => {
@@ -110,18 +110,18 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
             {!text &&
               ctx.chips.map((c) => (
                 <button key={c} className="ask-opt" onClick={() => (/^add\b/i.test(c) ? setQ(c) : ask(c))}>
-                  <Sparkles size={14} /> <span>{c}</span>
+                  <ArrowUpRight size={14} /> <span>{c}</span>
                 </button>
               ))}
             {isEvent && event && (
               <button className="ask-opt on" onClick={addEvent}>
                 <CalendarPlus size={14} /> <span>Add “{event.title || 'New event'}”</span>
-                <small>{format(event.start, event.allDay ? 'EEE, MMM d' : 'EEE, MMM d · h:mm a')}</small>
+                <small>{whenLabel(event)}</small>
               </button>
             )}
             {text && !isEvent && (
               <button className="ask-opt on" onClick={() => ask(text)}>
-                <Sparkles size={14} />{' '}
+                <MessageCircle size={14} />{' '}
                 <span>
                   Ask
                   {page ? ` about ${(page.title || 'this').slice(0, 24)}` : ''}: “{text.slice(0, 60)}”
@@ -140,7 +140,7 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
         )}
       </AnimatePresence>
       <div className="ask-field">
-        <Sparkles size={16} className="ask-ico" />
+        <MessageCircle size={16} className="ask-ico" />
         <input
           ref={input}
           value={q}

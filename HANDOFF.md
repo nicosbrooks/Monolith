@@ -1,6 +1,6 @@
 # Handoff: Monolith (formerly Socratic), Nov 13 2026
 
-The project folder is still named `socratic/` and isn't a git repo, so don't commit. The web app is React + Vite (typecheck: `npx tsc -b`), the iOS/iPad/Watch app is SwiftUI (`apple/`, XcodeGen), and the relay is a Cloudflare Worker (`relay/`).
+The project folder is still named `socratic/`. It is a git repo pushed to github.com/nicosbrooks/Monolith (`main`); commit only when asked. The web app is React + Vite (typecheck: `npx tsc -b`), the iOS/iPad/Watch app is SwiftUI (`apple/`, XcodeGen), and the relay is a Cloudflare Worker (`relay/`).
 
 ## Ground rules from the user
 - **localhost:5199 holds the user's real data.** Never write to it, including through a second store instance in the browser preview. Test on **5210** (launch config `monolith-test`).
@@ -202,3 +202,70 @@ The project folder is still named `socratic/` and isn't a git repo, so don't com
 
 - **`DESIGN.md`** (new, project root) records the UI foundations: principles, colour, type, shape, components, writing and which screens follow them. Update it whenever a pattern is settled.
 - Simulator note (Nov 15): while testing the pill, two test docs (“Clean test…”, “Secon test”) were moved to Recently Deleted in the iPhone 17 simulator and not recovered, because injected taps were arriving one step late. Recover them from Docs → ··· → Recently Deleted.
+
+## iOS roomier layout + Integrations (Nov 15, pass 2)
+- **Spacing tokens** (`Space` in `apple/iOS/Theme.swift`): page 20, section 32, card 18, row 54. Home, Docs/Recordings lists and the drawer use them; the drawer is min(310, 80%) wide with 50pt rows and a fixed 24pt icon column so labels line up.
+- **`Theme.tile`**: a fill that shows on a card (white 7% / black 4.5%). Use it for icon tiles and status rows inside cards; `Theme.wash` is too close to `Theme.card` to read.
+- **Switches are tinted `Theme.local` (green).** The app tint is `.primary` (white), which hid the knob on an "on" switch. Applies to Integrations and the All-day switch.
+- **Integrations** (`apple/iOS/Integrations.swift`, sidebar row after Calendar on iPhone and iPad):
+  - Four switches, all off by default: Location, Weather (WeatherKit), Maps (travel time to the next event that has a place, MapKit), Location history (CoreLocation visits, needs "Always").
+  - Each card shows what it knows now ("Near San Francisco, CA", forecast, "leave by", places this week) or why not.
+  - Turning on anything that needs location asks for permission then; history asks for "Always" after "While Using". The "needs Always" message and its Open Settings button live in the history card, and are held back while the system prompt is open. A full "no" gets one notice at the top.
+  - Places are saved only on the phone (`Application Support/visits.json`, file protection, 30 days / 500 entries). See places / Clear history (confirms, can't be undone).
+  - `Integrations.shared.context` is added to chat; Home shows the weather beside "Calendar" and a "Leave by" row.
+- **Signing:** `DEVELOPMENT_TEAM` (422K9C2579) is now in `apple/project.yml`; regenerating with xcodegen used to drop it. The entitlements add `com.apple.developer.weatherkit`. **WeatherKit needs that capability on the App ID** (automatic signing adds it on a device build). Until then, Weather shows "Weather isn't available right now", which is what the simulator shows.
+- Tested in the iPhone 17 simulator (location set to San Francisco): permission prompts with our wording, Location, Weather (unavailable as above), Maps (no event with a place yet), history with Always. Not checked: a real trip time, a recorded visit, iPad, light mode.
+- **Home's "Today" section is now "Calendar"** (user request; briefly "Up next"), on iOS (iPhone and iPad) and web. Empty text: "Nothing coming up". Day buttons in the week row still say "Today". Web's link beside it now says "Open".
+- **"Plan my day" is gone** (user: too rigid, "the app needs to be more flexible"). The assistant card now offers up to three **starting points** built from the day (next event, open tasks, last doc). Each opens chat with that question already sent. Web: `ask()` sets `askDraft` + `aiOpen`; iOS: `Router.ask`, which `BottomBar` turns into the chat sheet. The brief code (`makeBrief`, `planDay`, `.hm-asst .md`) is deleted. iPad Home shows the same card; its schedule panel no longer repeats the suggestion.
+- iOS chat context now includes up to 12 open tasks, so task questions get real answers.
+- **No sparkles anywhere** (user: "reads too AI"). The assistant card's role is words only. Elsewhere: Ask bar, command palette, phone menu and editor "Ask AI" use `MessageCircle`; Write notes and Continue writing use a pen (`PenLine` / `square.and.pencil`); AI panel insights use `Lightbulb` (the `'sparkles'` icon key in `types.ts` now draws a lightbulb); iOS chat's "Thinking" is text only.
+- **Calendar rows show title, place and start/end** on Home (web `.hm-ev`/`.hm-ev-time`, iOS `eventRow`). Checked on web with a test "Lab meeting · Science Hall 204, 2:15–3:15 PM" event added through the Calendar UI on :5210 (still there), and on iPhone with an event that has no place. iOS with a place and iPad are not checked.
+- **Event colour is a side bar, not a dot** (web `.hm-bar`, iOS `eventRow` with `.fixedSize(vertical:)` so the bar matches the text height). Checked on web :5210 and iPhone.
+
+## First-time setup, passcode lock, personal greeting (Nov 15, pass 3)
+- **Web setup** (`src/components/Setup.tsx`, styles `.su-*` in `soft.css`): name, then storage (folder via File System Access, greyed out with a reason where unsupported; or this browser) and an optional passcode. Shown when `settings.setupAt === null`. The v9 migration marks existing installs as set up (`setupAt: 1`), so :5199 and :5210 never see it. Settings › You has the name; Settings › Storage › the lock row reopens step 2 (`setupOpen: 1`).
+- **Folder as home**: `settings.home` is the folder source new docs go to (`createItem` adds `sourceId` + `file`).
+- **Passcode** (`src/lib/vault.ts`): PBKDF2-SHA256 (600k) → AES-256-GCM key, memory only; a reload locks. Encrypts the persisted store (`idbStorage` waits on `vaultReady`), recorded audio, and files written to a connected folder (with a header comment line). Files Monolith never wrote stay as they are; turning it off or changing it rewrites only the files it encrypted (`rewriteSealedFiles`). No recovery by design.
+- **Tested on web** at `http://setup.localhost:5210` (its own empty storage): setup → Home "Late night, Nico"; data stored as `monolith:sealed:v1:…`; reload shows the lock screen; a wrong passcode is rejected; the right one restores everything; turning the lock off stores plain data again. The throwaway passcode was `monolith-test`. **Not tested:** picking a real folder (a system dialog), the encrypted folder files, the greyed-out folder option in Safari/Firefox.
+- **iOS** (`apple/iOS/Setup.swift`): `Profile` keys, `Greeting`, `AppLock`, `LockScreen`, `SetupView`, `YouSection` (Settings). Setup shows in place of the app while `setupAt == 0`; `markExistingInstall` sets it to 1 for databases that already had items. Home shows the greeting on iPhone and iPad. **Not verified:** the Face ID lock. The simulator never completed the prompt, so the switch stayed off. There's no "folder in Files" option on iOS; storage is on-device, and the computer links to it.
+- Simulator note: `simctl spawn defaults write` doesn't reach the app's prefs. Edit `<data container>/Library/Preferences/com.socratic.app.plist` with `plutil` while the app is stopped.
+
+## Workspace backup file (Nov 15, pass 4)
+- `src/lib/backup.ts` + `src/components/BackupDialog.tsx`. File: `MONOLITH-BACKUP 1\n` + a plain header line (KDF params, created, counts) + AES-256-GCM(gzip(JSON)). The key is PBKDF2-SHA256 at 600k iterations from the backup password (8+ characters). It holds items (folder docs become plain docs), folders, events, settings (minus `home`/`setupAt`), dismissed suggestions, and recording audio as base64. Linked phones, connected sources and the passcode lock are left out on purpose: they're tied to the device.
+- Restore replaces local items, events, folders and settings, but keeps docs from connected sources and this browser's lock. `settings.lastBackup` drives the "Last backed up" line.
+- Entry points: Settings › Storage › Backup file (Back up / Restore), and the setup step 2 "Restore from a backup" link.
+- **Tested** on `setup.localhost:5210`: backup → wipe → Restore dialog (file injected with DataTransfer) → wrong password rejected → right one (`backup-test-1`) restores the name and doc, and survives a reload. **Not tested:** a real download/file picker, recordings with audio, a large workspace (it's all in memory at once), the setup link.
+- Gotcha: in the preview, `import('/src/store.ts')` can give a *second* store instance after HMR (the app loads `store.ts?t=…`). Check `performance.getEntriesByType('resource')` for the URL the app uses. On the throwaway origin the stray instance overwrote test data; never do this on :5199/:5210.
+
+## Assistant: speed, accuracy, actions, web integrations (Nov 15, pass 5)
+**Speed**
+- `background()` in `src/ai/llm.ts`: page insights run in a background lane that is stopped (and anything queued dropped) the moment someone asks something via `enqueue()`. Before, a question could wait behind a 220-token insight run.
+- Chat no longer pastes the open page (up to 6,000 chars) into the system prompt. `relevant()` in `src/ai/context.ts` picks ≤6 passages (~3,200 chars) per question from *all* docs and recordings (IDF-weighted word match; title, named-doc and open-doc boosts; a short open doc is sent whole). Passages ride on the user message, so the shared prefix (rules, dates, calendar, tasks) stays identical across turns and WebLLM reuses its KV cache. Passages already sent in this conversation aren't sent again.
+- `src/ai/instant.ts`: schedule/next/tasks questions answered from data with no model. Tested phrasings are in the Nov 15 transcript; the regexes are deliberately narrow.
+- Temperature 0.3 for chat, 500 tokens (800 when it's doing something).
+
+**Accuracy**
+- `CHAT_RULES` + `sharedContext()`: a 14-day **Dates** lookup ("tomorrow: Monday 2026-11-16"), current time and time zone, calendar with ISO dates and locations, open tasks with their doc. The old prompt said both "use Markdown" and "answer in plain text"; fixed.
+- iOS gets the same rules and Dates list (`Assistant.instructions`, `Assistant.dates`, `Assistant.day` in `Intelligence.swift`); the chat context now puts short exact things first so the 9,000-char trim cuts the workspace, not the calendar, and the question goes last.
+
+**Actions** (`src/ai/act.ts`): `@move`, `@cancel`, `@task`, `@done` join `@event`/`@doc`. Events are matched by title (never subscribed calendars), tasks by text. Acts are resolved once when the answer finishes and kept in `meta`, so a moved event remembers where it was. `perform()` returns an undo; the toast offers it. `@task` goes to the open doc, else a doc called "Tasks" (created if needed). Editing the open doc goes through the editor (`setContent`/`insertContent`), since the editor doesn't follow the store.
+
+**Web integrations** (`src/lib/integrations.ts`, Settings › Integrations): Location (BigDataCloud reverse geocode, rounded to 2 decimals) and Weather (Open-Meteo). `settings.integrations`. Context line matches iOS. Refreshed at most every 10 min; a new conversation waits ≤1.5s for it.
+
+**Also fixed**: the calendar's month cell class `.md` collided with chat answers (`.md`), giving every answer `min-height: 96px` and borders. Scoped to `.month > .md`. Web switches were invisible on modals (track = background, "on" = near-white accent); now match setup's.
+
+**Found while testing with Gemma 4 E2B, and fixed**
+- It put "Tuesday" (said on Sunday) on the Tuesday of the following week, even with the Dates list. `pinToAsked()` in `act.ts` now reads the day (and time, if given) from the request with the quick-add parser and pins the action to it; "from Monday to Wednesday" reads after the last "to"; relative requests ("an hour later") are left to the model. The Dates list no longer says "next Tuesday" for the second week, since quick add reads "next Tuesday" as the coming one.
+- After an action turn it echoed a plain question back. The action instructions in earlier user turns were still steering it. Past turns now drop `ACT_GUIDE`, and card-only answers appear in history as "Offered: Move “…” (…)". This costs a KV-cache miss after action turns, which is worth it.
+- Action replies are card-only (the model writes only the `@` lines): fewer tokens, and nothing said twice.
+- Retrying an answer kept the old card's "done" state; it's reset now. Undo toasts last 8s (4s was too short to reach).
+- Timings in the hidden preview pane (throttled, so worst case): first word 3–5.5s, full answer 8–11s, ~1,150-char shared context.
+
+**Tested** (setup.localhost:5210): with the model: move (right day after the guard), add task (creates "Tasks"), check off → the open editor updates → Undo restores it, a question with no answer in the data. Without it: instant answers (20 phrasings, in page), quick-add card → Add → toast Undo removes it, sources pill, Settings switches, both lookup APIs answer from the browser with a fixed London coordinate. **Not tested**: turning Location on with a real position (it would send this machine's location), `@cancel` from a real model, answers that draw on doc passages (this test origin has almost no docs), other models (Fast/Enhanced, MLX, Ollama), iOS chat in the simulator (it builds).
+
+## Quick-add parser rewrite (Nov 15, pass 6)
+- `src/lib/dates.ts` `parseQuickEvent` rewritten: phrases are read and cut out one kind at a time (due-words, length, day, part of day, time or range, place); the rest is the title. New: `due` flag, `location`, ranges (3-5pm, from 2 to 4, 11-1pm), 24-hour times, ordinals (the 21st), "21 Nov", ISO dates, "in 3 days", "day after tomorrow", weekends, "Friday next week", parts of day (tomorrow morning → 9 AM), noon/midnight/EOD ("due Friday at midnight" = start of Saturday), typos (tmrw, tommorow), "SAT" the exam, evening plans default PM. Exports `eventColor`, `whenLabel`, `nextWeek`.
+- All callers use them: Ask bar, command palette, assistant quick add and `pinToAsked`, doc suggestions. The doc scanner no longer splits clauses on the colon inside "11:59pm" (it was reading "by 11").
+- "Next week" in instant answers now means Sunday–Saturday of next week, the same as the parser.
+- iOS: `apple/iOS/QuickAdd.swift` is a step-for-step port (the old NSDataDetector version left "due", "at", "on" in titles). It sets `allDay`, `location` and the rose colour. The iOS Dates list for the assistant now uses the same labels as the web.
+- **Tested**: `npm run test:dates`, 77/77 (69 phrasings + 8 that must not be events). The same cases compiled against the Swift file with `swiftc`: 77/77. In the web app: the Ask bar preview, the toast, and the rose 9 PM event for "math 19a homework due tomorrow 9pm". **Not tested**: iOS quick add in the simulator (it builds); non-US date order (11/12 is read as Nov 12).

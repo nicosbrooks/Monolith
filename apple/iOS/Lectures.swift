@@ -8,14 +8,85 @@ nonisolated private final class AudioSink: @unchecked Sendable {
     private let lock = NSLock()
     private var file: AVAudioFile?
     private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var feeder: Feeder?
 
     func set(file: AVAudioFile?) { lock.withLock { self.file = file } }
     func set(request: SFSpeechAudioBufferRecognitionRequest?) { lock.withLock { self.request = request } }
+    func set(feeder: Feeder?) { lock.withLock { self.feeder = feeder } }
     func write(_ buffer: AVAudioPCMBuffer) {
         lock.withLock {
             try? file?.write(from: buffer)
             request?.append(buffer)
+            feeder?.feed(buffer)
         }
+    }
+}
+
+/// Hands microphone audio to SpeechAnalyzer, converted to the format its model wants. Runs on the audio thread.
+nonisolated final class Feeder: @unchecked Sendable {
+    private let converter: AVAudioConverter?
+    private let format: AVAudioFormat
+    private let input: AsyncStream<AnalyzerInput>.Continuation
+
+    init(from: AVAudioFormat, to: AVAudioFormat, input: AsyncStream<AnalyzerInput>.Continuation) {
+        converter = from == to ? nil : AVAudioConverter(from: from, to: to)
+        format = to
+        self.input = input
+    }
+
+    func feed(_ buffer: AVAudioPCMBuffer) {
+        guard let converter else { input.yield(AnalyzerInput(buffer: buffer)); return }
+        let frames = AVAudioFrameCount(Double(buffer.frameLength) * format.sampleRate / buffer.format.sampleRate) + 512
+        guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else { return }
+        var given = false
+        var error: NSError?
+        converter.convert(to: out, error: &error) { _, status in
+            if given { status.pointee = .noDataNow; return nil }
+            given = true
+            status.pointee = .haveData
+            return buffer
+        }
+        if error == nil, out.frameLength > 0 { input.yield(AnalyzerInput(buffer: out)) }
+    }
+
+    func finish() { input.finish() }
+}
+
+/// Apple's newer on-device speech model (SpeechAnalyzer, iOS 26). Faster and more accurate on long-form
+/// speech than SFSpeechRecognizer, with no one-minute limit, so a whole lecture is one stream.
+enum LiveSpeech {
+    /// A transcriber for this language whose model is on the device, or nil (the recorder then uses the
+    /// older recognizer). A supported language that isn't downloaded yet starts downloading for next time.
+    static func transcriber() async -> SpeechTranscriber? {
+        guard SpeechTranscriber.isAvailable,
+              let locale = await SpeechTranscriber.supportedLocale(equivalentTo: .current) else { return nil }
+        let t = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [.volatileResults], attributeOptions: [.audioTimeRange])
+        switch await AssetInventory.status(forModules: [t]) {
+        case .installed: return t
+        case .supported, .downloading:
+            Task.detached { try? await AssetInventory.assetInstallationRequest(supporting: [t])?.downloadAndInstall() }
+            return nil
+        default: return nil
+        }
+    }
+
+    /// A finished result as sentence-sized lines, each with the time its first word was said.
+    nonisolated static func lines(_ text: AttributedString) -> [(start: Double, text: String)] {
+        var out: [(start: Double, text: String)] = []
+        var cur = "", start = 0.0
+        for run in text.runs {
+            let piece = String(text[run.range].characters)
+            if cur.trimmingCharacters(in: .whitespaces).isEmpty, let range = run.audioTimeRange { start = range.start.seconds }
+            cur += piece
+            if piece.trimmingCharacters(in: .whitespaces).last.map({ ".?!".contains($0) }) == true || cur.count > 220 {
+                let line = cur.trimmingCharacters(in: .whitespaces)
+                if !line.isEmpty { out.append((start, line)) }
+                cur = ""
+            }
+        }
+        let line = cur.trimmingCharacters(in: .whitespaces)
+        if !line.isEmpty { out.append((start, line)) }
+        return out
     }
 }
 
@@ -45,6 +116,10 @@ final class LectureRecorder {
     /// Recognition attempts in a row that ended at once with nothing.
     private var misses = 0
     private let recognizer = SFSpeechRecognizer(locale: .current) ?? SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    /// The newer speech model, while it's the one listening.
+    private var analyzer: SpeechAnalyzer?
+    private var feeder: Feeder?
+    private var listening: Task<Void, Never>?
 
     init() {
         // A phone call, Siri, or the microphone changing (AirPods in or out) stops the engine. Save what we have.
@@ -68,8 +143,9 @@ final class LectureRecorder {
                 return
             }
             let speech = await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) } }
+            let transcriber = speech == .authorized ? await LiveSpeech.transcriber() : nil
             do {
-                try begin(item, transcribe: speech == .authorized)
+                try await begin(item, transcribe: speech == .authorized, with: transcriber)
             } catch {
                 self.error = "Couldn’t start recording. \(error.localizedDescription)"
                 stop()
@@ -77,7 +153,7 @@ final class LectureRecorder {
         }
     }
 
-    private func begin(_ item: Item, transcribe: Bool) throws {
+    private func begin(_ item: Item, transcribe: Bool, with transcriber: SpeechTranscriber?) async throws {
         settle()
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetoothHFP])
@@ -98,7 +174,9 @@ final class LectureRecorder {
         elapsed = item.duration
         misses = 0
         transcribing = false
-        if transcribe { newRequest() }
+        if let transcriber, await analyze(with: transcriber, from: format) {
+            // The newer model is listening.
+        } else if transcribe { newRequest() }
 
         let sink = sink
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in sink.write(buffer) }
@@ -111,6 +189,38 @@ final class LectureRecorder {
                 self.elapsed = item.duration + Date.now.timeIntervalSince(self.startedAt)
             }
         }
+    }
+
+    /// Starts SpeechAnalyzer on the microphone. False if it can't run, so the older recognizer takes over.
+    private func analyze(with transcriber: SpeechTranscriber, from mic: AVAudioFormat) async -> Bool {
+        guard let wanted = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else { return false }
+        let (stream, input) = AsyncStream<AnalyzerInput>.makeStream()
+        let analyzer = SpeechAnalyzer(modules: [transcriber])
+        do { try await analyzer.start(inputSequence: stream) } catch { return false }
+        let feeder = Feeder(from: mic, to: wanted, input: input)
+        self.analyzer = analyzer
+        self.feeder = feeder
+        sink.set(feeder: feeder)
+        transcribing = true
+        // Times from the analyzer count from the start of this stretch of audio.
+        segmentStart = item?.duration ?? 0
+        run += 1
+        let mine = run
+        listening = Task { [weak self] in
+            do {
+                for try await result in transcriber.results {
+                    let lines = result.isFinal ? LiveSpeech.lines(result.text) : []
+                    let text = String(result.text.characters)
+                    guard let self, self.run == mine else { return }
+                    if result.isFinal { self.commit(lines); self.live = "" } else { self.live = text }
+                }
+            } catch {
+                // Keep recording audio; whatever was heard is already written down.
+                guard let self, self.run == mine else { return }
+                self.transcribing = false
+            }
+        }
+        return true
     }
 
     /// One recognition request per stretch of speech; a new one starts when the last ends.
@@ -190,16 +300,28 @@ final class LectureRecorder {
         transcribing = false
         sink.set(file: nil)
         sink.set(request: nil)
+        sink.set(feeder: nil)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
 
         // Let the recognizer hand over its final wording. If it doesn't answer, keep what was on screen.
         let mine = run
-        request?.endAudio()
-        task?.finish()
-        request = nil
-        Task {
-            try? await Task.sleep(for: .seconds(3))
-            if run == mine { settle() }
+        if let analyzer {
+            feeder?.finish()
+            let listening = listening
+            self.analyzer = nil; feeder = nil; self.listening = nil
+            Task {
+                try? await analyzer.finalizeAndFinishThroughEndOfInput()
+                await listening?.value
+                if run == mine { settle() }
+            }
+        } else {
+            request?.endAudio()
+            task?.finish()
+            request = nil
+            Task {
+                try? await Task.sleep(for: .seconds(3))
+                if run == mine { settle() }
+            }
         }
         if let part, let item {
             self.part = nil
@@ -251,6 +373,23 @@ final class LectureRecorder {
 
     /// Transcribes an audio file after the fact, e.g. a recording sent from the watch.
     static func transcribe(_ url: URL) async -> [Segment] {
+        // The newer model reads a file much faster than real time.
+        if let t = await LiveSpeech.transcriber(), let file = try? AVAudioFile(forReading: url) {
+            let analyzer = SpeechAnalyzer(modules: [t])
+            let collect = Task { () -> [(start: Double, text: String)] in
+                var out: [(start: Double, text: String)] = []
+                do { for try await r in t.results where r.isFinal { out += LiveSpeech.lines(r.text) } } catch {}
+                return out
+            }
+            do {
+                if let end = try await analyzer.analyzeSequence(from: file) { try await analyzer.finalizeAndFinish(through: end) }
+                else { await analyzer.cancelAndFinishNow() }
+                let lines = await collect.value
+                if !lines.isEmpty { return lines.map { Segment(start: $0.start, text: $0.text) } }
+            } catch {
+                collect.cancel()
+            }
+        }
         guard let recognizer = SFSpeechRecognizer(), recognizer.isAvailable else { return [] }
         let r = SFSpeechURLRecognitionRequest(url: url)
         r.requiresOnDeviceRecognition = recognizer.supportsOnDeviceRecognition
@@ -386,7 +525,7 @@ struct LectureView: View {
                         MarkdownBlocks(markdown: notes)
                     } else if Assistant.isAvailable {
                         Button { Task { await makeNotes() } } label: {
-                            Label(working ? "Writing notes…" : "Write notes", systemImage: "sparkles")
+                            Label(working ? "Writing notes…" : "Write notes", systemImage: "square.and.pencil")
                         }
                         .disabled(working)
                         if let notesError {
