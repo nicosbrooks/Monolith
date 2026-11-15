@@ -1902,3 +1902,5 @@ body {
 /* Settings: a label on the left, its choice on the right. */
 .modal .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .modal .set-row > span { color: var(--text-2); font-size: 14px; }
+/* An attachment is as wide as its card, so selecting it outlines the card, not the whole column. */
+.ProseMirror .file-node:has(> .file-card) { width: fit-content; max-width: 100%; }

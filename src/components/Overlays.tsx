@@ -49,9 +49,17 @@ export type MenuItem = { label: string; icon?: LucideIcon; run: () => void; dang
 const useMenu = create<{ cur: { x: number; y: number; items: MenuItem[] } | null }>(() => ({ cur: null }))
 
 /** Open a menu at the pointer. Use from onContextMenu, or from a "more" button click. */
-export function openMenu(e: { preventDefault(): void; clientX: number; clientY: number }, items: MenuItem[]) {
+export function openMenu(e: { preventDefault(): void; clientX: number; clientY: number; currentTarget?: EventTarget | null }, items: MenuItem[]) {
   e.preventDefault()
-  useMenu.setState({ cur: { x: e.clientX, y: e.clientY, items } })
+  let { clientX: x, clientY: y } = e
+  // Opened from the keyboard (Enter or Space on a button): no pointer position, so open just under the button.
+  const el = e.currentTarget as HTMLElement | null
+  if (!x && !y && el?.getBoundingClientRect) {
+    const r = el.getBoundingClientRect()
+    x = r.left
+    y = r.bottom + 4
+  }
+  useMenu.setState({ cur: { x, y, items } })
 }
 
 function MenuHost() {
