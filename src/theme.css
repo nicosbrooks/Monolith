@@ -581,11 +581,6 @@ button:focus-visible {
   border-color: var(--border-2);
   color: var(--ok);
 }
-.toast {
-  border-radius: 8px;
-  background: var(--fg);
-  color: var(--fg-inverse);
-}
 /* ── AI panel ── */
 .ai-panel {
   padding: 12px 12px 12px 12px;

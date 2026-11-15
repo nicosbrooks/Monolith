@@ -37,18 +37,26 @@ export function useRuleSuggestions(): Suggestion[] {
         // dismissed suggestion must stay dismissed.
         const id = `cal:${it!.id}:${norm(p.title)}`
         if (exists || dismissed.includes(id)) continue
+        /** Adds the event and returns its id, so the caller can offer Undo. */
+        const add = () => {
+          const ev = st.addEvent({ title: p.title, start: p.start.getTime(), end: p.end.getTime(), allDay: p.allDay, color: /due|exam|quiz|test|deadline|final|midterm/i.test(p.title) ? 'rose' : 'blue', linkedItemId: it!.id })
+          st.dismiss(id)
+          return ev.id
+        }
         out.push({
           id,
           icon: 'calendar',
           source: 'rule',
           title: `Add “${p.title}” to calendar?`,
           detail: `${format(p.start, p.allDay ? 'EEE, MMM d' : 'EEE, MMM d · h:mm a')} — found in “${it!.title || 'Untitled'}”`,
-          action: {
-            label: 'Add event',
-            run: () => {
-              st.addEvent({ title: p.title, start: p.start.getTime(), end: p.end.getTime(), allDay: p.allDay, color: /due|exam|quiz|test|deadline|final|midterm/i.test(p.title) ? 'rose' : 'blue', linkedItemId: it!.id })
-              st.dismiss(id)
-            },
+          action: { label: 'Add event', run: () => void add() },
+          found: {
+            what: p.title,
+            when: format(p.start, p.allDay ? 'EEEE, MMMM d' : 'EEEE, MMMM d · h:mm a'),
+            itemId: it!.id,
+            docTitle: it!.title || 'Untitled',
+            line: p.line || p.title,
+            add,
           },
         })
         if (out.length > 3) break

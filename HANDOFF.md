@@ -187,3 +187,18 @@ The project folder is still named `socratic/` and isn't a git repo, so don't com
     - Turns are a `Turn` struct, and each keeps the docs it actually matched as **Sources** chips (tap to open).
     - Answer actions follow web's AI panel: Copy, plus "Add to doc" when asked from a doc or "Save as doc" otherwise (toast with Open).
     - "Thinking" pulses while waiting; errors show as a quiet ⓘ line; answers are selectable.
+
+## Web UI rework, pass 1 (Nov 15)
+- **Home is AI-first, one column** (`src/views/HomeView.tsx`, `.hm-*` in `src/soft.css`; the old `.home-panel`, `.nudge`, `.week-strip`/`.ws-*` and `.soft-row` rules are gone):
+  - Greeting + date, then one assistant card: a calendar suggestion with its date, the source doc and the quoted line (tap opens the doc) and **Add to calendar** / **Not now**; or the plan; or "Plan your day" when a model is ready.
+  - Both choices show a toast with Undo. Undo removes the event and brings the suggestion back.
+  - `Suggestion.found` (`src/types.ts`) carries what/when/doc/line and `add()`, which returns the new event's id. `findDatedCommitments` now returns the `line` it matched.
+  - A task the card is asking about is hidden from Tasks.
+  - Today: a seven-day row; pick a day to list its events, pick it again or "Open calendar" to open it. Tasks: the box checks (toast with Undo), the words open the doc; 5 then "Show all N". Recent: 5 then "See all" (opens Docs); right-click gives the doc menu.
+  - The page fades out under the Ask bar (`.home-dock::before`), except on Calendar.
+- **Notifications are pills in the upper right** on the raised surface, not white bars at the bottom (user request). Web: `.toaster`/`.toast` now live only in `src/index.css`. iOS: `ToastView` is a capsule shown from a `.topTrailing` overlay in `BottomBar` (seen working in the iPhone 17 simulator; iPad not checked).
+- **Empty states** share `.blank`: Recordings (with the one Start recording button; the header mic shows only once there are recordings), Recently Deleted, and "No doc open" (New doc ⌘N).
+- iOS starter task no longer says "Lectures tab".
+
+- **`DESIGN.md`** (new, project root) records the UI foundations: principles, colour, type, shape, components, writing and which screens follow them. Update it whenever a pattern is settled.
+- Simulator note (Nov 15): while testing the pill, two test docs (“Clean test…”, “Secon test”) were moved to Recently Deleted in the iPhone 17 simulator and not recovered, because injected taps were arriving one step late. Recover them from Docs → ··· → Recently Deleted.

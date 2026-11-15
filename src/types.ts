@@ -96,4 +96,6 @@ export interface Suggestion {
   detail?: string
   action?: { label: string; run: () => void }
   source: 'rule' | 'ai'
+  /** Calendar suggestions: what, when and exactly where it was found, so Home can show its source. */
+  found?: { what: string; when: string; itemId: string; docTitle: string; line: string; add: () => string }
 }

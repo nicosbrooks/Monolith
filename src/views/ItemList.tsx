@@ -28,6 +28,7 @@ export function ItemList({ kind, trash }: { kind?: ItemKind; trash?: boolean }) 
   const [q, setQ] = useState('')
   const [grid, setGrid] = useState(false)
   const st = useStore.getState()
+  const newItem = () => st.createItem(kind!, kind === 'lecture' ? { title: `Recording · ${format(new Date(), 'MMM d')}` } : {})
   const newFolder = () => {
     const name = prompt('New folder')?.trim()
     if (name) st.createFolder(name)
@@ -69,7 +70,22 @@ export function ItemList({ kind, trash }: { kind?: ItemKind; trash?: boolean }) 
           <div className="cards">{its.map((i) => <Row key={i.id} item={i} on={i.id === activeId} grid={grid} />)}</div>
         </div>
       ))}
-      {!list.length && <div className="empty-list">{trash ? 'Nothing here.' : kind === 'lecture' ? 'No recordings yet.' : 'No notes yet.'}</div>}
+      {!list.length && (q ? (
+        <div className="empty-list blank"><b>No matches for “{q}”</b></div>
+      ) : trash ? (
+        <div className="empty-list blank">
+          <span className="blank-ico"><Trash2 size={22} strokeWidth={1.7} /></span>
+          <b>Nothing deleted</b>
+          <p>Docs and recordings you delete wait here, so you can get them back.</p>
+        </div>
+      ) : (
+        <div className="empty-list blank">
+          <span className="blank-ico"><Mic size={22} strokeWidth={1.7} /></span>
+          <b>No recordings yet</b>
+          <p>Record a class or meeting. You get a transcript, and notes written for you.</p>
+          <button className="btn primary" onClick={newItem}><Mic size={15} /> Start recording</button>
+        </div>
+      ))}
     </>
   )
 
@@ -129,8 +145,8 @@ export function ItemList({ kind, trash }: { kind?: ItemKind; trash?: boolean }) 
               <Ellipsis size={16} />
             </button>
           )}
-          {!trash && (
-            <button className="icon-btn" onClick={() => st.createItem(kind!, kind === 'lecture' ? { title: `Recording · ${format(new Date(), 'MMM d')}` } : {})} title="New">
+          {!trash && list.length > 0 && (
+            <button className="icon-btn" onClick={newItem} title={kind === 'lecture' ? 'Start recording' : 'New'} aria-label={kind === 'lecture' ? 'Start recording' : 'New'}>
               {kind === 'lecture' ? <Mic size={16} /> : <SquarePen size={16} />}
             </button>
           )}

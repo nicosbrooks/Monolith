@@ -17,10 +17,10 @@ export function toast(text: string, opts: { action?: T['action']; ms?: number } 
 export function Toaster() {
   const list = useToasts((s) => s.list)
   return (
-    <div className="toaster">
+    <div className="toaster" aria-live="polite">
       <AnimatePresence>
         {list.map((t) => (
-          <motion.div key={t.id} className="toast" initial={{ opacity: 0, y: 16, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.96 }}>
+          <motion.div key={t.id} className="toast" layout initial={{ opacity: 0, y: -12, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, x: 16, scale: 0.96 }} transition={{ type: 'spring', duration: 0.35, bounce: 0.15 }} role="status">
             <span>{t.text}</span>
             {t.action && (
               <button onClick={() => (t.action!.run(), useToasts.setState((s) => ({ list: s.list.filter((x) => x.id !== t.id) })))}>{t.action.label}</button>

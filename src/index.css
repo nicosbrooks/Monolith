@@ -2580,36 +2580,60 @@ kbd {
 /* ───────────────────────── Toasts ───────────────────────── */
 .toaster {
   position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 200;
+  /* Just under the page's own top-right controls (star, ···, Week/Month), so it never covers them. */
+  top: calc(56px + env(safe-area-inset-top));
+  right: 16px;
+  z-index: 300;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
-  align-items: center;
   pointer-events: none;
 }
+.app.ai-open:not(.mobile) .toaster {
+  right: calc(var(--ai-w) + 16px);
+}
+/* Notifications: small pills in the top right, on the raised surface (never the inverse of the page). */
 .toast {
   pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px 10px 10px 16px;
-  border-radius: 12px;
-  background: color-mix(in oklab, var(--text) 92%, transparent);
-  color: var(--bg);
-  backdrop-filter: blur(12px);
-  box-shadow: var(--shadow-lg);
-  font-size: 13px;
+  gap: 10px;
+  max-width: min(420px, calc(100vw - 32px));
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--raised-edge);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+  font-size: 13.5px;
   font-weight: 500;
 }
+:root[data-theme='light'] .toast {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.toast span {
+  padding-block: 10px;
+  line-height: 1.35;
+}
 .toast button {
-  padding: 4px 10px;
-  border-radius: 7px;
-  background: color-mix(in oklab, var(--bg) 18%, transparent);
+  flex: none;
+  height: 28px;
+  margin-right: -10px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--raised-fill-2);
+  color: var(--text);
+  font-size: 13px;
   font-weight: 600;
-  font-size: 12.5px;
+}
+.toast button:hover {
+  background: color-mix(in oklab, var(--raised-fill-2), var(--text) 10%);
+}
+.app.mobile .toaster {
+  left: 16px;
+  align-items: center;
 }
 /* ───────────────────────── Home ───────────────────────── */
 .home {

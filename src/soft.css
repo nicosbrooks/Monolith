@@ -195,162 +195,315 @@ kbd {
 .devices-row i.off {
   background: var(--s9);
 }
-/* ── Home: reads like a page ── */
-.home-page {
-  container-type: inline-size;
-  width: min(100%, 1060px);
+/* ── Home: the assistant first, then today, tasks and recent work. One column, soft cards, no lines. ── */
+:root {
+  --card: #ffffff;
+  --card-hover: rgba(0, 0, 0, 0.045);
+}
+:root[data-theme='dark'] {
+  --card: #191918;
+  --card-hover: rgba(255, 255, 255, 0.06);
+}
+.hm {
+  width: min(100%, 728px);
   margin-inline: auto;
-  padding: 42px clamp(20px, 5%, 56px) 116px;
+  padding: 56px 24px 132px;
 }
-.home-header,
-.home-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.hm-head h1 {
+  margin: 0;
+  font: 650 30px/1.2 var(--font);
+  letter-spacing: -0.028em;
 }
-.home-header {
-  margin-bottom: 24px;
-}
-.home-header h1 {
-  margin: 0 0 2px;
-  font: 650 28px/1.2 var(--font);
-  letter-spacing: -0.025em;
-}
-.home-header time,
-.home-panel-head > span,
-.home-empty {
+.hm-head time {
+  display: block;
+  margin-top: 4px;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 15px;
 }
-.home-panels {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 24px;
-  align-items: start;
+.hm-card {
+  border-radius: 22px;
+  background: var(--card);
 }
-.home-panel {
-  min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--raised-edge);
-  border-radius: 16px;
-  background: var(--raised-fill);
+:root[data-theme='light'] .hm-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
-.home-schedule {
-  grid-column: 1 / -1;
+.hm-sec {
+  margin-top: 30px;
 }
-.home-brief {
-  margin-top: 16px;
+.hm-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 14px 10px;
 }
-.home-panel-head h2 {
+.hm-label h2 {
+  margin: 0;
+  color: var(--text-2);
+  font: 550 13.5px/1.4 var(--font);
+}
+.hm-label button {
+  color: var(--text-2);
+  font-size: 13.5px;
+  border-radius: 6px;
+}
+.hm-label button:hover {
+  color: var(--text);
+}
+/* assistant */
+.hm-asst {
+  margin-top: 28px;
+  padding: 20px 22px 22px;
+  border-radius: 24px;
+}
+.hm-asst-top {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0;
-  font: 600 14px/1.4 var(--font);
+  color: var(--text-2);
+  font-size: 13.5px;
+  font-weight: 550;
 }
-.home-panel-head h2 svg,
-.home-item-icon,
-.home-recent-arrow {
+.hm-asst h2 {
+  margin: 12px 0 0;
+  font: 600 19px/1.35 var(--font);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+.hm-asst > p {
+  margin: 4px 0 0;
+  color: var(--text-2);
+  font-size: 15px;
+}
+.hm-asst .md {
+  margin-top: 12px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.hm-source {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--card-hover);
+  text-align: left;
+  transition: background 0.15s;
+}
+.hm-source:hover {
+  background: var(--raised-fill-2);
+}
+.hm-source svg {
   flex: none;
+  margin-top: 2px;
   color: var(--text-2);
 }
-.home-rows {
+.hm-source span {
   display: grid;
-  margin-top: 10px;
-}
-.home-rows .soft-row {
-  width: 100%;
-  min-height: 49px;
-  text-align: left;
-}
-.home-row-copy {
-  display: grid;
-  flex: 1;
-  min-width: 0;
   gap: 2px;
+  min-width: 0;
 }
-.home-row-copy > * {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.hm-source b {
+  font-size: 13.5px;
+  font-weight: 550;
 }
-.home-row-copy small {
-  max-width: none;
-}
-.home-tasks .home-row-copy > span {
-  white-space: normal;
+.hm-source q {
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.home-empty {
-  margin: 12px 0 2px;
+.hm-asst-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
 }
-.home-schedule .week-strip-shell,
-.home-schedule .nudge {
-  margin-top: 12px;
+.hm-asst-actions .btn {
+  height: 38px;
+  padding: 0 18px;
+  font-size: 14px;
 }
-@container (max-width: 580px) {
-  .home-panels { grid-template-columns: minmax(0, 1fr); }
+/* rows */
+.hm-list {
+  display: grid;
+  padding: 6px;
 }
-.nudge {
+.hm-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 22px;
-  padding: 10px 10px 10px 16px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
   border-radius: 16px;
-  background: var(--s3);
-  font-size: 14px;
+  color: var(--text);
+  font-size: 15px;
+  text-align: left;
+  transition: background 0.12s;
 }
-.nudge > span {
-  flex: 1;
-  min-width: 0;
+.hm-row:hover {
+  background: var(--card-hover);
 }
-.nudge small {
-  display: block;
-  color: var(--text-3);
-  font-size: 12.5px;
-  margin-top: 2px;
+.hm-row:active {
+  background: var(--raised-fill-2);
 }
-.nudge .dot {
-  flex: 0 0 auto;
+.hm-row:focus-visible,
+.hm-week button:focus-visible,
+.hm-source:focus-visible,
+.hm-more:focus-visible,
+.hm-row-main:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: -2px;
+}
+.hm-ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  color: var(--text-2);
+}
+.hm-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--info);
 }
-.soft-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 44px;
-  padding: 0 12px;
-  border-radius: 12px;
-  font-size: 15px;
-  text-align: left;
-  color: var(--text);
-}
-.soft-row:hover {
-  background: var(--s3);
-}
-.soft-row .grow {
+.hm-row-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.soft-row small {
+.hm-row small {
+  flex: none;
   color: var(--text-3);
   font-size: 13px;
-  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
-.soft-row input[type='checkbox'] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--fg);
+.hm-task {
+  padding-block: 8px;
+}
+.hm-task input {
+  appearance: none;
+  flex: none;
+  width: 20px;
+  height: 20px;
   margin: 0;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1.6px var(--text-3);
+  cursor: pointer;
+  transition: box-shadow 0.12s, background 0.12s;
+}
+.hm-task input:hover {
+  box-shadow: inset 0 0 0 1.6px var(--text);
+  background: var(--card-hover);
+}
+.hm-row-main {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.hm-row-main span {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.hm-row-main small {
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hm-empty {
+  margin: 0;
+  padding: 14px 12px;
+  color: var(--text-2);
+  font-size: 14.5px;
+}
+.hm-more {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 16px;
+  color: var(--text-2);
+  font-size: 14px;
+  text-align: left;
+}
+.hm-more:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+/* the week */
+.hm-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  padding: 8px 8px 2px;
+}
+.hm-week button {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 10px 0 8px;
+  border-radius: 16px;
+  color: var(--text);
+  transition: background 0.15s;
+}
+.hm-week button:hover {
+  background: var(--card-hover);
+}
+.hm-week button.on {
+  background: var(--raised-fill-2);
+}
+.hm-week span {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.hm-week .on span {
+  color: var(--text);
+}
+.hm-week b {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.hm-week i {
+  display: flex;
+  gap: 3px;
+  height: 5px;
+  margin-top: 3px;
+}
+.hm-week u {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+.app.mobile .hm {
+  padding: 8px 14px 110px;
+}
+.app.mobile .hm-head h1 {
+  font-size: 26px;
+}
+@media (max-width: 480px) {
+  .hm-row-main {
+    flex-direction: column;
+    gap: 1px;
+  }
+  .hm-row-main small {
+    max-width: 100%;
+  }
+  .hm-asst-actions .btn {
+    flex: 1;
+  }
 }
 /* ── floating Ask pill ── */
 .main {
@@ -500,27 +653,6 @@ details.advanced[open] > summary::after {
 /* Phone width: Home has no big title (the date and headline are the title), and the suggestion stacks. */
 .app.mobile .home .p-large:has(h1:empty) {
   display: none;
-}
-.app.mobile .home-page {
-  padding: 8px 14px 96px;
-}
-.app.mobile .home-panel {
-  padding: 12px 8px;
-}
-.app.mobile .home-panel-head {
-  padding-inline: 4px;
-}
-@media (max-width: 560px) {
-  .nudge {
-    flex-wrap: wrap;
-    padding: 14px 16px;
-  }
-  .nudge > span {
-    flex-basis: calc(100% - 24px);
-  }
-  .nudge .btn {
-    margin-left: 20px;
-  }
 }
 /* ── phone: sidebar drawer and the floating dock ── */
 .p-drawer {
@@ -700,21 +832,6 @@ details.advanced[open] > summary::after {
   background: var(--danger);
   color: #fff;
 }
-/* Toasts: the inverse of the page, so they never blend in */
-.toast {
-  background: var(--text) !important;
-  color: var(--bg) !important;
-  border: 0 !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35) !important;
-}
-.toast button {
-  color: var(--bg) !important;
-  font-weight: 600;
-}
-/* Suggestion card on Home */
-.nudge {
-  background: var(--btn);
-}
 /* ── Calendar: linked calendars, colors, swipe ── */
 .cal-body {
   flex: 1;
@@ -884,6 +1001,18 @@ body {
   gap: 10px;
   z-index: 20;
 }
+/* The page fades out under the bar, so rows never collide with it. */
+.home-dock::before {
+  content: '';
+  position: absolute;
+  inset: -36px -100vw -24px;
+  z-index: -1;
+  background: linear-gradient(to bottom, transparent, var(--bg) 62%);
+  pointer-events: none;
+}
+.main.sec-calendar .home-dock::before {
+  display: none;
+}
 .home-dock .p-fab {
   width: 48px;
   height: 48px;
@@ -894,10 +1023,6 @@ body {
   background: var(--text);
   color: var(--bg);
   box-shadow: var(--shadow);
-}
-/* "Pick up where you left off": plain rows, like native */
-.nudge .icon-btn {
-  color: var(--text-3);
 }
 /* Assistant actions */
 .act-card {
@@ -942,220 +1067,8 @@ body {
   color: var(--ok);
   font-size: 12.5px;
 }
-/* ── Home: a week at a glance ── */
-.week-strip-shell {
-  container-type: inline-size;
-  margin-top: 28px;
-}
-.week-strip {
-  display: flex;
-  gap: 4px;
-  margin: 0;
-  padding: 6px;
-  list-style: none;
-  border-radius: 20px;
-  background: var(--surface-2, #1a1a18);
-}
-:root[data-theme='dark'] .week-strip {
-  background: #181817;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
-}
-:root[data-theme='light'] .week-strip {
-  background: #ffffff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
-}
-.week-strip > li {
-  display: flex;
-  flex: 0.25 0 40px;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 134px;
-  border-radius: 14px;
-  background: var(--raised-fill);
-  transition: flex-grow 240ms cubic-bezier(0.2, 0.7, 0.3, 1), background-color 180ms ease;
-}
-.week-strip > li.expanded {
-  flex-grow: 5;
-  background: var(--btn);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--text) 10%, transparent);
-}
-.ws-day {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  width: 100%;
-  min-height: 44px;
-  padding: 8px 0;
-  border-radius: 14px;
-  color: var(--text);
-}
-.week-strip > li:not(.expanded) .ws-day:hover {
-  background: var(--btn);
-}
-.expanded .ws-day {
-  flex: 0 0 auto;
-  flex-direction: row;
-  gap: 6px;
-  padding: 4px 12px;
-  cursor: default;
-}
-.ws-day:focus-visible,
-.ws-open:focus-visible {
-  outline: 2px solid var(--text-2);
-  outline-offset: -2px;
-}
-.ws-dow {
-  font-size: 12px;
-  color: var(--text-2);
-}
-.ws-day.today .ws-dow {
-  color: var(--text);
-  font-weight: 600;
-}
-.ws-num {
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-.ws-dots {
-  display: flex;
-  gap: 3px;
-  margin-top: 5px;
-}
-.ws-dots i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-}
-.expanded .ws-dots {
-  display: none;
-}
-.ws-details {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 6px;
-  min-width: 0;
-  padding: 0 12px 8px;
-}
-.ws-details[hidden] {
-  display: none;
-}
-.ws-evs {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.ws-event {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-  padding: 3px 6px 3px 8px;
-  border-radius: 5px;
-  background: color-mix(in oklab, var(--c) 14%, transparent);
-  box-shadow: inset 2px 0 var(--c);
-  font-size: 12px;
-}
-.ws-time {
-  flex: none;
-  color: var(--text-2);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.ws-event-title {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.ws-empty {
-  margin: 0;
-  color: var(--text-2);
-  font-size: 12px;
-}
-.ws-footer {
-  display: flex;
-  flex-wrap: wrap-reverse;
-  align-items: center;
-  justify-content: space-between;
-  column-gap: 6px;
-  color: var(--text-2);
-}
-.ws-open {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 32px;
-  border-radius: 4px;
-  font-size: 12px;
-  text-align: left;
-}
-.ws-open:hover {
-  color: var(--text);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.ws-open svg {
-  flex: none;
-}
 .wd.selected:not(.today) b {
   box-shadow: inset 0 0 0 1px var(--text-2);
-}
-@container (max-width: 450px) {
-  .week-strip {
-    gap: 3px;
-    padding: 5px;
-  }
-  .week-strip > li {
-    flex-basis: 32px;
-    border-radius: 11px;
-  }
-  .week-strip > li.expanded {
-    flex-grow: 9;
-  }
-  .ws-day {
-    border-radius: 11px;
-  }
-  .expanded .ws-day {
-    padding-inline: 8px;
-  }
-  .ws-details {
-    padding-inline: 8px;
-  }
-  .ws-event {
-    display: grid;
-    gap: 0;
-  }
-  .ws-event-title {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    overflow-wrap: anywhere;
-    white-space: normal;
-  }
-  .ws-open {
-    min-height: 44px;
-  }
-}
-@container (max-width: 360px) {
-  .week-strip > li {
-    flex-basis: 28px;
-  }
-  .ws-dow {
-    font-size: 11px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .week-strip > li {
-    transition: none;
-  }
 }
 /* ── Sidebar: its own surface, roomier rows ── */
 .app:not(.mobile) .side-wrap {
@@ -1379,7 +1292,50 @@ body {
 .app.mobile:has(.ProseMirror:focus, textarea:focus, .editor input:focus) .p-dock.detail {
   display: none;
 }
-/* Toasts sit above the Ask bar, never on it. */
-.toaster {
-  bottom: calc(92px + env(safe-area-inset-bottom));
+/* ── Empty states: one icon, what this place is for, and the one thing to do ── */
+.blank {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  color: var(--text-2);
+  font-size: 14.5px;
+}
+.blank b {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.blank p {
+  max-width: 34ch;
+  margin: 0;
+  line-height: 1.5;
+  text-wrap: balance;
+}
+.blank-ico {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 10px;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--text-2);
+}
+.blank .btn {
+  height: 38px;
+  margin-top: 14px;
+  padding: 0 18px;
+  gap: 8px;
+  font-size: 14px;
+}
+.blank .btn kbd {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  opacity: 0.55;
+  font: inherit;
 }

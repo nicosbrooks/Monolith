@@ -80,10 +80,6 @@ private struct BottomBar: ViewModifier {
                                 .glassEffect(.regular, in: .capsule)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
-                        if let t = Toaster.shared.current {
-                            ToastView(toast: t).id(t.id)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
-                        }
                         if !keyboard || focused {
                             ChatField(text: $text, focused: $focused,
                                       prompt: placeholder, send: send) {
@@ -93,6 +89,15 @@ private struct BottomBar: ViewModifier {
                     }
                     .padding(.horizontal, 14).padding(.top, 28).padding(.bottom, 8)
                     .background(Fog())
+                }
+            }
+            // Notifications: a pill in the upper right, as on the web. The bottom belongs to the chat bar.
+            .overlay(alignment: .topTrailing) {
+                if let t = Toaster.shared.current {
+                    ToastView(toast: t).id(t.id)
+                        // Below the title bar, so the title and its buttons stay readable and tappable.
+                        .padding(.horizontal, 14).padding(.top, 54)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
             .animation(.snappy, value: recorder.isRecording)

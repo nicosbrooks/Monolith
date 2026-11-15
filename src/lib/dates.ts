@@ -10,6 +10,8 @@ export interface ParsedEvent {
   end: Date
   allDay: boolean
   matched: string
+  /** The sentence this was found in, when it came from free text. */
+  line?: string
 }
 
 const TIME = /\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i
@@ -115,7 +117,7 @@ export function findDatedCommitments(text: string, now = new Date()): ParsedEven
     if (l.length < 6 || l.length > 120 || !KEY.test(l)) continue
     if (!MONTH_DATE.test(l) && !DAY_WORD.test(l) && !SLASH_DATE.test(l)) continue
     const p = parseQuickEvent(l.replace(/^[-*•\d.)\s]+/, ''), now)
-    if (p && p.start.getTime() > now.getTime() - 864e5) out.push(p)
+    if (p && p.start.getTime() > now.getTime() - 864e5) out.push({ ...p, line: line.replace(/^[-*•\s]+/, '').trim() })
   }
   return out
 }

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { FileText, Mic, PanelLeftOpen, StickyNote } from 'lucide-react'
+import { FileText, Mic, PanelLeftOpen } from 'lucide-react'
 import { AskBar } from './components/AskBar'
 import { useStore } from './store'
 import { Sidebar } from './components/Sidebar'
@@ -187,13 +187,14 @@ export default function App() {
 }
 
 function Empty({ kind }: { kind?: string }) {
-  if (!kind) return <div className="empty-detail"><p className="muted">Select an item to preview it.</p></div>
+  if (!kind) return <div className="empty-detail blank"><b>Nothing selected</b><p>Pick something from the list to see it here.</p></div>
+  if (kind === 'lecture') return <div className="empty-detail blank"><span className="blank-ico"><Mic size={22} strokeWidth={1.7} /></span><b>Pick a recording</b><p>Its transcript and notes open here.</p></div>
   return (
-    <div className="empty-detail">
-      {kind === 'doc' ? <FileText size={30} strokeWidth={1.5} /> : kind === 'lecture' ? <Mic size={30} strokeWidth={1.5} /> : <StickyNote size={30} strokeWidth={1.5} />}
-      <b>Nothing open</b>
-      {/* Notes and recordings have their own button at the top of the list; docs have no list, so the button lives here. */}
-      {kind !== 'lecture' && <p className="muted small">Pick a {kind} in the sidebar, or start one with +.</p>}
+    <div className="empty-detail blank">
+      <span className="blank-ico"><FileText size={22} strokeWidth={1.7} /></span>
+      <b>No doc open</b>
+      <p>Pick one in the sidebar, or start a new one.</p>
+      <button className="btn primary" onClick={() => useStore.getState().createItem('doc')}>New doc <kbd>⌘N</kbd></button>
     </div>
   )
 }

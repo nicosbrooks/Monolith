@@ -156,7 +156,7 @@ enum Storage {
         let welcome = Item(.doc, title: "Welcome to Monolith", body: """
         Notes, docs, lectures and your calendar in one place. The assistant runs on this device.
 
-        - [ ] Record a lecture from the Lectures tab
+        - [ ] Record a class or meeting and get notes written for you
         - [ ] Problem set due Friday at 5pm
         - [ ] Try the watch app: tap record on your wrist
         """)

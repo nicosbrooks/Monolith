@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 
-/// One quiet line above the bottom bar after something happens, with Undo when it can be taken back.
+/// A small pill in the upper right after something happens, with Undo when it can be taken back.
 /// Same as the web app's toasts: "Doc moved to Recently Deleted · Undo", "Copied as Markdown".
 @Observable
 final class Toaster {
@@ -35,15 +35,18 @@ struct ToastView: View {
                 Text(toast.title).font(.subheadline.weight(.medium)).lineLimit(1)
                 if let d = toast.detail { Text(d).font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
             }
-            Spacer(minLength: 8)
             if let a = toast.action {
                 Button(a.label) { a.run(); Toaster.shared.dismiss() }
-                    .font(.subheadline.weight(.semibold)).buttonStyle(.plain)
+                    .font(.footnote.weight(.semibold)).buttonStyle(.plain)
+                    .padding(.horizontal, 12).frame(height: 30)
+                    .background(Color.primary.opacity(0.12), in: .capsule)
             }
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
-        .frame(maxWidth: 640)
-        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+        .padding(.leading, 16).padding(.trailing, toast.action == nil ? 16 : 7)
+        .frame(minHeight: 44)
+        .background(Theme.raised, in: .capsule)
+        .overlay(Capsule().strokeBorder(Theme.rule))
+        .shadow(color: .black.opacity(0.3), radius: 14, y: 6)
         .onTapGesture { Toaster.shared.dismiss() }
     }
 }
