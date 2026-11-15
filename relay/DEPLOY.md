@@ -117,12 +117,9 @@ Save, then **Retry deployment** (variables only apply to new builds).
 **Custom domain:** Pages project → Custom domains → Set up a domain → `monolith.example.com`. Cloudflare adds the
 DNS record.
 
-**Models on people's own computers (Ollama, MLX).** All AI runs on the visitor's device: in the browser, or in Ollama
-or MLX on their computer. The site never looks for those on its own, because the browser may ask "allow this site to
-reach apps on this device?". It looks after someone clicks **Settings › Assistant › Use a model already on this
-computer**, and on every visit after that. Ollama only answers sites it's told about, so Settings shows the command:
-`OLLAMA_ORIGINS=https://monolith.example.com ollama serve`. Safari may refuse an https site talking to
-`http://localhost`; Chrome, Edge and Firefox allow it.
+**AI runs on the visitor's device.** Monolith downloads the models into the browser the first time they're needed,
+caches them, and runs them there (WebGPU, or WebAssembly where there's no GPU). Nothing to install and no AI server to
+run. Model weights download from Hugging Face, and WebLLM's runtime files from GitHub.
 
 **Headers:** `public/_headers` keeps `sw.js` uncached (so updates arrive) and caches the hashed files in `/assets/`
 for a year. A build without `VITE_RELAY_URL` prints a warning, because phone pairing and calendar subscriptions need

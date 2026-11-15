@@ -48,7 +48,7 @@ The product name lives in `src/brand.ts`.
 
 - **Language model**: [WebLLM](https://github.com/mlc-ai/web-llm) running in a Web Worker via WebGPU. Pick a model in Settings (SmolLM2 360M → Llama 3.2 3B). Downloaded once, cached in the browser, works offline.
 - **Speech-to-text**: Moonshine Base (fast, English) or Whisper Large v3 Turbo (most accurate) via [Transformers.js](https://github.com/huggingface/transformers.js), WebGPU with WASM fallback.
-- **Ollama or MLX** (optional): models already running on your computer. On the dev server they're found automatically; on the hosted site, click **Settings › Assistant › Use a model already on this computer** (Ollama needs `OLLAMA_ORIGINS=<site address> ollama serve`).
+- **Nothing to install.** Monolith downloads, caches and runs every model itself; there's no separate AI app to set up.
 
 Needs a WebGPU browser for the in-browser model: Chrome, Edge, Arc, or Safari 26+.
 

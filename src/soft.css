@@ -1848,6 +1848,3 @@ body {
   -webkit-box-orient: vertical;
 }
 
-/* Settings › Assistant: Ollama / MLX on this computer */
-.local-engines { margin-top: 12px; display: grid; gap: 6px; justify-items: start; }
-.local-engines code { font-size: 12.5px; }

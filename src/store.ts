@@ -50,10 +50,7 @@ const idbStorage: StateStorage = {
 }
 
 export interface Settings {
-  /** 'auto' picks for you: a Mac's MLX server, then Ollama, then the in-browser model. */
-  provider: 'auto' | 'mlx' | 'webllm' | 'ollama'
   llmModel: string
-  ollamaModel: string
   /** The speech-to-text model (named for the first one the app used). */
   whisperModel: string
   proactive: boolean
@@ -71,8 +68,6 @@ export interface Settings {
   lastBackup?: number
   /** Integrations turned on in this browser (Settings › Integrations). */
   integrations?: ('location' | 'weather')[]
-  /** On the hosted site: allowed to look for Ollama / MLX on this computer (the browser may ask first). */
-  localEngines?: boolean
 }
 
 interface State {
@@ -201,10 +196,8 @@ export const useStore = create<State>()(
       sidebarCollapsed: false,
       dismissed: [],
       settings: {
-        provider: 'auto',
         // 'default' means the Default tier, resolved per device (see modelForTier). Existing installs keep their pick.
         llmModel: 'default',
-        ollamaModel: '',
         whisperModel: 'onnx-community/moonshine-base-ONNX',
         proactive: true,
         accent: '#7c5cff',
@@ -332,14 +325,12 @@ export const useStore = create<State>()(
     }),
     {
       name: 'socratic-v1',
-      version: 9,
+      version: 10,
       migrate: (persisted: unknown, v: number) => {
         const p = persisted as Partial<State>
         if (v < 2) p.aiOpen = false
         if (p.settings && p.settings.googleClientId === undefined) p.settings.googleClientId = ''
         if (p.settings && p.settings.glass === undefined) p.settings.glass = true
-        // Engines are picked automatically now.
-        if (v < 5 && p.settings && p.settings.provider === 'webllm') p.settings.provider = 'auto'
         // Models are now picked by tier; older picks were last generation, so move everyone to Default.
         if (v < 6 && p.settings) p.settings.llmModel = 'default'
         if (v < 7 && p.items) p.items = p.items.map((i) => i.kind === 'note' || i.id === 'doc-guide' ? { ...i, content: withoutLegacyTitle(i.content, i.title) } : i)
@@ -347,6 +338,11 @@ export const useStore = create<State>()(
         if (v < 8 && p.items) p.items = p.items.map((i) => (i.kind === 'note' ? { ...i, kind: 'doc' } : i))
         // First-time setup is for new installs; anyone already using the app has been set up.
         if (v < 9 && p.settings) p.settings = { ...p.settings, name: '', home: null, setupAt: p.settings.setupAt ?? 1 }
+        // Models run only in the browser now, managed by the app: drop the old Ollama / MLX choices.
+        if (v < 10 && p.settings) {
+          const { provider: _p, ollamaModel: _o, localEngines: _l, ...rest } = p.settings as Settings & { provider?: string; ollamaModel?: string; localEngines?: boolean }
+          p.settings = rest
+        }
         return p as State
       },
       storage: createJSONStorage(() => idbStorage),

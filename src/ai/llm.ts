@@ -169,8 +169,6 @@ export function detectGPU() {
 }
 /** The build to download for a model on this browser. */
 const build = (id: string) => (gpu.f16 === false ? id.replace('q4f16_1', 'q4f32_1') : id)
-/** Set when the in-browser model couldn't start here, so a model on this computer answers instead. */
-let browserFailed = false
 /** Set when WebLLM failed in this tab; the Transformers.js engine takes over. */
 let webllmFailed = false
 
@@ -201,8 +199,6 @@ interface AIState {
   progressText: string
   loadedModel: string | null
   error: string | null
-  ollama: string[] | null // available ollama models, null if not running
-  mlx: boolean | null // a local MLX server (mlx_lm.server) answered, null before the first check
   busy: boolean
   cached: Record<string, boolean>
 }
@@ -213,15 +209,11 @@ export const useAI = create<AIState>(() => ({
   progressText: '',
   loadedModel: null,
   error: null,
-  ollama: null,
-  mlx: null,
   busy: false,
   cached: {},
 }))
 
 export const hasWebGPU = () => typeof navigator !== 'undefined' && 'gpu' in navigator && gpu.adapter !== false
-/** Something can run in this tab: WebGPU, or the CPU fallback (WebAssembly is everywhere). */
-export const canRunInBrowser = () => true
 
 let engine: MLCEngineInterface | null = null
 let webllmWorker: Worker | null = null
@@ -260,100 +252,13 @@ export async function refreshCache() {
   }
 }
 
-// ─── Engines already running on this computer (Ollama, MLX) ──────────────
-// The dev and preview servers proxy them at /local/… (same origin, no CORS). The hosted site has no proxy, so it calls
-// the port directly: Ollama then needs this site in OLLAMA_ORIGINS, and the browser may ask to allow access to devices
-// on this computer. Because of that prompt, the hosted site only looks once someone asks it to in Settings.
-
-/** True where the app's own server can reach this computer's engines (`npm run dev` / `preview`). */
-const proxied = typeof location !== 'undefined' && (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.hostname.endsWith('.ts.net'))
-const BASES = {
-  ollama: [...(proxied ? ['/local/ollama'] : []), 'http://localhost:11434'],
-  mlx: [...(proxied ? ['/local/mlx/v1'] : []), 'http://localhost:8080/v1'],
-}
-const base: { ollama: string; mlx: string } = { ollama: BASES.ollama[0], mlx: BASES.mlx[0] }
-/** Whether to look for local engines now: always behind the dev proxy, on the hosted site once allowed. */
-export const mayLookLocally = () => proxied || !!useStore.getState().settings.localEngines
-/** What Ollama needs to allow this page, for the hint in Settings: nothing behind the dev proxy. */
-export const ollamaHint = () => (proxied ? 'ollama serve' : `OLLAMA_ORIGINS=${location.origin} ollama serve`)
-
-/** The first address for this engine that answers with JSON; remembered for the requests that follow. */
-async function reach(kind: 'ollama' | 'mlx', path: string) {
-  for (const b of BASES[kind]) {
-    const r = await fetch(b + path, { signal: AbortSignal.timeout(1500) }).catch(() => null)
-    if (r?.ok && r.headers.get('content-type')?.includes('json')) {
-      base[kind] = b
-      return r
-    }
-  }
-  return null
-}
-
-export async function detectOllama() {
-  if (!mayLookLocally()) return null
-  try {
-    const r = await reach('ollama', '/api/tags')
-    if (!r) throw new Error('not running')
-    const j = await r.json()
-    const names: string[] = (j.models || []).map((m: { name: string }) => m.name)
-    useAI.setState({ ollama: names })
-    const s = useStore.getState().settings
-    if (names.length && !s.ollamaModel) useStore.getState().setSettings({ ollamaModel: names[0] })
-    return names
-  } catch {
-    useAI.setState({ ollama: null })
-    return null
-  }
-}
-
-/** A Mac running `mlx_lm.server` (port 8080). */
-export async function detectMLX() {
-  if (!mayLookLocally()) return false
-  const ok = !!(await reach('mlx', '/models'))
-  useAI.setState({ mlx: ok })
-  return ok
-}
-
-/** Settings › "Use a model on this computer": allow looking (the browser may ask), then look. */
-export async function lookLocally() {
-  useStore.getState().setSettings({ localEngines: true })
-  const [mlx, ollama] = await Promise.all([detectMLX(), detectOllama()])
-  return mlx || !!ollama?.length
-}
-
-/**
- * Which engine answers right now. A model picked in Settings (a tier or one from More) runs in the browser;
- * a model already running on this computer (MLX or Ollama) is used when picked, or when the browser can't run one.
- */
-export function engineInUse(): 'mlx' | 'ollama' | 'webllm' {
-  const s = useStore.getState().settings
-  const a = useAI.getState()
-  if (s.provider === 'mlx' || s.provider === 'ollama') return s.provider
-  if (canRunInBrowser() && !(browserFailed && (a.mlx || (a.ollama?.length && s.ollamaModel)))) return 'webllm'
-  if (a.mlx) return 'mlx'
-  if (a.ollama?.length && s.ollamaModel) return 'ollama'
-  return 'webllm'
-}
-
-export function isReady() {
-  const e = engineInUse()
-  const a = useAI.getState()
-  if (e === 'mlx') return !!a.mlx
-  if (e === 'ollama') return !!a.ollama?.length && !!useStore.getState().settings.ollamaModel
-  return a.status === 'ready'
-}
+/** Whether the assistant can answer right now. */
+export const isReady = () => useAI.getState().status === 'ready'
 
 /** What someone picked in Settings. Picking is all it takes; this gets it running. */
-export async function chooseModel(c: { kind: 'auto' } | { kind: 'mlx' } | { kind: 'ollama'; id: string } | { kind: 'webllm'; id: string }) {
-  const set = useStore.getState().setSettings
-  if (c.kind === 'auto') set({ provider: 'auto' })
-  else if (c.kind === 'mlx') set({ provider: 'mlx' })
-  else if (c.kind === 'ollama') set({ provider: 'ollama', ollamaModel: c.id })
-  else {
-    set({ provider: 'auto', llmModel: c.id })
-    return loadModel(c.id)
-  }
-  await ensureAI()
+export async function chooseModel(id: string) {
+  useStore.getState().setSettings({ llmModel: id })
+  return loadModel(id)
 }
 
 /** The model id to load: the saved choice, or the Default tier if nothing has been picked. */
@@ -368,8 +273,7 @@ export function resolvedModel() {
 
 /** At startup: find what this machine already has and get it going quietly. Downloads nothing new. */
 export async function startAI() {
-  await Promise.all([detectMLX(), detectOllama(), detectGPU()])
-  if (engineInUse() !== 'webllm') return
+  await detectGPU()
   await refreshCache()
   const id = resolvedModel()
   if (useAI.getState().cached[id]) void loadModel(id)
@@ -378,9 +282,7 @@ export async function startAI() {
 /** Make sure something can answer, downloading the in-browser model once if nothing else is there. */
 export async function ensureAI() {
   if (isReady()) return true
-  await Promise.all([detectMLX(), detectOllama()])
-  if (isReady()) return true
-  if (engineInUse() === 'webllm') await loadModel()
+  await loadModel()
   return isReady()
 }
 
@@ -410,7 +312,6 @@ export async function loadModel(modelId?: string) {
         webllmWorker = new Worker(new URL('./llm.worker.ts', import.meta.url), { type: 'module' })
         engine = await CreateWebWorkerMLCEngine(webllmWorker, build(id), { initProgressCallback: cb })
       }
-      browserFailed = false
       loadedEngine = 'webllm'
       useAI.setState({ status: 'ready', loadedModel: id, progress: 1 })
       refreshCache()
@@ -489,12 +390,10 @@ async function loadOnnx(modelId: string) {
           return r.type === 'ready'
         },
       )
-      browserFailed = false
       loadedEngine = 'onnx'
       useAI.setState({ status: 'ready', loadedModel: m.id, progress: 1 })
       refreshCache()
     } catch (e) {
-      browserFailed = true
       loadedEngine = null
       useAI.setState({ status: 'error', error: message(e) })
     } finally {
@@ -534,81 +433,10 @@ export async function deleteModel(modelId: string) {
   refreshCache()
 }
 
-/** Stream a chat completion from whichever local provider is active. Returns the full text. */
+/** Stream a chat completion from the model running in this browser. Returns the full text. */
 export async function chat(messages: Msg[], onToken?: (full: string) => void, opts: { signal?: AbortSignal; temperature?: number; maxTokens?: number } = {}): Promise<string> {
-  const s = useStore.getState().settings
-  const which = engineInUse()
   useAI.setState({ busy: true })
   try {
-    if (which === 'mlx') {
-      const r = await fetch(`${base.mlx}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages,
-          stream: true,
-          temperature: opts.temperature ?? 0.6,
-          max_tokens: opts.maxTokens ?? 1024,
-        }),
-        signal: opts.signal,
-      })
-      if (!r.ok || !r.body) throw new Error('The assistant on your Mac didn’t answer. Try again.')
-      const reader = r.body.getReader()
-      const dec = new TextDecoder()
-      let full = ''
-      let buf = ''
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += dec.decode(value, { stream: true })
-        const lines = buf.split('\n')
-        buf = lines.pop()!
-        for (const l of lines) {
-          const d = l.replace(/^data:\s*/, '').trim()
-          if (!d || d === '[DONE]') continue
-          try {
-            full += JSON.parse(d).choices?.[0]?.delta?.content ?? ''
-          } catch {
-            /* partial line */
-          }
-          onToken?.(clean(full))
-        }
-      }
-      return clean(full)
-    }
-    if (which === 'ollama' && s.ollamaModel) {
-      const r = await fetch(`${base.ollama}/api/chat`, {
-        method: 'POST',
-        body: JSON.stringify({
-          model: s.ollamaModel,
-          messages,
-          stream: true,
-          options: {
-            temperature: opts.temperature ?? 0.6,
-            num_predict: opts.maxTokens ?? 1024,
-          },
-        }),
-        signal: opts.signal,
-      })
-      const reader = r.body!.getReader()
-      const dec = new TextDecoder()
-      let full = ''
-      let buf = ''
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += dec.decode(value, { stream: true })
-        const lines = buf.split('\n')
-        buf = lines.pop()!
-        for (const l of lines) {
-          if (!l.trim()) continue
-          const j = JSON.parse(l)
-          full += j.message?.content ?? ''
-          onToken?.(clean(full))
-        }
-      }
-      return clean(full)
-    }
     if (loadedEngine === 'onnx') {
       const direct = useAI.getState().loadedModel?.startsWith('onnx:Qwen3')
       let full = ''

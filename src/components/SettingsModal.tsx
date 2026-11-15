@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Check, Monitor, Moon, Sun, Trash2, X } from 'lucide-react'
 import { useStore } from '../store'
-import { chooseModel, deleteModel, detectMLX, detectOllama, fits, lookLocally, mayLookLocally, modelForTier, models, refreshCache, resolvedModel, ollamaHint, useAI } from '../ai/llm'
+import { chooseModel, deleteModel, fits, modelForTier, models, refreshCache, resolvedModel, useAI } from '../ai/llm'
 import { STT_MODELS, sttModel } from '../ai/stt'
 import { StorageSettings } from './StorageSettings'
 import { openLink } from './LinkDialog'
@@ -15,7 +15,7 @@ export function SettingsModal() {
   const set = useStore((s) => s.setSettings)
   const ai = useAI()
   useEffect(() => {
-    if (open) (refreshCache(), detectOllama(), detectMLX())
+    if (open) refreshCache()
   }, [open])
   const close = () => useStore.getState().setUI({ settingsOpen: false })
 
@@ -74,10 +74,10 @@ export function SettingsModal() {
                 <div className="tiers">
                   {(['fast', 'default', 'enhanced'] as const).map((t) => {
                     const m = modelForTier(t)
-                    const on = settings.provider !== 'mlx' && settings.provider !== 'ollama' && resolvedModel() === m.id
+                    const on = resolvedModel() === m.id
                     const loadingThis = ai.status === 'loading' && resolvedModel() === m.id
                     return (
-                      <button key={t} className={`tier ${on ? 'on' : ''}`} onClick={() => chooseModel({ kind: 'webllm', id: m.id })} disabled={t === 'enhanced' && !fits(m)}>
+                      <button key={t} className={`tier ${on ? 'on' : ''}`} onClick={() => chooseModel(m.id)} disabled={t === 'enhanced' && !fits(m)}>
                         <b>{t === 'fast' ? 'Fast' : t === 'default' ? 'Default' : 'Enhanced'}</b>
                         <small>{m.name}</small>
                         {loadingThis && (
@@ -93,21 +93,6 @@ export function SettingsModal() {
                     )
                   })}
                 </div>
-                {(ai.mlx || !!ai.ollama?.length) && (
-                  <div className="model-list" style={{ marginTop: 10 }}>
-                    {ai.mlx && <ModelRow name="Your Mac’s model" note="Already running on this computer" on={settings.provider === 'mlx'} onPick={() => chooseModel({ kind: 'mlx' })} />}
-                    {ai.ollama?.map((n) => (
-                      <ModelRow
-                        key={n}
-                        name={n.replace(/:latest$/, '')}
-                        note="Already on this computer"
-                        on={settings.provider === 'ollama' && settings.ollamaModel === n}
-                        onPick={() => chooseModel({ kind: 'ollama', id: n })}
-                      />
-                    ))}
-                  </div>
-                )}
-                {!ai.mlx && !ai.ollama?.length && <LocalEngines />}
                 {models().some((m) => m.tier === 'more' && fits(m)) && (
                   <details className="advanced">
                     <summary>More models</summary>
@@ -119,9 +104,9 @@ export function SettingsModal() {
                             key={m.id}
                             name={m.name}
                             note={m.note}
-                            on={settings.provider !== 'mlx' && settings.provider !== 'ollama' && resolvedModel() === m.id}
+                            on={resolvedModel() === m.id}
                             progress={ai.status === 'loading' && resolvedModel() === m.id ? ai.progress : undefined}
-                            onPick={() => chooseModel({ kind: 'webllm', id: m.id })}
+                            onPick={() => chooseModel(m.id)}
                             onRemove={ai.cached[m.id] ? () => deleteModel(m.id) : undefined}
                           />
                         ))}
@@ -153,30 +138,6 @@ export function SettingsModal() {
 }
 
 /** One choice in the model list: pick it and it's used (downloading first if it has to). */
-/**
- * Ollama or MLX already running on this computer. On the hosted site the browser may ask before the page can reach
- * them, so nothing is looked for until this is clicked; after that it's checked whenever Settings opens.
- */
-function LocalEngines() {
-  const [state, setState] = useState<'idle' | 'looking' | 'none'>(mayLookLocally() ? 'none' : 'idle')
-  return (
-    <div className="local-engines">
-      <button className="btn sm" disabled={state === 'looking'} onClick={async () => (setState('looking'), setState((await lookLocally()) ? 'idle' : 'none'))}>
-        {state === 'looking' ? 'Looking…' : state === 'none' ? 'Look again' : 'Use a model already on this computer'}
-      </button>
-      <p className="muted small">
-        {state === 'none' ? (
-          <>
-            Nothing found. Start Ollama with <code>{ollamaHint()}</code>, or run <code>mlx_lm.server</code>, then look again.
-          </>
-        ) : (
-          'Ollama or MLX. Your browser may ask to let this site reach apps on this computer.'
-        )}
-      </p>
-    </div>
-  )
-}
-
 function ModelRow({ name, note, on, progress, onPick, onRemove }: { name: string; note: string; on: boolean; progress?: number; onPick: () => void; onRemove?: () => void }) {
   return (
     <div className={`model ${on ? 'on' : ''}`} role="radio" aria-checked={on} tabIndex={0} onClick={onPick} onKeyDown={(e) => e.key === 'Enter' && onPick()}>

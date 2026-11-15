@@ -23,7 +23,7 @@ export function AIPanel() {
   const activeId = useStore((s) => s.activeId)
   const active = useStore((s) => s.items.find((i) => i.id === s.activeId && !i.deletedAt))
   const rules = useRuleSuggestions()
-  // Opening the assistant is the cue to get an engine ready: the Mac's, Ollama, or (once) the in-browser one.
+  // Opening the assistant is the cue to get the in-browser model ready (downloaded once, then cached).
   useEffect(() => {
     void ensureAI()
   }, [])
