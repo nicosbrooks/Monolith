@@ -76,8 +76,9 @@ export interface Settings {
   recordingQuality?: 'voice' | 'high'
   /** Settings › Assistant › Understand meaning (System 1, EmbeddingGemma). Unset means on. */
   system1?: boolean
-  /** How long the general model (System 2) stays in memory after its last answer. Unset means 10 minutes. */
-  keepLoaded?: '2m' | '10m' | 'always'
+  /** How long the general model (System 2) stays in memory. Unset means auto: learned from use, loaded ahead when
+   *  System 1 sees a question coming, released when the tab is hidden. */
+  keepLoaded?: 'auto' | '2m' | '10m' | 'always'
 }
 
 interface State {

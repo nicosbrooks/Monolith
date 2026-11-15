@@ -178,12 +178,13 @@ function System1Settings() {
         <div className="seg">
           {(
             [
+              ['auto', 'Auto'],
               ['2m', '2 min'],
               ['10m', '10 min'],
               ['always', 'Always'],
             ] as const
           ).map(([k, label]) => (
-            <button key={k} title={k === 'always' ? 'Fastest answers; holds the most memory' : 'Frees memory when you’re not asking; reloads in seconds'} className={(settings.keepLoaded ?? '10m') === k ? 'on' : ''} onClick={() => (set({ keepLoaded: k }), void import('../ai/llm').then((m) => m.scheduleRelease()))}>
+            <button key={k} title={k === 'auto' ? 'Loads ahead when a question is coming, keeps it as long as you tend to need it, frees it when you leave the tab' : k === 'always' ? 'Fastest answers; holds the most memory' : 'Frees memory when you’re not asking; reloads in seconds'} className={(settings.keepLoaded ?? 'auto') === k ? 'on' : ''} onClick={() => (set({ keepLoaded: k }), void import('../ai/llm').then((m) => m.scheduleRelease()))}>
               {label}
             </button>
           ))}

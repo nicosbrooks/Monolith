@@ -92,6 +92,20 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
     setQ('')
     input.current?.blur()
   }
+  // System 1 reads the request as it's typed: a question loads the general model ahead (if it's downloaded), so the
+  // answer starts sooner; adding an event or searching never wakes it. Without System 1, a question mark is the cue.
+  useEffect(() => {
+    const t = q.trim()
+    if (t.length < 6 || isEvent) return
+    let live = true
+    const timer = setTimeout(async () => {
+      const [{ intent }, llm] = await Promise.all([import('../ai/system1'), import('../ai/llm')])
+      const read = await intent(t)
+      if (live && (read ? read.kind === 'ask' && read.confidence > 0.03 : /\?\s*$/.test(t))) llm.warmUp()
+    }, 350)
+    return () => ((live = false), clearTimeout(timer))
+  }, [q, isEvent])
+
   const submit = () => {
     if (!text) return
     if (isEvent) addEvent()

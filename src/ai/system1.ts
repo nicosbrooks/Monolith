@@ -186,6 +186,55 @@ export async function related(question: string, k = 6, ms = 300): Promise<{ id: 
   return best.sort((a, b) => b.score - a.score).slice(0, k)
 }
 
+// ─── What someone is asking for ────────────────────────────────────────────
+// Labelled examples; a request is the kind whose examples it's closest to in meaning. Only "ask" needs the general
+// model, so it's the signal to load it ahead of time (see llm.ts warmUp), while "add" and "find" never wake it.
+
+export type Intent = 'ask' | 'add' | 'find'
+const EXAMPLES: Record<Intent, string[]> = {
+  ask: [
+    'what should I focus on today?', 'summarize my notes on this', 'explain this concept to me', 'help me write the introduction',
+    'what did the lecture say about it?', 'make flashcards from this', 'how do I solve this problem', 'compare these two ideas',
+    'what am I missing in this essay', 'rewrite this paragraph more clearly',
+  ],
+  add: [
+    'lunch with Sam tomorrow at noon', 'dentist on Friday at 3pm', 'remind me to call mom tonight', 'essay due next Monday',
+    'add study session Thursday 4-6', 'meeting with advisor at 10am', 'gym every morning', 'new task: buy groceries',
+  ],
+  find: [
+    'chemistry notes', 'the doc about eigenvalues', 'open my essay draft', 'last week’s recording', 'grocery list',
+    'find the syllabus', 'linear algebra week 3', 'meeting notes from Tuesday',
+  ],
+}
+const classify = (t: string) => `task: classification | query: ${t}`
+let prototypes: { kind: Intent; v: Float32Array }[] | null = null
+
+/**
+ * Which kind of request `text` is, with how sure (the gap between the best and next kind, 0…1). Undefined when System
+ * 1 isn't ready or slower than `ms`.
+ */
+export async function intent(text: string, ms = 250): Promise<{ kind: Intent; confidence: number } | undefined> {
+  if (!system1Ready() || text.trim().length < 4) return undefined
+  const run = async () => {
+    if (!prototypes) {
+      const all = (Object.keys(EXAMPLES) as Intent[]).flatMap((kind) => EXAMPLES[kind].map((t) => ({ kind, t })))
+      const vecs = await embedder!.embed(all.map((x) => classify(x.t)))
+      prototypes = all.map((x, i) => ({ kind: x.kind, v: vecs.slice(i * DIMS, (i + 1) * DIMS) }))
+    }
+    const qv = await embedder!.embed([classify(text)])
+    const best: Record<Intent, number> = { ask: -1, add: -1, find: -1 }
+    for (const p of prototypes) {
+      let sum = 0
+      for (let i = 0; i < DIMS; i++) sum += p.v[i] * qv[i]
+      best[p.kind] = Math.max(best[p.kind], sum)
+    }
+    const ranked = (Object.entries(best) as [Intent, number][]).sort((a, b) => b[1] - a[1])
+    return { kind: ranked[0][0], confidence: ranked[0][1] - ranked[1][1] }
+  }
+  const timeout = new Promise<undefined>((r) => setTimeout(() => r(undefined), ms))
+  return Promise.race([run().catch(() => undefined), timeout])
+}
+
 // ─── Starting and stopping ─────────────────────────────────────────────────
 
 let unsubscribe: (() => void) | null = null
@@ -225,6 +274,7 @@ export function stopSystem1() {
   worker?.terminate()
   worker = null
   embedder = null
+  prototypes = null
   index.clear()
   useSystem1.setState({ status: 'off', progress: 0 })
 }

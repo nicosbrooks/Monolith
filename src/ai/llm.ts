@@ -611,12 +611,46 @@ export async function chat(messages: Msg[] | ((window: number, reserve: number) 
 // again from the browser's cache (seconds, no download). System 1 stays: it's small, and keeps search and context
 // quick in the meantime.
 const KEEP_MS = { '2m': 2 * 60_000, '10m': 10 * 60_000 } as const
+/** When the last few questions were asked: Auto keeps the model about as long as the gaps between them. */
+const asked: number[] = []
+export function noteQuestion(at = Date.now()) {
+  asked.push(at)
+  if (asked.length > 8) asked.shift()
+}
+/**
+ * Auto: about two and a half times the typical gap between recent questions, between 90 seconds and 12 minutes;
+ * 4 minutes until there's a pattern. Someone asking every minute keeps it; someone who asked once an hour ago doesn't.
+ */
+export function keepAliveMs(times: number[] = asked) {
+  if (times.length < 3) return 4 * 60_000
+  const gaps = times.slice(1).map((t, i) => t - times[i]).sort((a, b) => a - b)
+  const median = gaps[Math.floor(gaps.length / 2)]
+  return Math.min(12 * 60_000, Math.max(90_000, median * 2.5))
+}
 let releaseTimer = 0
 export function scheduleRelease() {
   clearTimeout(releaseTimer)
-  const keep = useStore.getState().settings.keepLoaded ?? '10m'
+  const keep = useStore.getState().settings.keepLoaded ?? 'auto'
   if (keep === 'always' || typeof window === 'undefined') return
-  releaseTimer = window.setTimeout(() => void releaseModel(), KEEP_MS[keep])
+  releaseTimer = window.setTimeout(() => void releaseModel(), keep === 'auto' ? keepAliveMs() : KEEP_MS[keep])
+}
+// Auto also lets go once the tab has been in the background for a minute: the memory goes back to whatever is in front.
+if (typeof document !== 'undefined') {
+  let hidden = 0
+  document.addEventListener('visibilitychange', () => {
+    clearTimeout(hidden)
+    if (document.visibilityState === 'hidden' && (useStore.getState().settings.keepLoaded ?? 'auto') === 'auto') hidden = window.setTimeout(() => void releaseModel(), 60_000)
+  })
+}
+/**
+ * Load the general model ahead of a question (System 1 saw one coming, or the assistant opened). Only a model that's
+ * already downloaded: a first download waits until someone actually asks.
+ */
+export function warmUp() {
+  if (isReady() || loading) return
+  const id = resolvedModel()
+  if (!useAI.getState().cached[id]) return
+  void loadModel(id).then(scheduleRelease)
 }
 /** Unload the general model now, unless it's busy (then try again later). */
 export async function releaseModel() {
@@ -732,6 +766,7 @@ function clean(t: string) {
 let queue: Promise<unknown> = Promise.resolve()
 let behind: AbortController | null = null
 export function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+  noteQuestion() // someone asked (background work goes through background(), not here)
   behind?.abort()
   behind = null
   const p = queue.then(fn, fn)
