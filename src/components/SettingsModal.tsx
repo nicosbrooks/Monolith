@@ -93,12 +93,12 @@ export function SettingsModal() {
                     )
                   })}
                 </div>
-                {models().some((m) => m.tier === 'more' && fits(m)) && (
+                {models().some((m) => m.tier === 'more' && !m.hidden && fits(m)) && (
                   <details className="advanced">
                     <summary>More models</summary>
                     <div className="model-list">
                       {models()
-                        .filter((m) => m.tier === 'more' && fits(m))
+                        .filter((m) => m.tier === 'more' && !m.hidden && fits(m))
                         .map((m) => (
                           <ModelRow
                             key={m.id}

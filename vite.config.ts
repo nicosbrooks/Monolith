@@ -11,7 +11,7 @@ export default defineConfig(({ mode, command }) => {
   return {
     plugins: [react(), authApi(env), relay(), ics()],
     worker: { format: 'es' },
-    optimizeDeps: { exclude: ['@huggingface/transformers', '@mlc-ai/web-llm'] },
+    optimizeDeps: { exclude: ['@huggingface/transformers', '@mlc-ai/web-llm', '@litert-lm/core'] },
     // allowedHosts lets `tailscale serve` (https://<machine>.<tailnet>.ts.net) reach the dev server
     server: { port: 5199, allowedHosts: ['.ts.net'] },
     preview: { port: 5199, allowedHosts: ['.ts.net'] },

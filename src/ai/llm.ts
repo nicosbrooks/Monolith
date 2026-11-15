@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { MLCEngineInterface } from '@mlc-ai/web-llm'
 import { useStore } from '../store'
 import { APP_NAME } from '../brand'
+import { cachedModel, removeModel } from './litert-cache'
 
 export type Tier = 'fast' | 'default' | 'enhanced' | 'more'
 export interface ModelInfo {
@@ -13,14 +14,22 @@ export interface ModelInfo {
   needMB: number
   /** Set for Transformers.js models: the Hugging Face repo and the weights to use on GPU and on CPU. */
   onnx?: { repo: string; gpu: string; cpu?: string }
+  /** Set for LiteRT-LM models (Gemma): the Hugging Face repo of the web build. */
+  litert?: { repo: string }
+  /** What runs instead if this model's engine can't start on this device. */
+  fallback?: string
+  /** Only a fallback: never listed in Settings. */
+  hidden?: boolean
 }
 
 /**
- * Open models that run in a browser tab, all 2B or smaller so they download quickly and answer fast. Downloaded once,
- * then cached offline. All three run in WebLLM: compiled WebGPU kernels, long prompts read in chunks, and each chat's
- * shared start kept in memory between turns, so follow-ups don't re-read it. (LFM 3, the iPhone's Default, is left out
- * here: in the browser it only runs through Transformers.js, which reads a prompt in one pass. Prompts of ~900 tokens
- * crash Safari's GPU process that way, and every turn re-reads the whole chat.)
+ * Open models that run in a browser tab. Downloaded once, then cached offline.
+ * - Gemma 4 (Default, Enhanced) runs in Google's LiteRT-LM, the fastest web runtime for it: Google reports ~73 tokens/s
+ *   writing and ~4,800 tokens/s reading on an M4 Max for E2B, and a conversation keeps what it has read between turns.
+ * - Qwen 3.5 0.8B (Fast) runs in WebLLM: LiteRT-LM has no model that small.
+ * - If LiteRT-LM can't start on a device, each Gemma tier falls back to a WebLLM model (hidden from Settings).
+ * LFM 3, the iPhone's Default, isn't used here: in the browser it only runs through Transformers.js, which reads a
+ * prompt in one pass (a ~900-token pass crashes Safari's GPU process) and re-reads the whole chat every turn.
  * Same tier names as the iPhone and iPad app.
  */
 export const MODELS: ModelInfo[] = [
@@ -32,21 +41,27 @@ export const MODELS: ModelInfo[] = [
     needMB: 1630,
   },
   {
-    id: 'Qwen3.5-2B-q4f16_1-MLC',
-    name: 'Qwen 3.5 2B',
+    id: 'litert:gemma-4-E2B',
+    name: 'Gemma 4 E2B',
     tier: 'default',
-    note: 'Quick and capable',
-    needMB: 2250,
+    note: 'Quick and capable, about 2 GB',
+    needMB: 2600,
+    litert: { repo: 'litert-community/gemma-4-E2B-it-litert-lm' },
+    fallback: 'Qwen3.5-2B-q4f16_1-MLC',
   },
   {
-    id: 'gemma-4-E2B-it-q4f16_1-MLC',
-    name: 'Gemma 4 E2B',
+    id: 'litert:gemma-4-E4B',
+    name: 'Gemma 4 E4B',
     tier: 'enhanced',
     note: 'Sharpest writing and reasoning',
-    needMB: 3390,
+    needMB: 4400,
+    litert: { repo: 'litert-community/gemma-4-E4B-it-litert-lm' },
+    fallback: 'gemma-4-E2B-it-q4f16_1-MLC',
   },
+  { id: 'Qwen3.5-2B-q4f16_1-MLC', name: 'Qwen 3.5 2B', tier: 'more', note: 'Quick and capable', needMB: 2250, hidden: true },
+  { id: 'gemma-4-E2B-it-q4f16_1-MLC', name: 'Gemma 4 E2B', tier: 'more', note: 'Sharpest writing and reasoning', needMB: 3390, hidden: true },
 ]
-/** Default where Qwen 3.5 2B won't fit. */
+/** Default where Gemma 4 E2B won't fit. */
 const FALLBACK_DEFAULT = 'Qwen3.5-0.8B-q4f16_1-MLC'
 
 /**
@@ -131,8 +146,8 @@ export function detectGPU() {
 const build = (id: string) => (gpu.f16 === false ? id.replace('q4f16_1', 'q4f32_1') : id)
 /** Set when WebLLM failed in this tab; the Transformers.js engine takes over. */
 let webllmFailed = false
-/** Set when a Transformers.js model failed where WebLLM works; Default then uses WebLLM's lighter model. */
-let onnxFailed = false
+/** Set when LiteRT-LM couldn't start in this tab; the Gemma tiers use their WebLLM fallbacks. */
+let litertFailed = false
 
 /** The model behind a tier on this device. Default steps down to a lighter model where it won't fit or can't run. */
 export function modelForTier(t: Exclude<Tier, 'more'>): ModelInfo {
@@ -149,8 +164,9 @@ export function modelForTier(t: Exclude<Tier, 'more'>): ModelInfo {
             needMB: Infinity,
           })
         : list[0]
-  if (t === 'default' && (!fits(m) || (m.onnx && onnxFailed && browserEngine() === 'webllm'))) return fallback()
-  return m
+  const usable = m.litert && litertFailed ? (findModel(m.fallback!) ?? m) : m
+  if (t === 'default' && !fits(usable)) return fallback()
+  return usable
 }
 
 export type Msg = { role: 'system' | 'user' | 'assistant'; content: string }
@@ -180,8 +196,9 @@ export const hasWebGPU = () => typeof navigator !== 'undefined' && 'gpu' in navi
 let engine: MLCEngineInterface | null = null
 let webllmWorker: Worker | null = null
 let onnx: Worker | null = null
+let litert: Worker | null = null
 /** Which engine holds the loaded model. */
-let loadedEngine: 'webllm' | 'onnx' | null = null
+let loadedEngine: 'webllm' | 'onnx' | 'litert' | null = null
 let loading: Promise<void> | null = null
 
 /** Transformers.js keeps downloads in the Cache API, one entry per file URL. */
@@ -207,8 +224,7 @@ export async function refreshCache() {
       return
     }
     const { hasModelInCache } = await import('@mlc-ai/web-llm')
-    const have = await onnxCached(MODELS.filter((m) => m.onnx).map((m) => m.onnx!.repo))
-    const entries = await Promise.all(MODELS.map(async (m) => [m.id, m.onnx ? have.has(m.onnx.repo) : await hasModelInCache(build(m.id))] as const))
+    const entries = await Promise.all(MODELS.map(async (m) => [m.id, m.litert ? !!(await cachedModel(m.litert.repo)) : await hasModelInCache(build(m.id))] as const))
     useAI.setState({ cached: Object.fromEntries(entries) })
   } catch {
     /* ignore */
@@ -272,17 +288,22 @@ export async function loadModel(modelId?: string) {
     const tier = findModel(id)?.tier
     return void (await loadOnnx(ONNX_MODELS.some((m) => m.id === id) ? id : modelForTier(tier && tier !== 'more' ? tier : 'default').id, true))
   }
-  // A model WebLLM doesn't have runs in the other engine; if it can't start here, Default uses WebLLM's lighter one.
-  if (findModel(id)?.onnx) {
-    await unloadWebLLM()
-    if (await loadOnnx(id, false)) return
-    if (isNetwork(lastLoadError)) return void useAI.setState({ status: 'error', error: NO_DOWNLOAD })
-    onnxFailed = true
-    return loadModel(FALLBACK_DEFAULT)
+  // Gemma runs in LiteRT-LM; if that can't start on this device, the tier's WebLLM model takes over.
+  const m = findModel(id)
+  if (m?.litert) {
+    if (!litertFailed) {
+      await unloadWebLLM()
+      unloadOnnx()
+      if (await loadLitert(m, false)) return
+      if (isNetwork(lastLoadError)) return void useAI.setState({ status: 'error', error: NO_DOWNLOAD })
+      litertFailed = true
+    }
+    return loadModel(m.fallback)
   }
   if (useAI.getState().loadedModel === id && engine) return
   // Only one model in memory at a time.
   if (loadedEngine === 'onnx') unloadOnnx()
+  if (loadedEngine === 'litert') await unloadLitert()
   useAI.setState({
     status: 'loading',
     progress: 0,
@@ -335,6 +356,15 @@ async function unloadWebLLM() {
     useAI.setState({ status: 'idle', loadedModel: null })
   }
 }
+async function unloadLitert() {
+  if (!litert) return
+  litert.terminate()
+  litert = null
+  if (loadedEngine === 'litert') {
+    loadedEngine = null
+    useAI.setState({ status: 'idle', loadedModel: null })
+  }
+}
 function unloadOnnx() {
   onnx?.terminate()
   onnx = null
@@ -348,7 +378,7 @@ function unloadOnnx() {
 let lastLoadError: unknown = null
 const NO_DOWNLOAD = 'The model couldn’t download. Check your connection and try again.'
 /** A download that didn't arrive says nothing about whether the model runs here, so it never triggers a fallback. */
-const isNetwork = (e: unknown) => (typeof navigator !== 'undefined' && !navigator.onLine) || /failed to fetch|networkerror|network error|load failed|err_|fetch failed|timed? ?out/i.test(message(e))
+const isNetwork = (e: unknown) => (typeof navigator !== 'undefined' && !navigator.onLine) || /failed to fetch|networkerror|network error|load failed|err_|fetch failed|timed? ?out|cut short|couldn’t download/i.test(message(e))
 
 /** Errors arrive as Error objects, strings, or nothing at all; always show something readable. */
 const message = (e: unknown) => (typeof e === 'string' ? e : (e as Error)?.message) || 'The assistant couldn’t start.'
@@ -379,6 +409,75 @@ function onnxCall(msg: object, on: (m: OnnxOut) => boolean | void): Promise<void
     w.addEventListener('message', h)
     w.postMessage(msg)
   })
+}
+
+type LitertOut = OnnxOut | { type: 'unloaded' }
+/** Send one request to the LiteRT-LM worker and follow its replies until `on` says it's finished. */
+function litertCall(msg: object, on: (m: LitertOut) => boolean | void): Promise<void> {
+  litert ??= new Worker(new URL('./litert.worker.ts', import.meta.url), { type: 'module' })
+  const w = litert
+  return new Promise((resolve, reject) => {
+    const h = (e: MessageEvent<LitertOut>) => {
+      if (e.data.type === 'error') {
+        w.removeEventListener('message', h)
+        return reject(new Error(e.data.message))
+      }
+      if (on(e.data)) {
+        w.removeEventListener('message', h)
+        resolve()
+      }
+    }
+    w.addEventListener('message', h)
+    w.postMessage(msg)
+  })
+}
+
+/** Tokens a LiteRT-LM conversation can hold; chats are fitted to it like WebLLM's. */
+const LITERT_WINDOW = 4096
+
+/** Load a Gemma model in LiteRT-LM. False if it couldn't start; `showError` puts that on screen. */
+async function loadLitert(m: ModelInfo, showError: boolean): Promise<boolean> {
+  while (loading) await loading
+  if (useAI.getState().loadedModel === m.id && loadedEngine === 'litert') return true
+  useAI.setState({ status: 'loading', progress: 0, progressText: 'Starting…', error: null })
+  // A 2 GB download shouldn't be cleared when the browser runs short of space.
+  void navigator.storage?.persist?.().catch(() => {})
+  let ok = false
+  loading = (async () => {
+    try {
+      await litertCall({ type: 'load', repo: m.litert!.repo, maxTokens: LITERT_WINDOW }, (r) => {
+        if (r.type === 'progress') useAI.setState({ progress: Math.min(r.progress, 0.97), progressText: 'Downloading…' })
+        if (r.type === 'warming') useAI.setState({ progress: 0.98, progressText: 'Almost ready…' })
+        return r.type === 'ready'
+      })
+      loadedEngine = 'litert'
+      ok = true
+      useAI.setState({ status: 'ready', loadedModel: m.id, progress: 1 })
+      refreshCache()
+      void clearFallbacks()
+    } catch (e) {
+      lastLoadError = e
+      await unloadLitert()
+      // The stored file itself is bad (damaged on disk, or a broken download): remove it so the next try downloads it again.
+      if (/magic number|litertlm header|corrupt|truncated/i.test(message(e))) await removeModel(m.litert!.repo).catch(() => {})
+      useAI.setState(showError ? { status: 'error', error: isNetwork(e) ? NO_DOWNLOAD : message(e) } : { status: 'idle' })
+    } finally {
+      loading = null
+    }
+  })()
+  await loading
+  return ok
+}
+
+/** Once Gemma runs in LiteRT-LM here, its WebLLM fallbacks aren't needed: free their downloads (over 1 GB each). */
+async function clearFallbacks() {
+  try {
+    const { deleteModelAllInfoInCache, hasModelInCache } = await import('@mlc-ai/web-llm')
+    for (const f of MODELS.filter((x) => x.hidden))
+      for (const b of [f.id, f.id.replace('q4f16_1', 'q4f32_1')]) if (await hasModelInCache(b).catch(() => false)) await deleteModelAllInfoInCache(b)
+  } catch {
+    /* nothing cached */
+  }
 }
 
 /** Load a Transformers.js model. False if it couldn't start; `showError` puts that on screen (no fallback left). */
@@ -427,6 +526,12 @@ async function loadOnnx(modelId: string, showError: boolean): Promise<boolean> {
 }
 
 export async function deleteModel(modelId: string) {
+  const lm = MODELS.find((m) => m.id === modelId && m.litert)
+  if (lm) {
+    if (useAI.getState().loadedModel === modelId) await unloadLitert()
+    await removeModel(lm.litert!.repo)
+    return refreshCache()
+  }
   const o = ONNX_MODELS.find((m) => m.id === modelId)
   if (o) {
     if (useAI.getState().loadedModel === modelId) {
@@ -460,7 +565,7 @@ export async function deleteModel(modelId: string) {
 const tokensOf = (t: string) => Math.ceil(t.length / 3.2) + 4
 /** Tokens a model can see at once. WebLLM's builds of all three tiers use 4,096. The other engine reads a prompt in one
  *  pass, which costs memory in proportion to its length, so it's kept shorter there. */
-const windowOf = () => (loadedEngine === 'onnx' ? 2048 : 4096)
+const windowOf = () => (loadedEngine === 'onnx' ? 2048 : loadedEngine === 'litert' ? LITERT_WINDOW : 4096)
 
 /**
  * Fit a chat inside the model's window, leaving room for the answer. The system message and the newest question always
@@ -526,11 +631,34 @@ async function resetEngines() {
   engine = null
   onnx?.terminate()
   onnx = null
+  litert?.terminate()
+  litert = null
   loadedEngine = null
   useAI.setState({ status: 'idle', loadedModel: null })
 }
 
 async function generate(messages: Msg[], onToken: ((full: string) => void) | undefined, opts: { signal?: AbortSignal; temperature?: number; maxTokens?: number }): Promise<string> {
+  if (loadedEngine === 'litert') {
+    let full = ''
+    const stop = () => litert?.postMessage({ type: 'stop' })
+    opts.signal?.addEventListener('abort', stop)
+    try {
+      await litertCall({ type: 'chat', messages, maxTokens: opts.maxTokens ?? 1024, temperature: opts.temperature ?? 0.6 }, (r) => {
+        if (r.type === 'token' || r.type === 'done') {
+          full = r.full
+          onToken?.(clean(full))
+        }
+        return r.type === 'done'
+      })
+    } catch (e) {
+      // Stopping mid-answer ends the stream with an error; what was written so far is the answer.
+      if (opts.signal?.aborted) return clean(full)
+      throw e
+    } finally {
+      opts.signal?.removeEventListener('abort', stop)
+    }
+    return clean(full)
+  }
   if (loadedEngine === 'onnx') {
     const direct = useAI.getState().loadedModel?.startsWith('onnx:Qwen3')
     let full = ''

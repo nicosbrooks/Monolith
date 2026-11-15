@@ -8,8 +8,28 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k.startsWith('app-')).map((k) => caches.delete(k)))).then(() => self.clients.claim()))
 })
+// LiteRT-LM's runtime (about 25–37 MB of WebAssembly) comes from a CDN at an exact version, so it never changes:
+// keep it, so the Gemma models still start without a network. Models themselves are stored by the app (OPFS).
+const RUNTIME = 'litert-runtime-v1'
+const RUNTIME_URL = /^https:\/\/cdn\.jsdelivr\.net\/npm\/@litert-lm\/core@\d[^/]*\/wasm\//
+
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url)
+  if (e.request.method === 'GET' && RUNTIME_URL.test(e.request.url)) {
+    e.respondWith(
+      caches.open(RUNTIME).then((c) =>
+        c.match(e.request).then(
+          (hit) =>
+            hit ||
+            fetch(e.request).then((r) => {
+              if (r.ok) c.put(e.request, r.clone())
+              return r
+            }),
+        ),
+      ),
+    )
+    return
+  }
   if (e.request.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/oauth/')) return
   // Pages: network first so updates arrive, cached shell when offline.
   if (e.request.mode === 'navigate') {
