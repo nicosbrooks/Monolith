@@ -109,6 +109,8 @@ export default function App() {
   // global shortcuts
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
+      // Setup and the lock screen come first: no shortcut opens anything underneath them.
+      if (document.querySelector('.su')) return
       const mod = e.metaKey || e.ctrlKey
       const s = useStore.getState()
       if (mod && e.key === 'k' && !(e.target as HTMLElement).closest('.ProseMirror')) (e.preventDefault(), s.setUI({ paletteOpen: !s.paletteOpen }))

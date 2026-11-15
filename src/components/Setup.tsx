@@ -6,6 +6,19 @@ import { APP_NAME } from '../brand'
 import { hasFolderAccess } from '../storage/folder'
 import { connectFolder, folderAccess, rewriteSealedFiles } from '../storage/sync'
 import { openBackup } from '../lib/backup'
+
+/**
+ * While setup or the lock screen is up, the app behind it is `inert`: no Tab, clicks or screen reader can reach it.
+ * The backup dialog stays usable (setup links to "Restore from a backup").
+ */
+function useInertBehind(ref: React.RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const me = ref.current
+    const behind = [...(me?.parentElement?.children ?? [])].filter((el) => el !== me && !el.querySelector('.bk') && !el.classList.contains('bk-overlay') && !el.classList.contains('toaster'))
+    behind.forEach((el) => el.setAttribute('inert', ''))
+    return () => behind.forEach((el) => el.removeAttribute('inert'))
+  }, [ref])
+}
 import { clearPasscode, PASSCODE_MIN, setPasscode, unlock, useVault } from '../lib/vault'
 
 type Where = 'folder' | 'browser'
@@ -31,6 +44,8 @@ export function Setup() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
+  const root = useRef<HTMLDivElement>(null)
+  useInertBehind(root)
   useEffect(() => nameRef.current?.focus(), [])
 
   const hadLock = vault === 'open'
@@ -77,7 +92,7 @@ export function Setup() {
   const primary = needsPick ? 'Choose folder…' : again ? 'Save' : `Start using ${APP_NAME}`
 
   return (
-    <div className="su" role="dialog" aria-modal="true" aria-labelledby="su-title">
+    <div className="su" role="dialog" aria-modal="true" aria-labelledby="su-title" ref={root}>
       <div className="su-card">
         <div className="su-top">
           {step > 0 ? (
@@ -160,11 +175,13 @@ export function Setup() {
 
 /** Shown on open while a passcode is set. Nothing is read from storage until it's entered. */
 export function Unlock() {
+  const root = useRef<HTMLDivElement>(null)
+  useInertBehind(root)
   const [pass, setPass] = useState('')
   const [wrong, setWrong] = useState(false)
   const [busy, setBusy] = useState(false)
   return (
-    <div className="su" role="dialog" aria-modal="true" aria-labelledby="su-title">
+    <div className="su" role="dialog" aria-modal="true" aria-labelledby="su-title" ref={root}>
       <form className="su-card su-unlock" onSubmit={async (e) => {
         e.preventDefault()
         if (!pass || busy) return

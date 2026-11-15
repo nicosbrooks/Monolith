@@ -201,7 +201,8 @@ export function DocView({ item }: { item: Item }) {
                 placeholder="Untitled"
                 onChange={(e) => st.updateItem(item.id, { title: e.target.value.replace(/\n/g, '') })}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === 'ArrowDown') (e.preventDefault(), ed?.commands.focus('start'))
+                  // Focus the body now, not on the next frame (Tiptap's focus waits one), or fast typing after Enter lands in the title.
+                  if (e.key === 'Enter' || e.key === 'ArrowDown') (e.preventDefault(), ed?.view.focus(), ed?.commands.focus('start'))
                 }}
               />
             </div>

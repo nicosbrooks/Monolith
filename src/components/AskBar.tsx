@@ -26,7 +26,7 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
     if (section === 'calendar')
       return {
         hint: 'Add an event or ask about your schedule',
-        chips: ['What’s on this week?', 'Plan my day', 'Find a free hour tomorrow'],
+        chips: ['What’s on this week?', 'What’s left today?', 'Find a free hour tomorrow'],
       }
     if (page?.kind === 'lecture')
       return {

@@ -12,6 +12,7 @@ import { liveTranscribe, transcribe, type Live } from '../ai/stt'
 import { chat, enqueue, ensureAI, isReady, SYSTEM } from '../ai/llm'
 import { formatDuration, mdToHtml } from '../lib/util'
 import { toast } from '../components/Toast'
+import { takeRecordWhenOpened } from '../lib/recordNext'
 
 export function LectureView({ item }: { item: Item }) {
   const st = useStore.getState()
@@ -49,6 +50,11 @@ export function LectureView({ item }: { item: Item }) {
       if (url) URL.revokeObjectURL(url)
       stopAll()
     }
+  }, [item.id]) // eslint-disable-line
+
+  // Opened from a "Start recording" button: start straight away.
+  useEffect(() => {
+    if (takeRecordWhenOpened(item.id)) void start()
   }, [item.id]) // eslint-disable-line
 
   useEffect(() => {

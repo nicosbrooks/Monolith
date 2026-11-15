@@ -8,6 +8,7 @@ import { formatDuration, preview } from '../lib/util'
 import { confirmDialog, openMenu, type MenuItem } from '../components/Overlays'
 import { toast } from '../components/Toast'
 import { useLongPress, useMobile, useScrolled } from '../lib/useMobile'
+import { recordWhenOpened } from '../lib/recordNext'
 import { PhoneTitle } from '../components/Phone'
 
 function group(t: number) {
@@ -28,7 +29,10 @@ export function ItemList({ kind, trash }: { kind?: ItemKind; trash?: boolean }) 
   const [q, setQ] = useState('')
   const [grid, setGrid] = useState(false)
   const st = useStore.getState()
-  const newItem = () => st.createItem(kind!, kind === 'lecture' ? { title: `Recording · ${format(new Date(), 'MMM d')}` } : {})
+  const newItem = () => {
+    const made = st.createItem(kind!, kind === 'lecture' ? { title: `Recording · ${format(new Date(), 'MMM d')}` } : {})
+    if (kind === 'lecture') recordWhenOpened(made.id)
+  }
   const newFolder = () => {
     const name = prompt('New folder')?.trim()
     if (name) st.createFolder(name)
