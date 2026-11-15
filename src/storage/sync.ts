@@ -12,7 +12,8 @@ import { folderProvider, forgetHandle, hasPermission, loadHandle, pickFolder, sa
 import { forgetToken, githubProvider, inspectRepo, loadToken, parseRepo, saveToken } from './github'
 import { cachedToken, driveProvider, ensureRoot, signInDrive, signOutDrive } from './gdrive'
 import { googleClientId } from './accounts'
-import { FILE_HEADER, openText, sealText } from '../lib/vault'
+import { FILE_HEADER, hasKey, openText, sealText } from '../lib/vault'
+import { exportAssets, importAssets } from './assets'
 
 export type SyncStatus = 'idle' | 'syncing' | 'needs-auth' | 'error'
 export const useSync = create<{ st: Record<string, { status: SyncStatus; error?: string }> }>(() => ({ st: {} }))
@@ -254,6 +255,9 @@ export function pull(id: string): Promise<void> {
         const text = texts[k]
         if (text === null) { next.set(f.path, { ...ex!, file: { ...ex!.file!, conflict: true } }); continue }
         const parsed = fromFile(conv, text, f.path)
+        // Pictures and files linked from the doc (assets/…) come in as stored files.
+        const imported = await importAssets(id, p as FileProvider, parsed.content, f.path)
+        if (imported !== parsed.content) (parsed.content = imported), (parsed.baseHtml = imported)
         const file: FileMeta = { ...ex?.file, path: f.path, rev: f.rev, id: f.id, baseHtml: parsed.baseHtml, baseTitle: parsed.baseTitle, front: parsed.front, h1: parsed.h1, conflict: false, error: undefined, pulls: (ex?.file?.pulls || 0) + 1 }
         if (ex) reloaded.add(ex.id)
         next.set(f.path, ex
@@ -311,7 +315,7 @@ function targetPath(it: Item, taken: Set<string>): { path: string; h1: boolean; 
   return { path: f.path, h1: !!f.h1 }
 }
 
-const render = (c: Conv, it: Item, h1: boolean) => joinFile(it.file!.front, h1 ? it.title.trim() || 'Untitled' : undefined, c.htmlToMarkdown(it.content))
+const render = (c: Conv, it: Item, h1: boolean, html = it.content) => joinFile(it.file!.front, h1 ? it.title.trim() || 'Untitled' : undefined, c.htmlToMarkdown(html))
 
 /** Write all local changes for a folder or Drive source. */
 export function flush(id: string, force: string[] = []): Promise<void> {
@@ -337,12 +341,15 @@ export function flush(id: string, force: string[] = []): Promise<void> {
             continue
           }
           const { path, h1, from } = targetPath(it, taken)
+          // Pictures and files go beside the doc in assets/, linked relatively, unless the passcode lock is on: then
+          // the Markdown is encrypted and the files stay in Monolith, not written out in the clear.
+          const html = hasKey() ? it.content : await exportAssets(id, p, it.content, path)
           let e: Entry
           if (from && p.rename) {
             e = await p.rename({ path: from, rev: f.rev || '', id: f.id }, path)
-            e = await p.write(path, render(conv, it, h1), e, true)
+            e = await p.write(path, render(conv, it, h1, html), e, true)
           } else {
-            e = await p.write(path, render(conv, it, h1), from ? undefined : prev, overwrite)
+            e = await p.write(path, render(conv, it, h1, html), from ? undefined : prev, overwrite)
             if (from) await p.remove({ path: from, rev: f.rev || '', id: f.id })
           }
           taken.add(path)

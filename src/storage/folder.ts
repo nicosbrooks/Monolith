@@ -63,6 +63,16 @@ export function folderProvider(root: DH): FileProvider {
       const h = await fileFor(e.path)
       return h ? (await h.getFile()).text() : ''
     },
+    async readFile(path) {
+      const h = await fileFor(path)
+      return h ? h.getFile() : null
+    },
+    async writeFile(path, data) {
+      const h = (await fileFor(path, true))!
+      const w = await h.createWritable()
+      await w.write(data)
+      await w.close()
+    },
     async write(path, text, prev, force) {
       if (prev && !force) {
         const cur = await fileFor(path)

@@ -21,6 +21,9 @@ export interface FileProvider {
   write(path: string, text: string, prev?: Entry, force?: boolean): Promise<Entry>
   remove(e: Entry): Promise<void>
   rename?(e: Entry, newPath: string): Promise<Entry>
+  /** Binary files beside the docs (pictures and attachments in `assets/`). Only providers that can store them. */
+  readFile?(path: string): Promise<Blob | null>
+  writeFile?(path: string, data: Blob): Promise<void>
 }
 
 /** Batch providers (GitHub) collect changes and commit them together. */

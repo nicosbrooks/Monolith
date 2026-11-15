@@ -13,8 +13,10 @@ import { htmlToText, itemEmoji } from '../lib/util'
 import { createFile, isDirty, kindLabel, resolve, useSync } from '../storage/sync'
 import { SourceIcon } from '../components/StorageSettings'
 
-// Docs kept as Markdown files in a folder, GitHub or Drive: no sketches, and no attachments (those sources hold text only).
+// Docs kept as Markdown files elsewhere: no sketches (Markdown can't hold them). A folder also holds the doc's files
+// (assets/ beside it); GitHub and Drive hold text only, so no attachments there yet.
 const NO_SKETCH = ['sketch', 'file']
+const FOLDER_EXCLUDE = ['sketch']
 
 const EMOJIS = ['📘', '📗', '📕', '🧠', '💡', '🧪', '📐', '🎯', '🗂️', '📝', '🚀', '🌱', '⚙️', '🎨', '📊', '🧭', '🏛️', '✨', '🔬']
 
@@ -230,7 +232,7 @@ export function DocView({ item }: { item: Item }) {
             ) : (
             <Editor
               key={`${item.id}:${item.file?.pulls ?? 0}`}
-              exclude={source ? NO_SKETCH : undefined}
+              exclude={source ? (source.kind === 'folder' ? FOLDER_EXCLUDE : NO_SKETCH) : undefined}
               html={item.content}
               placeholder="Type / for blocks…"
               onReady={(e) => (setEd(e), buildToc(e))}
