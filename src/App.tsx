@@ -17,6 +17,7 @@ import { PhoneDocList, TabBar } from './components/Phone'
 import { Setup, Unlock } from './components/Setup'
 import { BackupDialog } from './components/BackupDialog'
 import { startRecording } from './lib/recordNext'
+import { FileViewer } from './components/FileViewer'
 import { checkVault, useVault } from './lib/vault'
 
 void checkVault()
@@ -198,6 +199,7 @@ export default function App() {
       {(settings.setupAt === null || setupOpen !== false) && <Setup />}
       <BackupDialog />
       <Overlays />
+      <FileViewer />
       <Toaster />
     </div>
   )

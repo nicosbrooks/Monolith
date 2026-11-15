@@ -1,8 +1,9 @@
 import { Image } from '@tiptap/extension-image'
 import type { Node as PMNode } from '@tiptap/pm/model'
-import { Download, ExternalLink, PenLine, Trash2 } from 'lucide-react'
-import { fileMeta, fileUrl, formatSize, hashOf, isImageType } from '../../lib/files'
+import { Download, Eye, PenLine, Trash2 } from 'lucide-react'
+import { fileMeta, fileUrl, formatSize, hashOf, isImageType, refOf } from '../../lib/files'
 import { openMenu, type MenuItem } from '../Overlays'
+import { openViewer, viewable } from '../FileViewer'
 
 // Lucide's shapes, inline (node views are plain DOM): one per kind of file.
 const svg = (inner: string) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`
@@ -56,6 +57,7 @@ export const FileImage = Image.extend({
       // The file's address is looked up as soon as it's shown, so menu actions run within the click (browsers only
       // open a tab then).
       let url: string | undefined
+      let meta: { name: string; type: string; size: number } | undefined
 
       const pos = () => (typeof getPos === 'function' ? getPos() : undefined)
       const rename = () => {
@@ -68,11 +70,26 @@ export const FileImage = Image.extend({
         const at = pos()
         if (at !== undefined) editor.chain().focus().deleteRange({ from: at, to: at + current.nodeSize }).run()
       }
-      const open = () => url && window.open(url, '_blank')
+      /** Open in Monolith's viewer (editable for text, Markdown and CSV); anything it can't show is downloaded. */
+      const open = () => {
+        const hash = hashOf(String(current.attrs.src ?? ''))
+        if (!hash || !meta) return
+        const name = String(current.attrs.alt || meta.name)
+        if (!viewable(name, meta.type)) return url && save(name)
+        openViewer({
+          hash, name, type: meta.type, size: meta.size,
+          // An edit is a new file: point every use of the old one in this doc at it.
+          onSave: editor.isEditable ? (ref) => {
+            const tr = editor.state.tr
+            editor.state.doc.descendants((n, at) => void (n.type.name === 'image' && n.attrs.src === refOf(hash) && tr.setNodeMarkup(at, undefined, { ...n.attrs, src: ref })))
+            if (tr.docChanged) editor.view.dispatch(tr)
+          } : undefined,
+        })
+      }
       const save = (name: string) => url && Object.assign(document.createElement('a'), { href: url, download: name }).click()
       const menu = (isPicture: boolean, name: string): MenuItem[] => [
         ...(isPicture ? [] : [{ label: 'Rename', icon: PenLine, run: rename }]),
-        { label: 'Open', icon: ExternalLink, run: open },
+        { label: 'View', icon: Eye, run: open },
         { label: 'Download', icon: Download, run: () => save(name) },
         'sep',
         { label: 'Remove', icon: Trash2, danger: true, run: remove },
@@ -93,6 +110,7 @@ export const FileImage = Image.extend({
         img.alt = alt
         img.loading = 'lazy'
         img.decoding = 'async'
+        if (stored) img.ondblclick = open
         dom.replaceChildren(img, ...(stored ? [moreButton(true, alt || 'Picture')] : []))
       }
       const card = (name: string, type: string, size: number) => {
@@ -123,7 +141,7 @@ export const FileImage = Image.extend({
         const alt = String(n.attrs.alt ?? '')
         const hash = hashOf(src)
         if (!hash) return picture(src, alt, false)
-        const meta = await fileMeta(hash)
+        meta = await fileMeta(hash)
         if (current !== n) return // changed while looking it up
         if (!meta) return missing(alt)
         url = await fileUrl(hash)

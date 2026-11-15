@@ -458,3 +458,12 @@ User: a small "System 1" model like EmbeddingGemma, always on and efficient; the
   - **Keep as long as it's used:** `enqueue()` records when people ask (background insights don't count); Auto keeps the model for 2.5× the median gap of the last few questions, between 90 s and 12 min (4 min until there are three questions). `keepAliveMs()` is pure and tested.
   - **Let go when away:** with Auto, the model is released after the tab has been hidden for a minute.
   - Tested with a stand-in embedder: six unseen phrasings classified correctly, keep-alive bounds, the Ask bar consulting System 1 for questions. Not tested with the real models: real intent accuracy (tune the examples and the 0.03 margin), real warm-up timing.
+
+## File viewer and sidebar spacing (Nov 15, cloud session)
+- **Sidebar:** items under Docs, Recordings and folders are flush with their section (Docs etc. are types, not levels): same highlight edge, titles at the same x (61 px), 12 px per deeper level; a doc with sub-docs shows its arrow in place of its icon on hover/focus (`.emoji.has-kids` in Sidebar.tsx / soft.css). `.side-tree` lost its 10 px inset.
+- **File viewer** (`src/components/FileViewer.tsx`, `openViewer()`), opened by a card's Open, a picture's double-click, or View in the ··· menu:
+  - Pictures full window (click toggles fit / actual size); PDF in the browser's own viewer (iframe); audio and video play in place.
+  - **Editable:** plain text and code (JSON, YAML, source files: monospaced textarea), Markdown (Preview rendered with the same Tiptap converter as docs, so checklists/tables/code match; Edit tab), CSV/TSV (table of inputs, + Row / + Column, RFC 4180 quoting kept). Up to 2 MB; larger text is view-only.
+  - Save (button or ⌘S) stores the edited content as a new file (`putFile`) and points every use of the old one in that doc at it, so compression, the passcode lock, folder assets and sync need nothing special. Esc closes; unsaved changes ask first.
+  - Office files and archives: Download only.
+  - Tested: picture, CSV edit (cell, new row, quoted cell kept) and save (doc reference changes, new content correct), Markdown preview with a real checklist and edit, JSON as editable code, unsaved-close prompt. Not tested: PDF/audio/video in real Chrome (headless has no PDF viewer), phone layout of the viewer (full screen under 680 px).
