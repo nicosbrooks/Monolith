@@ -17,8 +17,8 @@ enum Assistant {
         case "default", "auto": model = OpenModels.recommended
         case "enhanced": model = OpenModels.model(for: .enhanced)
         default:
-            guard let saved = OpenModels.catalog.first(where: { $0.id == choice }) else { return nil }
-            model = saved
+            // A model picked from an older list that's gone now: the Default tier.
+            model = OpenModels.catalog.first(where: { $0.id == choice }) ?? OpenModels.recommended
         }
         return OpenModels.fits(model) ? model : nil
     }

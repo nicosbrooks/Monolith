@@ -24,17 +24,15 @@ struct OpenModel: Identifiable, Hashable {
 final class OpenModels {
     static let shared = OpenModels()
 
-    /// Same tiers as the web app, so Fast / Default / Enhanced mean the same everywhere.
+    /// Same tiers as the web app, so Fast / Default / Enhanced mean the same everywhere. All 2B or smaller:
+    /// quick to download, fast to answer.
     static let catalog: [OpenModel] = [
-        .init(id: "mlx-community/Qwen3.5-0.8B-4bit", name: "Qwen 3.5 0.8B", tier: .fast, note: "Instant answers, lightest download", needsGB: 3),
+        .init(id: "mlx-community/Qwen3.5-0.8B-4bit", name: "Qwen 3.5 0.8B", tier: .fast, note: "Instant answers, smallest download", needsGB: 3),
         // Liquid AI's LFM3: about 1 GB, fast on phones (the model Locally AI runs). Needs LFM3.swift until mlx-swift-lm ships it.
-        .init(id: "LiquidAI/LFM3-1.7B-MLX-4bit", name: "LFM 3 1.7B", tier: .default, note: "Liquid AI’s fast on-device model, about 1 GB", needsGB: 3),
-        .init(id: "mlx-community/gemma-4-e2b-it-4bit", name: "Gemma 4 E2B", tier: .more, note: "Google’s newest small model", needsGB: 6),
-        .init(id: "mlx-community/Qwen3.5-4B-4bit", name: "Qwen 3.5 4B", tier: .enhanced, note: "Sharper writing and reasoning", needsGB: 8),
-        .init(id: "mlx-community/Qwen3.5-2B-4bit", name: "Qwen 3.5 2B", tier: .more, note: "Strong all-rounder, lighter than Gemma 4", needsGB: 4),
-        .init(id: "mlx-community/gemma-4-e4b-it-4bit", name: "Gemma 4 E4B", tier: .more, note: "Gemma 4’s larger mobile model", needsGB: 8),
-        .init(id: "mlx-community/Qwen3-8B-4bit", name: "Qwen 3 8B", tier: .more, note: "Large, for iPad and Mac", needsGB: 12),
-        .init(id: "mlx-community/Qwen3.5-9B-4bit", name: "Qwen 3.5 9B", tier: .more, note: "Largest, for iPad and Mac", needsGB: 16),
+        .init(id: "LiquidAI/LFM3-1.7B-MLX-4bit", name: "LFM 3 1.7B", tier: .default, note: "Quick and accurate, about 1 GB", needsGB: 3),
+        .init(id: "mlx-community/gemma-4-e2b-it-4bit", name: "Gemma 4 E2B", tier: .enhanced, note: "Sharpest writing and reasoning", needsGB: 6),
+        // Default where LFM 3 won't fit.
+        .init(id: "mlx-community/Qwen3.5-2B-4bit", name: "Qwen 3.5 2B", tier: .more, note: "Strong all-rounder", needsGB: 4),
     ]
     static let deviceGB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
     static func fits(_ m: OpenModel) -> Bool { m.needsGB <= deviceGB + 0.5 }

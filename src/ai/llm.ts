@@ -16,7 +16,9 @@ export interface ModelInfo {
 }
 
 /**
- * Open models that run in a browser tab via WebGPU. Downloaded once, then cached offline.
+ * Open models that run in a browser tab, all 2B or smaller so they download quickly and answer fast. Downloaded once,
+ * then cached offline. Each runs in the engine that suits it: WebLLM, or Transformers.js for models WebLLM doesn't
+ * have (those carry `onnx`). Monolith switches engines itself; people only pick a tier.
  * Same tiers as the iPhone and iPad app, so Fast / Default / Enhanced mean the same everywhere.
  */
 export const MODELS: ModelInfo[] = [
@@ -24,85 +26,51 @@ export const MODELS: ModelInfo[] = [
     id: 'Qwen3.5-0.8B-q4f16_1-MLC',
     name: 'Qwen 3.5 0.8B',
     tier: 'fast',
-    note: 'Instant answers, lightest download',
+    note: 'Instant answers, smallest download',
     needMB: 1630,
+  },
+  {
+    // Liquid AI's on-device model (Oct 2026): best in class at following instructions, about 1.1 GB.
+    id: 'onnx:LFM3-1.7B',
+    name: 'LFM 3 1.7B',
+    tier: 'default',
+    note: 'Quick and accurate, about 1 GB',
+    needMB: 1800,
+    onnx: { repo: 'onnx-community/LFM3-1.7B-ONNX', gpu: 'q4f16' },
   },
   {
     id: 'gemma-4-E2B-it-q4f16_1-MLC',
     name: 'Gemma 4 E2B',
-    tier: 'default',
-    note: 'Google’s newest small model',
+    tier: 'enhanced',
+    note: 'Sharpest writing and reasoning',
     needMB: 3390,
   },
-  {
-    id: 'Qwen3.5-4B-q4f16_1-MLC',
-    name: 'Qwen 3.5 4B',
-    tier: 'enhanced',
-    note: 'Sharper writing and reasoning',
-    needMB: 3870,
-  },
-  // Default for machines that can't fit Gemma 4.
+  // Default where LFM 3 can't run (it needs the other engine on WebGPU).
   {
     id: 'Qwen3.5-2B-q4f16_1-MLC',
     name: 'Qwen 3.5 2B',
     tier: 'more',
-    note: 'Strong all-rounder, lighter than Gemma 4',
+    note: 'Strong all-rounder',
     needMB: 2250,
-  },
-  {
-    id: 'Phi-4-mini-instruct-q4f16_1-MLC',
-    name: 'Phi 4 mini',
-    tier: 'more',
-    note: 'Good at maths and science',
-    needMB: 3440,
-  },
-  {
-    id: 'Qwen3-8B-q4f16_1-MLC',
-    name: 'Qwen 3 8B',
-    tier: 'more',
-    note: 'Large, for a strong graphics card',
-    needMB: 5700,
-  },
-  {
-    id: 'Qwen3.5-9B-q4f16_1-MLC',
-    name: 'Qwen 3.5 9B',
-    tier: 'more',
-    note: 'Largest, for a strong graphics card',
-    needMB: 6430,
   },
 ]
 const FALLBACK_DEFAULT = 'Qwen3.5-2B-q4f16_1-MLC'
 
 /**
- * The same tiers for the second engine (Transformers.js), used where WebLLM can't run: Firefox, and browsers with
- * no WebGPU (on the CPU, only models with a `cpu` build are offered). Standard-attention models, because they have
- * fast GPU kernels in ONNX Runtime; Qwen 3.5's hybrid attention measured several times slower there.
+ * The tiers where WebLLM can't run: Firefox (fewer GPU buffers than WebLLM's kernels need) and browsers with no
+ * WebGPU (on the CPU, only models with a `cpu` build are offered). Standard-attention models, because they have fast
+ * GPU kernels in ONNX Runtime; Qwen 3.5's hybrid attention measured several times slower there.
  */
 export const ONNX_MODELS: ModelInfo[] = [
   {
     id: 'onnx:Qwen3-0.6B',
     name: 'Qwen 3 0.6B',
     tier: 'fast',
-    note: 'Instant answers, lightest download',
+    note: 'Instant answers, smallest download',
     needMB: 900,
     onnx: { repo: 'onnx-community/Qwen3-0.6B-ONNX', gpu: 'q4f16', cpu: 'q4' },
   },
-  {
-    id: 'onnx:Qwen3-1.7B',
-    name: 'Qwen 3 1.7B',
-    tier: 'default',
-    note: 'Good all-rounder',
-    needMB: 2000,
-    onnx: { repo: 'onnx-community/Qwen3-1.7B-ONNX', gpu: 'q4f16' },
-  },
-  {
-    id: 'onnx:Qwen3-4B',
-    name: 'Qwen 3 4B',
-    tier: 'enhanced',
-    note: 'Sharper writing and reasoning',
-    needMB: 3600,
-    onnx: { repo: 'onnx-community/Qwen3-4B-ONNX', gpu: 'q4f16' },
-  },
+  MODELS[1],
   {
     id: 'onnx:LFM2-1.2B',
     name: 'LFM 2 1.2B',
@@ -171,8 +139,10 @@ export function detectGPU() {
 const build = (id: string) => (gpu.f16 === false ? id.replace('q4f16_1', 'q4f32_1') : id)
 /** Set when WebLLM failed in this tab; the Transformers.js engine takes over. */
 let webllmFailed = false
+/** Set when a Transformers.js model failed where WebLLM works; Default then uses WebLLM's lighter model. */
+let onnxFailed = false
 
-/** The model behind a tier on this device. Default steps down to a lighter model where Gemma 4 won't fit. */
+/** The model behind a tier on this device. Default steps down to a lighter model where it won't fit or can't run. */
 export function modelForTier(t: Exclude<Tier, 'more'>): ModelInfo {
   const list = models()
   const fallback = () => list.find((x) => x.id === (browserEngine() === 'webllm' ? FALLBACK_DEFAULT : ONNX_FALLBACK_DEFAULT)) ?? list[0]
@@ -187,7 +157,7 @@ export function modelForTier(t: Exclude<Tier, 'more'>): ModelInfo {
             needMB: Infinity,
           })
         : list[0]
-  if (t === 'default' && !fits(m)) return fallback()
+  if (t === 'default' && (!fits(m) || (m.onnx && onnxFailed && browserEngine() === 'webllm'))) return fallback()
   return m
 }
 
@@ -245,7 +215,8 @@ export async function refreshCache() {
       return
     }
     const { hasModelInCache } = await import('@mlc-ai/web-llm')
-    const entries = await Promise.all(MODELS.map(async (m) => [m.id, await hasModelInCache(build(m.id))] as const))
+    const have = await onnxCached(MODELS.filter((m) => m.onnx).map((m) => m.onnx!.repo))
+    const entries = await Promise.all(MODELS.map(async (m) => [m.id, m.onnx ? have.has(m.onnx.repo) : await hasModelInCache(build(m.id))] as const))
     useAI.setState({ cached: Object.fromEntries(entries) })
   } catch {
     /* ignore */
@@ -271,9 +242,24 @@ export function resolvedModel() {
   return modelForTier(t && t !== 'more' ? t : 'default').id
 }
 
+/** Models earlier versions offered. Their downloads (up to 5 GB each) are cleared once, since nothing uses them now. */
+const RETIRED = ['Qwen3.5-4B-q4f16_1-MLC', 'Qwen3.5-9B-q4f16_1-MLC', 'Qwen3-8B-q4f16_1-MLC', 'Phi-4-mini-instruct-q4f16_1-MLC']
+const RETIRED_ONNX = ['onnx-community/Qwen3-1.7B-ONNX', 'onnx-community/Qwen3-4B-ONNX']
+async function clearRetired() {
+  try {
+    const { deleteModelAllInfoInCache, hasModelInCache } = await import('@mlc-ai/web-llm')
+    for (const id of RETIRED) for (const b of [id, id.replace('q4f16_1', 'q4f32_1')]) if (await hasModelInCache(b).catch(() => false)) await deleteModelAllInfoInCache(b)
+    const c = await caches.open('transformers-cache')
+    for (const k of await c.keys()) if (RETIRED_ONNX.some((r) => k.url.includes(`/${r}/`))) await c.delete(k)
+  } catch {
+    /* nothing cached, or no Cache API */
+  }
+}
+
 /** At startup: find what this machine already has and get it going quietly. Downloads nothing new. */
 export async function startAI() {
   await detectGPU()
+  void clearRetired()
   await refreshCache()
   const id = resolvedModel()
   if (useAI.getState().cached[id]) void loadModel(id)
@@ -292,9 +278,19 @@ export async function loadModel(modelId?: string) {
   const id = modelId ?? resolvedModel()
   if (browserEngine() === 'onnx') {
     const tier = findModel(id)?.tier
-    return loadOnnx(ONNX_MODELS.some((m) => m.id === id) ? id : modelForTier(tier && tier !== 'more' ? tier : 'default').id)
+    return void (await loadOnnx(ONNX_MODELS.some((m) => m.id === id) ? id : modelForTier(tier && tier !== 'more' ? tier : 'default').id, true))
+  }
+  // A model WebLLM doesn't have runs in the other engine; if it can't start here, Default uses WebLLM's lighter one.
+  if (findModel(id)?.onnx) {
+    await unloadWebLLM()
+    if (await loadOnnx(id, false)) return
+    if (isNetwork(lastLoadError)) return void useAI.setState({ status: 'error', error: NO_DOWNLOAD })
+    onnxFailed = true
+    return loadModel(FALLBACK_DEFAULT)
   }
   if (useAI.getState().loadedModel === id && engine) return
+  // Only one model in memory at a time.
+  if (loadedEngine === 'onnx') unloadOnnx()
   useAI.setState({
     status: 'loading',
     progress: 0,
@@ -315,13 +311,16 @@ export async function loadModel(modelId?: string) {
       loadedEngine = 'webllm'
       useAI.setState({ status: 'ready', loadedModel: id, progress: 1 })
       refreshCache()
-    } catch {
-      // WebLLM can't run on this GPU. The other engine usually can: same tier, different build.
+    } catch (e) {
       webllmWorker?.terminate()
       webllmWorker = null
       engine = null
-      webllmFailed = true
-      fellBack = true
+      if (isNetwork(e)) useAI.setState({ status: 'error', error: NO_DOWNLOAD })
+      else {
+        // WebLLM can't run on this GPU. The other engine usually can: same tier, different build.
+        webllmFailed = true
+        fellBack = true
+      }
     } finally {
       loading = null
     }
@@ -329,9 +328,35 @@ export async function loadModel(modelId?: string) {
   await loading
   if (fellBack) {
     const t = findModel(id)?.tier
-    await loadOnnx(modelForTier(t && t !== 'more' ? t : 'default').id)
+    await loadOnnx(modelForTier(t && t !== 'more' ? t : 'default').id, true)
   }
 }
+
+async function unloadWebLLM() {
+  if (!engine) return
+  await engine.unload().catch(() => {})
+  webllmWorker?.terminate()
+  webllmWorker = null
+  engine = null
+  if (loadedEngine === 'webllm') {
+    loadedEngine = null
+    useAI.setState({ status: 'idle', loadedModel: null })
+  }
+}
+function unloadOnnx() {
+  onnx?.terminate()
+  onnx = null
+  if (loadedEngine === 'onnx') {
+    loadedEngine = null
+    useAI.setState({ status: 'idle', loadedModel: null })
+  }
+}
+
+/** The last load failure, to tell a lost connection from a model that can't run here. */
+let lastLoadError: unknown = null
+const NO_DOWNLOAD = 'The model couldn’t download. Check your connection and try again.'
+/** A download that didn't arrive says nothing about whether the model runs here, so it never triggers a fallback. */
+const isNetwork = (e: unknown) => (typeof navigator !== 'undefined' && !navigator.onLine) || /failed to fetch|networkerror|network error|load failed|err_|fetch failed|timed? ?out/i.test(message(e))
 
 /** Errors arrive as Error objects, strings, or nothing at all; always show something readable. */
 const message = (e: unknown) => (typeof e === 'string' ? e : (e as Error)?.message) || 'The assistant couldn’t start.'
@@ -364,10 +389,11 @@ function onnxCall(msg: object, on: (m: OnnxOut) => boolean | void): Promise<void
   })
 }
 
-async function loadOnnx(modelId: string) {
+/** Load a Transformers.js model. False if it couldn't start; `showError` puts that on screen (no fallback left). */
+async function loadOnnx(modelId: string, showError: boolean): Promise<boolean> {
   const m = ONNX_MODELS.find((x) => x.id === modelId) ?? modelForTier('default')
   while (loading) await loading
-  if (useAI.getState().loadedModel === m.id && loadedEngine === 'onnx') return
+  if (useAI.getState().loadedModel === m.id && loadedEngine === 'onnx') return true
   const device = gpu.adapter ? 'webgpu' : 'wasm'
   useAI.setState({
     status: 'loading',
@@ -375,6 +401,7 @@ async function loadOnnx(modelId: string) {
     progressText: 'Starting…',
     error: null,
   })
+  let ok = false
   loading = (async () => {
     try {
       await onnxCall(
@@ -391,16 +418,20 @@ async function loadOnnx(modelId: string) {
         },
       )
       loadedEngine = 'onnx'
+      ok = true
       useAI.setState({ status: 'ready', loadedModel: m.id, progress: 1 })
       refreshCache()
     } catch (e) {
+      lastLoadError = e
       loadedEngine = null
-      useAI.setState({ status: 'error', error: message(e) })
+      unloadOnnx()
+      useAI.setState(showError ? { status: 'error', error: isNetwork(e) ? NO_DOWNLOAD : message(e) } : { status: 'idle' })
     } finally {
       loading = null
     }
   })()
   await loading
+  return ok
 }
 
 export async function deleteModel(modelId: string) {
@@ -438,7 +469,8 @@ export async function chat(messages: Msg[], onToken?: (full: string) => void, op
   useAI.setState({ busy: true })
   try {
     if (loadedEngine === 'onnx') {
-      const direct = useAI.getState().loadedModel?.startsWith('onnx:Qwen3')
+      // Hybrid reasoning models (Qwen 3, LFM 3) answer directly; notes and chat don't need a visible chain of thought.
+      const direct = /^onnx:(Qwen3|LFM3)/.test(useAI.getState().loadedModel ?? '')
       let full = ''
       const stop = () => onnx?.postMessage({ type: 'stop' })
       opts.signal?.addEventListener('abort', stop)

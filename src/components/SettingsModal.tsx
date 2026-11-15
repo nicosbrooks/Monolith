@@ -79,7 +79,7 @@ export function SettingsModal() {
                     return (
                       <button key={t} className={`tier ${on ? 'on' : ''}`} onClick={() => chooseModel(m.id)} disabled={t === 'enhanced' && !fits(m)}>
                         <b>{t === 'fast' ? 'Fast' : t === 'default' ? 'Default' : 'Enhanced'}</b>
-                        <small>{m.name}</small>
+                        <small>{t === 'enhanced' && !fits(m) ? 'Not on this device' : m.name}</small>
                         {loadingThis && (
                           <span className="bar">
                             <i
