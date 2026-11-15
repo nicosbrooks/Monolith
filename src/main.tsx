@@ -7,10 +7,14 @@ import './index.css'
 import './theme.css'
 import './soft.css'
 import App from './App.tsx'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    {/* Last line of defence: if the app itself fails, a message and Reload, never a blank page. */}
+    <ErrorBoundary area="Monolith">
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 )
 

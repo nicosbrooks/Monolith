@@ -18,6 +18,7 @@ import { Setup, Unlock } from './components/Setup'
 import { BackupDialog } from './components/BackupDialog'
 import { startRecording } from './lib/recordNext'
 import { FileViewer } from './components/FileViewer'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { checkVault, useVault } from './lib/vault'
 
 void checkVault()
@@ -165,7 +166,7 @@ export default function App() {
       <AnimatePresence initial={false}>
         {!collapsed && !mobile && (
           <motion.div className="side-wrap" initial={{ width: 0, opacity: 0 }} animate={{ width: 'var(--side-w)', opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: 'spring', duration: 0.35, bounce: 0 }}>
-            <Sidebar />
+            <ErrorBoundary area="the sidebar"><Sidebar /></ErrorBoundary>
           </motion.div>
         )}
       </AnimatePresence>
@@ -173,7 +174,7 @@ export default function App() {
         {collapsed && !mobile && (
           <button className="icon-btn float-open" onClick={() => useStore.getState().setUI({ sidebarCollapsed: false })} title="Show sidebar (⌘\)"><PanelLeftOpen size={16} /></button>
         )}
-        <Suspense fallback={<ViewFallback />}>{main}</Suspense>
+        <ErrorBoundary area="this page" resetKey={`${section}:${activeId}`}><Suspense fallback={<ViewFallback />}>{main}</Suspense></ErrorBoundary>
         {/* The Ask bar is on every page; while the assistant panel is open, its own composer takes over. */}
         {!mobile && !aiOpen && (
           <div className="home-dock">
@@ -184,7 +185,7 @@ export default function App() {
       <AnimatePresence initial={false}>
         {aiOpen && (
           <motion.div className="ai-wrap" initial={{ width: 0, opacity: 0 }} animate={{ width: 'var(--ai-w)', opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: 'spring', duration: 0.35, bounce: 0 }}>
-            <Suspense fallback={null}><AIPanel /></Suspense>
+            <ErrorBoundary area="the assistant"><Suspense fallback={null}><AIPanel /></Suspense></ErrorBoundary>
           </motion.div>
         )}
       </AnimatePresence>

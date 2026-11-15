@@ -11,7 +11,8 @@ self.addEventListener('activate', (e) => {
 // LiteRT-LM's runtime (about 25–37 MB of WebAssembly) comes from a CDN at an exact version, so it never changes:
 // keep it, so the Gemma models still start without a network. Models themselves are stored by the app (OPFS).
 const RUNTIME = 'litert-runtime-v1'
-const RUNTIME_URL = /^https:\/\/cdn\.jsdelivr\.net\/npm\/@litert-lm\/core@\d[^/]*\/wasm\//
+// Also ONNX Runtime's, which Transformers.js (the fallback engine) loads from jsDelivr at an exact version.
+const RUNTIME_URL = /^https:\/\/cdn\.jsdelivr\.net\/npm\/(@litert-lm\/core|onnxruntime-web)@\d[^/]*\/(wasm|dist)\//
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url)

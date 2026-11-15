@@ -1947,3 +1947,8 @@ body {
 .fv-csv input:focus { background: var(--raised-fill); }
 .fv-csv-add { display: flex; gap: 8px; margin-top: 10px; }
 @media (max-width: 680px) { .fv { width: 100vw; height: 100dvh; border-radius: 0; } }
+
+/* A part of the app that failed (ErrorBoundary.tsx). */
+.crash { display: grid; justify-items: center; align-content: center; gap: 8px; padding: 32px 20px; min-height: 200px; text-align: center; }
+.crash p { color: var(--text-2); margin: 0 0 6px; }
+.crash-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
