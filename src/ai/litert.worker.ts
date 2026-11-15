@@ -1,22 +1,6 @@
-import { Engine, resolveModel, type Conversation, type Message } from '@litert-lm/core'
-import { cachedModel, markCached, modelFileName } from './litert-cache'
-
-// LiteRT-LM loads its runtime with `importScripts` when it sees a worker, but in a module worker (which the app's
-// bundler builds) `importScripts` exists and throws. This stand-in does the same job: fetch the script (synchronous
-// requests are allowed in workers) and run it in the worker's global scope, where it defines `ModuleFactory` as
-// LiteRT-LM expects. A worker has no script tag to tell the runtime where its `.wasm` file is, so `Module.locateFile`
-// points it at the script's own folder.
-const g = self as unknown as { importScripts: (...urls: string[]) => void; Module?: { locateFile: (path: string) => string } }
-g.importScripts = (...urls: string[]) => {
-  for (const url of urls) {
-    g.Module = { locateFile: (path) => new URL(path, url).href }
-    const req = new XMLHttpRequest()
-    req.open('GET', url, false)
-    req.send()
-    if (req.status !== 200) throw new Error(`The assistant’s runtime couldn’t download (${req.status}).`)
-    ;(0, eval)(req.responseText)
-  }
-}
+import './litert-shim' // first: lets LiteRT-LM load its runtime in a module worker
+import { Engine, type Conversation, type Message } from '@litert-lm/core'
+import { modelFile } from './litert-download'
 
 /**
  * Google's LiteRT-LM, for the Gemma tiers. Runs in its own worker so a model compile or a long answer never blocks
@@ -43,50 +27,6 @@ let convo: { conv: Conversation; history: string; settings: string } | null = nu
 const post = (m: object) => self.postMessage(m)
 const fail = (e: unknown) => post({ type: 'error', message: String((e as Error)?.message || e || 'Something went wrong') })
 
-/** The model file, from storage if it's there, else downloaded into storage first (with progress). */
-async function modelFile(repo: string): Promise<File> {
-  const have = await cachedModel(repo)
-  if (have) return have
-  return navigator.locks.request(`monolith-model:${repo}`, async () => {
-    // Another tab may have finished the download while this one waited.
-    const again = await cachedModel(repo)
-    if (again) return again
-    const { huggingFace, model } = await resolveModel(`hf://${repo}`)
-    const src = huggingFace?.source ?? (typeof model === 'string' ? { url: model } : (model as { url: string; size?: number }))
-    const res = await fetch(src.url)
-    if (!res.ok || !res.body) throw new Error(`The model couldn’t download (${res.status}).`)
-    const total = src.size ?? Number(res.headers.get('content-length')) ?? 0
-    const dir = await navigator.storage.getDirectory()
-    const handle = await dir.getFileHandle(modelFileName(repo), { create: true })
-    const out = await handle.createWritable()
-    let got = 0
-    let last = 0
-    try {
-      const reader = res.body.getReader()
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        await out.write(value)
-        got += value.byteLength
-        if (total && got - last > 4_000_000) {
-          last = got
-          post({ type: 'progress', progress: got / total, loaded: got, total })
-        }
-      }
-      await out.close()
-    } catch (e) {
-      await out.abort().catch(() => {})
-      await dir.removeEntry(modelFileName(repo)).catch(() => {})
-      throw e
-    }
-    if (total && got !== total) {
-      await dir.removeEntry(modelFileName(repo)).catch(() => {})
-      throw new Error('The model download was cut short. Check your connection and try again.')
-    }
-    await markCached(repo, { size: got, url: src.url, sha256: (src as { sha256?: string }).sha256 })
-    return handle.getFile()
-  })
-}
 
 async function dropConversation() {
   const c = convo
@@ -100,7 +40,7 @@ async function load(repo: string, maxTokens: number) {
   await engine?.delete().catch(() => {})
   engine = null
   loadedRepo = ''
-  const file = await modelFile(repo)
+  const file = await modelFile(repo, (progress, loaded, total) => post({ type: 'progress', progress, loaded, total }))
   post({ type: 'warming' })
   windowSize = maxTokens
   engine = await Engine.create({ model: file, mainExecutorSettings: { maxNumTokens: maxTokens } })

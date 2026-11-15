@@ -74,7 +74,7 @@ interface Chunk { item: Item; text: string; words: Set<string> }
 const chunkCache = new WeakMap<Item, Chunk[]>()
 
 /** A doc's text in passages of about 700 characters, split on paragraphs. Cached until the doc changes. */
-function chunks(i: Item): Chunk[] {
+export function chunks(i: Item): Chunk[] {
   const hit = chunkCache.get(i)
   if (hit) return hit
   const out: Chunk[] = []
@@ -117,7 +117,7 @@ export interface Found { item: Item; text: string }
  * The passages that best match a question, across every doc and recording. The open doc counts a little extra.
  * A short open doc is given whole; a doc the question names by title always gets its best passages.
  */
-export function relevant(question: string, o: { items: Item[]; open?: Item | null; budget?: number }): Found[] {
+export function relevant(question: string, o: { items: Item[]; open?: Item | null; budget?: number; semantic?: Map<string, number> }): Found[] {
   const budget = o.budget ?? 3200
   const q = terms(question)
   const live = o.items.filter((i) => !i.deletedAt && !i.file?.dir)
@@ -136,7 +136,11 @@ export function relevant(question: string, o: { items: Item[]; open?: Item | nul
       s += titleHits * 1.5
       if (named.has(c.item.id)) s += 4
       if (o.open && c.item.id === o.open.id) s += 1.2
-      return { c, s, hasTopic: topic.some((w) => c.words.has(w)) }
+      // System 1: closeness in meaning (EmbeddingGemma, see system1.ts). Counts on its own, so a passage that says it
+      // in other words still qualifies; above ~0.45 it passes the bar below with no shared words at all.
+      const sim = o.semantic?.get(`${c.item.id}#${chunks(c.item).indexOf(c)}`) ?? 0
+      if (sim > 0.35) s += (sim - 0.35) * 14
+      return { c, s, hasTopic: topic.some((w) => c.words.has(w)) || sim > 0.5 }
     })
     .filter((x) => x.s > 1.2 || (o.open && x.c.item.id === o.open.id && !q.length))
     .sort((a, b) => b.s - a.s)
@@ -223,7 +227,7 @@ function datesFor(now: Date, question: string, action: boolean): string {
   return `Dates (local): ${dates.join(', ')}. Now ${format(now, 'h:mm a')}.`
 }
 
-export function turnEvidence(question: string, o: Workspace & { open?: Item | null; action?: boolean }): Evidence[] {
+export function turnEvidence(question: string, o: Workspace & { open?: Item | null; action?: boolean; semantic?: Map<string, number> }): Evidence[] {
   const evidence: Evidence[] = []
   const plan = planning.test(question)
   const minutes = requestedMinutes(question)
@@ -278,7 +282,7 @@ export function turnEvidence(question: string, o: Workspace & { open?: Item | nu
     }
   }
   // Give explicit doc evidence room alongside calendar and tasks on mixed questions.
-  const found = relevant(question, { items: live, open: o.open })
+  const found = relevant(question, { items: live, open: o.open, semantic: o.semantic })
   const docs = found.map((hit): Evidence => ({ kind: 'doc', item: hit.item, text: passages([hit]) }))
   const lower = question.toLowerCase()
   const title = docs[0]?.item?.title.trim().toLowerCase()

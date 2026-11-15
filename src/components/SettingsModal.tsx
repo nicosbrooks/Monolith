@@ -8,6 +8,7 @@ import { StorageSettings } from './StorageSettings'
 import { toast } from './Toast'
 import { openLink } from './LinkDialog'
 import { useLink } from '../link/link'
+import { useSystem1 } from '../ai/system1'
 import { deviceSummary, setIntegration, useDevice } from '../lib/integrations'
 
 export function SettingsModal() {
@@ -74,6 +75,7 @@ export function SettingsModal() {
                   <span />
                   Suggest events, tasks and ideas while I work
                 </label>
+                <System1Settings />
                 <div className="tiers">
                   {(['fast', 'default', 'enhanced'] as const).map((t) => {
                     const m = modelForTier(t)
@@ -141,6 +143,56 @@ export function SettingsModal() {
 }
 
 /** One choice in the model list: pick it and it's used (downloading first if it has to). */
+/**
+ * Settings › Assistant: System 1 (a small model that understands meaning, always on) and how long the general model
+ * stays in memory after answering.
+ */
+function System1Settings() {
+  const settings = useStore((s) => s.settings)
+  const set = useStore((s) => s.setSettings)
+  const s1 = useSystem1()
+  const on = settings.system1 !== false
+  const status =
+    !on ? 'Off. Search and context use words only.'
+    : s1.status === 'loading' ? `Getting ready… ${Math.round(s1.progress * 100)}%`
+    : s1.status === 'error' ? `Couldn’t start: ${s1.error}`
+    : s1.status === 'ready' ? (s1.indexed < s1.total ? `Reading your docs: ${s1.indexed} of ${s1.total}` : `Ready · ${s1.total} docs and recordings`)
+    : 'Starting…'
+  return (
+    <>
+      <label className="toggle">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) => {
+            set({ system1: e.target.checked })
+            void import('../ai/system1').then((m) => (e.target.checked ? m.startSystem1() : m.stopSystem1()))
+          }}
+        />
+        <span />
+        Understand meaning, not just words
+      </label>
+      <p className="small muted">EmbeddingGemma, a small model that stays ready: it finds notes by what they mean for search and for the assistant. {status}</p>
+      <div className="set-row">
+        <span>Keep the assistant loaded</span>
+        <div className="seg">
+          {(
+            [
+              ['2m', '2 min'],
+              ['10m', '10 min'],
+              ['always', 'Always'],
+            ] as const
+          ).map(([k, label]) => (
+            <button key={k} title={k === 'always' ? 'Fastest answers; holds the most memory' : 'Frees memory when you’re not asking; reloads in seconds'} className={(settings.keepLoaded ?? '10m') === k ? 'on' : ''} onClick={() => (set({ keepLoaded: k }), void import('../ai/llm').then((m) => m.scheduleRelease()))}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
 /** Settings › Files: how much pictures, attachments and recordings are made smaller, and what they take up. */
 function FilesSettings() {
   const settings = useStore((s) => s.settings)

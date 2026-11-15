@@ -1,5 +1,5 @@
 import { Command } from 'cmdk'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { CalendarDays, CalendarPlus, FileText, Home, Mic, AudioWaveform, Moon, Settings, MessageCircle, StickyNote, Sun, HardDriveUpload, Smartphone, Keyboard } from 'lucide-react'
 import { useShortcuts } from './Overlays'
@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useStore } from '../store'
 import { htmlToText, itemEmoji } from '../lib/util'
 import { startRecording } from '../lib/recordNext'
+import { related } from '../ai/system1'
 import { eventColor, parseQuickEvent, whenLabel } from '../lib/dates'
 
 export function CommandPalette() {
@@ -34,6 +35,17 @@ export function CommandPalette() {
     .slice(0, 12)
 
   const Icon = { note: StickyNote, doc: FileText, lecture: AudioWaveform }
+
+  // System 1: docs close in meaning that the words didn't find ("eigenvectors" → "Linear algebra, week 3").
+  const [meaning, setMeaning] = useState<string[]>([])
+  useEffect(() => {
+    if (ql.length < 3) return setMeaning([])
+    let live = true
+    const t = setTimeout(() => void related(ql, 6).then((r) => live && setMeaning(r.filter((x) => x.score > 0.45).map((x) => x.id))), 120)
+    return () => ((live = false), clearTimeout(t))
+  }, [ql])
+  const shown = new Set(hits.map((h) => h.i.id))
+  const close2 = meaning.map((id) => items.find((i) => i.id === id && !i.deletedAt)).filter((i): i is (typeof items)[number] => !!i && !shown.has(i.id)).slice(0, 4)
 
   return (
     <AnimatePresence>
@@ -79,6 +91,19 @@ export function CommandPalette() {
                             <b>{i.title || 'Untitled'}</b>
                             {snippet && <small>{snippet}</small>}
                           </span>
+                        </Command.Item>
+                      )
+                    })}
+                  </Command.Group>
+                )}
+                {close2.length > 0 && (
+                  <Command.Group heading="Related">
+                    {close2.map((i) => {
+                      const I = Icon[i.kind]
+                      return (
+                        <Command.Item key={i.id} value={`related-${i.id} ${q}`} onSelect={run(() => st.open(i.id))}>
+                          {itemEmoji(i) ? <span className="emoji">{itemEmoji(i)}</span> : <I size={16} />}
+                          <span className="col"><b>{i.title || 'Untitled'}</b></span>
                         </Command.Item>
                       )
                     })}

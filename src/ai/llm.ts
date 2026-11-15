@@ -238,7 +238,8 @@ export const isReady = () => useAI.getState().status === 'ready'
 /** What someone picked in Settings. Picking is all it takes; this gets it running. */
 export async function chooseModel(id: string) {
   useStore.getState().setSettings({ llmModel: id })
-  return loadModel(id)
+  await loadModel(id)
+  scheduleRelease()
 }
 
 /** The model id to load: the saved choice, or the Default tier if nothing has been picked. */
@@ -271,13 +272,14 @@ export async function startAI() {
   void clearRetired()
   await refreshCache()
   const id = resolvedModel()
-  if (useAI.getState().cached[id]) void loadModel(id)
+  if (useAI.getState().cached[id]) void loadModel(id).then(scheduleRelease)
 }
 
 /** Make sure something can answer, downloading the in-browser model once if nothing else is there. */
 export async function ensureAI() {
   if (isReady()) return true
   await loadModel()
+  scheduleRelease()
   return isReady()
 }
 
@@ -599,7 +601,29 @@ export async function chat(messages: Msg[] | ((window: number, reserve: number) 
     }
   } finally {
     useAI.setState({ busy: false })
+    scheduleRelease()
   }
+}
+
+// ─── Memory: System 2 loads when needed and leaves when idle ───────────────
+// The general model is by far the biggest thing Monolith holds (1–4 GB of GPU memory). After its last answer it stays
+// loaded for a while (Settings › Assistant › Keep the assistant loaded), then it's unloaded; the next question loads it
+// again from the browser's cache (seconds, no download). System 1 stays: it's small, and keeps search and context
+// quick in the meantime.
+const KEEP_MS = { '2m': 2 * 60_000, '10m': 10 * 60_000 } as const
+let releaseTimer = 0
+export function scheduleRelease() {
+  clearTimeout(releaseTimer)
+  const keep = useStore.getState().settings.keepLoaded ?? '10m'
+  if (keep === 'always' || typeof window === 'undefined') return
+  releaseTimer = window.setTimeout(() => void releaseModel(), KEEP_MS[keep])
+}
+/** Unload the general model now, unless it's busy (then try again later). */
+export async function releaseModel() {
+  if (useAI.getState().busy || loading) return scheduleRelease()
+  await unloadWebLLM()
+  await unloadLitert()
+  unloadOnnx()
 }
 
 /** Drop both engines after the GPU was lost, so the next load starts clean. */

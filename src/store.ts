@@ -74,6 +74,10 @@ export interface Settings {
   pictureSize?: 'small' | 'medium' | 'large'
   /** Recording bitrate: voice (32 kbps Opus, ~14 MB an hour, the default) or high (96 kbps). */
   recordingQuality?: 'voice' | 'high'
+  /** Settings › Assistant › Understand meaning (System 1, EmbeddingGemma). Unset means on. */
+  system1?: boolean
+  /** How long the general model (System 2) stays in memory after its last answer. Unset means 10 minutes. */
+  keepLoaded?: '2m' | '10m' | 'always'
 }
 
 interface State {

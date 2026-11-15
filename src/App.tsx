@@ -80,6 +80,8 @@ export default function App() {
     // Find the best engine this machine already has, quietly.
     void startAI()
     void import('./lib/fileUpkeep').then((m) => m.startFileUpkeep())
+    // System 1 (EmbeddingGemma): small, always on; quietly downloads once, then indexes when the browser is idle.
+    void import('./ai/system1').then((m) => m.startSystem1())
     // Warm the editor and calendar in the background so the first open is instant.
     const idle = window.requestIdleCallback || ((f: () => void) => setTimeout(f, 800))
     idle(() => void Promise.all([views.doc(), views.calendar()]).catch(() => {}))

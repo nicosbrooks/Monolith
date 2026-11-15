@@ -12,6 +12,7 @@ import { deviceContext, refreshDevice } from '../lib/integrations'
 import { toast } from './Toast'
 import { Listen } from './Listen'
 import { htmlToText, mdToHtml } from '../lib/util'
+import { passageScores } from '../ai/system1'
 import type { Suggestion } from '../types'
 
 const ICONS = { calendar: CalendarPlus, check: CheckSquare, sparkles: Lightbulb, clock: Clock, book: BookOpen, list: List }
@@ -262,7 +263,9 @@ function Chat() {
       const current = useStore.getState()
       const workspace: Workspace = { items: current.items, events: current.events, now: new Date(), device: deviceContext() }
       const open = useCtx && active ? current.items.find((item) => item.id === active.id && !item.deletedAt) : null
-      const evidence = turnEvidence(query, { ...workspace, open, action: act })
+      // System 1 ranks passages by meaning when it's ready (a few milliseconds); otherwise words alone decide.
+      const semantic = await passageScores(query).catch(() => undefined)
+      const evidence = turnEvidence(query, { ...workspace, open, action: act, semantic })
       const start = Math.max(0, base.length - 10)
       for (const i of sent.current.keys()) if (i < start || i >= base.length) sent.current.delete(i)
       const history = base.slice(start).map((m, offset): Msg => {
