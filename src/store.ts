@@ -71,6 +71,8 @@ export interface Settings {
   lastBackup?: number
   /** Integrations turned on in this browser (Settings › Integrations). */
   integrations?: ('location' | 'weather')[]
+  /** On the hosted site: allowed to look for Ollama / MLX on this computer (the browser may ask first). */
+  localEngines?: boolean
 }
 
 interface State {

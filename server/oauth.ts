@@ -1,7 +1,9 @@
 import type { Connect, Plugin } from 'vite'
+import { authConfig, githubToken } from './auth.ts'
 
 /**
- * Tiny backend for sign-in, mounted on the dev and preview servers.
+ * Tiny backend for sign-in, mounted on the dev and preview servers. The hosted site runs the same code as Pages
+ * Functions (functions/api/).
  * GitHub won't hand an OAuth token to a browser directly (it needs the client secret
  * and doesn't allow CORS), so the code-for-token exchange happens here.
  *
@@ -19,25 +21,12 @@ export function authApi(env: Record<string, string>): Plugin {
       res.end(JSON.stringify(body))
     }
     try {
-      if (req.method === 'GET' && req.url === '/api/config') {
-        return send(200, {
-          github: env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET ? { clientId: env.GITHUB_CLIENT_ID } : null,
-          google: env.GOOGLE_CLIENT_ID ? { clientId: env.GOOGLE_CLIENT_ID } : null,
-        })
-      }
+      if (req.method === 'GET' && req.url === '/api/config') return send(200, authConfig(env))
       if (req.method === 'POST' && req.url === '/api/github/token') {
-        if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) return send(501, { error: 'GitHub sign-in is not configured' })
         let raw = ''
         for await (const chunk of req) raw += chunk
-        const { code, redirectUri } = JSON.parse(raw || '{}')
-        if (typeof code !== 'string') return send(400, { error: 'Missing code' })
-        const r = await fetch('https://github.com/login/oauth/access_token', {
-          method: 'POST',
-          headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ client_id: env.GITHUB_CLIENT_ID, client_secret: env.GITHUB_CLIENT_SECRET, code, redirect_uri: redirectUri }),
-        })
-        const d = (await r.json()) as { access_token?: string; error?: string; error_description?: string }
-        return d.access_token ? send(200, { token: d.access_token }) : send(400, { error: d.error_description || d.error || 'GitHub sign-in failed' })
+        const r = await githubToken(env, raw)
+        return send(r.status, r.body)
       }
       next()
     } catch (e) {

@@ -29,7 +29,7 @@ Everything is saved in this browser (IndexedDB) by default. Use **Connect storag
 
 Folders in the source become nested docs. A leading `# Title` line becomes the doc title (otherwise the file name does, and renaming the doc renames the file). Front matter is kept as-is. If a file changes in two places, the doc shows **Keep mine / Use theirs**. Sketch blocks aren't available in file-backed docs because Markdown can't hold them.
 
-Tokens stay in this browser and the app talks to GitHub and Google directly. The only server code is a small endpoint in the dev server (`server/oauth.ts`) that swaps GitHub's sign-in code for a token, since GitHub requires a client secret for that step.
+Tokens stay in this browser and the app talks to GitHub and Google directly. The only server code swaps GitHub's sign-in code for a token, since GitHub requires a client secret for that step: `server/auth.ts`, served by the dev server and, on the hosted site, by Pages Functions (`functions/api/`).
 
 ### One-time setup for one-click sign-in
 
@@ -47,8 +47,8 @@ The product name lives in `src/brand.ts`.
 ## Local AI
 
 - **Language model**: [WebLLM](https://github.com/mlc-ai/web-llm) running in a Web Worker via WebGPU. Pick a model in Settings (SmolLM2 360M → Llama 3.2 3B). Downloaded once, cached in the browser, works offline.
-- **Speech-to-text**: Whisper (tiny/base/small) via [Transformers.js](https://github.com/huggingface/transformers.js), WebGPU with WASM fallback.
-- **Ollama** (optional): if running on `localhost:11434`, you can switch to any model you've pulled.
+- **Speech-to-text**: Moonshine Base (fast, English) or Whisper Large v3 Turbo (most accurate) via [Transformers.js](https://github.com/huggingface/transformers.js), WebGPU with WASM fallback.
+- **Ollama or MLX** (optional): models already running on your computer. On the dev server they're found automatically; on the hosted site, click **Settings › Assistant › Use a model already on this computer** (Ollama needs `OLLAMA_ORIGINS=<site address> ollama serve`).
 
 Needs a WebGPU browser for the in-browser model: Chrome, Edge, Arc, or Safari 26+.
 

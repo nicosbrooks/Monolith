@@ -1,8 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Check, Monitor, Moon, Sun, Trash2, X } from 'lucide-react'
 import { useStore } from '../store'
-import { chooseModel, deleteModel, detectMLX, detectOllama, fits, modelForTier, models, refreshCache, resolvedModel, useAI } from '../ai/llm'
+import { chooseModel, deleteModel, detectMLX, detectOllama, fits, lookLocally, mayLookLocally, modelForTier, models, refreshCache, resolvedModel, ollamaHint, useAI } from '../ai/llm'
 import { STT_MODELS, sttModel } from '../ai/stt'
 import { StorageSettings } from './StorageSettings'
 import { openLink } from './LinkDialog'
@@ -107,6 +107,7 @@ export function SettingsModal() {
                     ))}
                   </div>
                 )}
+                {!ai.mlx && !ai.ollama?.length && <LocalEngines />}
                 {models().some((m) => m.tier === 'more' && fits(m)) && (
                   <details className="advanced">
                     <summary>More models</summary>
@@ -152,6 +153,30 @@ export function SettingsModal() {
 }
 
 /** One choice in the model list: pick it and it's used (downloading first if it has to). */
+/**
+ * Ollama or MLX already running on this computer. On the hosted site the browser may ask before the page can reach
+ * them, so nothing is looked for until this is clicked; after that it's checked whenever Settings opens.
+ */
+function LocalEngines() {
+  const [state, setState] = useState<'idle' | 'looking' | 'none'>(mayLookLocally() ? 'none' : 'idle')
+  return (
+    <div className="local-engines">
+      <button className="btn sm" disabled={state === 'looking'} onClick={async () => (setState('looking'), setState((await lookLocally()) ? 'idle' : 'none'))}>
+        {state === 'looking' ? 'Looking…' : state === 'none' ? 'Look again' : 'Use a model already on this computer'}
+      </button>
+      <p className="muted small">
+        {state === 'none' ? (
+          <>
+            Nothing found. Start Ollama with <code>{ollamaHint()}</code>, or run <code>mlx_lm.server</code>, then look again.
+          </>
+        ) : (
+          'Ollama or MLX. Your browser may ask to let this site reach apps on this computer.'
+        )}
+      </p>
+    </div>
+  )
+}
+
 function ModelRow({ name, note, on, progress, onPick, onRemove }: { name: string; note: string; on: boolean; progress?: number; onPick: () => void; onRemove?: () => void }) {
   return (
     <div className={`model ${on ? 'on' : ''}`} role="radio" aria-checked={on} tabIndex={0} onClick={onPick} onKeyDown={(e) => e.key === 'Enter' && onPick()}>

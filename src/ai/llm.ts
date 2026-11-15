@@ -260,11 +260,40 @@ export async function refreshCache() {
   }
 }
 
+// ─── Engines already running on this computer (Ollama, MLX) ──────────────
+// The dev and preview servers proxy them at /local/… (same origin, no CORS). The hosted site has no proxy, so it calls
+// the port directly: Ollama then needs this site in OLLAMA_ORIGINS, and the browser may ask to allow access to devices
+// on this computer. Because of that prompt, the hosted site only looks once someone asks it to in Settings.
+
+/** True where the app's own server can reach this computer's engines (`npm run dev` / `preview`). */
+const proxied = typeof location !== 'undefined' && (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.hostname.endsWith('.ts.net'))
+const BASES = {
+  ollama: [...(proxied ? ['/local/ollama'] : []), 'http://localhost:11434'],
+  mlx: [...(proxied ? ['/local/mlx/v1'] : []), 'http://localhost:8080/v1'],
+}
+const base: { ollama: string; mlx: string } = { ollama: BASES.ollama[0], mlx: BASES.mlx[0] }
+/** Whether to look for local engines now: always behind the dev proxy, on the hosted site once allowed. */
+export const mayLookLocally = () => proxied || !!useStore.getState().settings.localEngines
+/** What Ollama needs to allow this page, for the hint in Settings: nothing behind the dev proxy. */
+export const ollamaHint = () => (proxied ? 'ollama serve' : `OLLAMA_ORIGINS=${location.origin} ollama serve`)
+
+/** The first address for this engine that answers with JSON; remembered for the requests that follow. */
+async function reach(kind: 'ollama' | 'mlx', path: string) {
+  for (const b of BASES[kind]) {
+    const r = await fetch(b + path, { signal: AbortSignal.timeout(1500) }).catch(() => null)
+    if (r?.ok && r.headers.get('content-type')?.includes('json')) {
+      base[kind] = b
+      return r
+    }
+  }
+  return null
+}
+
 export async function detectOllama() {
+  if (!mayLookLocally()) return null
   try {
-    const r = await fetch('/local/ollama/api/tags', {
-      signal: AbortSignal.timeout(1500),
-    })
+    const r = await reach('ollama', '/api/tags')
+    if (!r) throw new Error('not running')
     const j = await r.json()
     const names: string[] = (j.models || []).map((m: { name: string }) => m.name)
     useAI.setState({ ollama: names })
@@ -277,20 +306,19 @@ export async function detectOllama() {
   }
 }
 
-/** A Mac running `mlx_lm.server` (port 8080), reached through the app's own server so the browser needs no CORS. */
-const MLX = '/local/mlx/v1'
-
+/** A Mac running `mlx_lm.server` (port 8080). */
 export async function detectMLX() {
-  try {
-    const r = await fetch(`${MLX}/models`, {
-      signal: AbortSignal.timeout(1500),
-    })
-    useAI.setState({ mlx: r.ok })
-    return r.ok
-  } catch {
-    useAI.setState({ mlx: false })
-    return false
-  }
+  if (!mayLookLocally()) return false
+  const ok = !!(await reach('mlx', '/models'))
+  useAI.setState({ mlx: ok })
+  return ok
+}
+
+/** Settings › "Use a model on this computer": allow looking (the browser may ask), then look. */
+export async function lookLocally() {
+  useStore.getState().setSettings({ localEngines: true })
+  const [mlx, ollama] = await Promise.all([detectMLX(), detectOllama()])
+  return mlx || !!ollama?.length
 }
 
 /**
@@ -513,7 +541,7 @@ export async function chat(messages: Msg[], onToken?: (full: string) => void, op
   useAI.setState({ busy: true })
   try {
     if (which === 'mlx') {
-      const r = await fetch(`${MLX}/chat/completions`, {
+      const r = await fetch(`${base.mlx}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -549,7 +577,7 @@ export async function chat(messages: Msg[], onToken?: (full: string) => void, op
       return clean(full)
     }
     if (which === 'ollama' && s.ollamaModel) {
-      const r = await fetch('/local/ollama/api/chat', {
+      const r = await fetch(`${base.ollama}/api/chat`, {
         method: 'POST',
         body: JSON.stringify({
           model: s.ollamaModel,

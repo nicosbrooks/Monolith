@@ -117,6 +117,17 @@ Save, then **Retry deployment** (variables only apply to new builds).
 **Custom domain:** Pages project → Custom domains → Set up a domain → `monolith.example.com`. Cloudflare adds the
 DNS record.
 
+**Models on people's own computers (Ollama, MLX).** All AI runs on the visitor's device: in the browser, or in Ollama
+or MLX on their computer. The site never looks for those on its own, because the browser may ask "allow this site to
+reach apps on this device?". It looks after someone clicks **Settings › Assistant › Use a model already on this
+computer**, and on every visit after that. Ollama only answers sites it's told about, so Settings shows the command:
+`OLLAMA_ORIGINS=https://monolith.example.com ollama serve`. Safari may refuse an https site talking to
+`http://localhost`; Chrome, Edge and Firefox allow it.
+
+**Headers:** `public/_headers` keeps `sw.js` uncached (so updates arrive) and caches the hashed files in `/assets/`
+for a year. A build without `VITE_RELAY_URL` prints a warning, because phone pairing and calendar subscriptions need
+it on the hosted site.
+
 **Single-page app routing** works without setup: with no `404.html` in `dist`, Pages serves `index.html` for unknown
 paths, so links like `/calendar` open the app.
 
@@ -171,11 +182,12 @@ The design keeps people separate by default; this list is what to keep true as y
   local app. Worth a line in your FAQ.
 - **Previews never talk to production.** Preview builds use the staging relay, so a test build can't join anyone's
   real pairing.
-- **Sign-in (Google Drive, GitHub) isn't production-ready yet.** It uses a small token-exchange backend
-  (`server/oauth.ts`) that only runs on the Vite dev/preview server, not on Pages. Before offering it publicly, move
-  it to a Pages Function (`functions/api/…`) or a Worker, with `GITHUB_CLIENT_SECRET` stored as an encrypted secret
-  (`wrangler secret put`), and register your production domain as the OAuth redirect. Until then those buttons only
-  work locally.
+- **Sign-in (Google Drive, GitHub)** runs on Pages Functions (`functions/api/config.ts`, `functions/api/github/token.ts`,
+  sharing `server/auth.ts` with the dev server). In the Pages project → Settings → Variables and secrets, add
+  `GITHUB_CLIENT_ID` and `GOOGLE_CLIENT_ID` as variables and `GITHUB_CLIENT_SECRET` as a **secret**, then register
+  `https://<your domain>/oauth/github.html` as the GitHub OAuth App's callback and your domain as the Google client's
+  JavaScript origin. Without them, the buttons fall back to pasting a token (GitHub) or a client ID (Google).
+  Checked with `wrangler pages dev dist`: `/api/config` answers and `/api/github/token` reaches GitHub.
 - **Calendar links are fetched by the relay** (browsers can't fetch most calendars directly). It accepts only
   https, refuses private network addresses, caps files at 5 MB, and must see `BEGIN:VCALENDAR` before returning
   anything.
