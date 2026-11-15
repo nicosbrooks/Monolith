@@ -3,7 +3,8 @@ import { baseExtensions } from '../components/editor/extensions'
 
 // One hidden editor does all conversions, so output matches what the live editor produces.
 let ed: Editor | null = null
-const conv = () => (ed ??= new Editor({ element: document.createElement('div'), extensions: baseExtensions() }))
+// It lives in a separate, inert document: in the page's own document, every <img> it builds would start loading.
+const conv = () => (ed ??= new Editor({ element: document.implementation.createHTMLDocument('').createElement('div'), extensions: baseExtensions() }))
 
 export function markdownToHtml(md: string): string {
   const e = conv()

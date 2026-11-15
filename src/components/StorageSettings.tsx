@@ -34,6 +34,7 @@ export function StorageSettings() {
             <b>This browser</b>
             <small>{localCount} items{!home || !sources.some((s) => s.id === home) ? ' · New docs go here' : ''}</small>
           </div>
+          {(!home || !sources.some((s) => s.id === home)) && <button className="btn sm" onClick={change}>Change</button>}
         </div>
 
         {sources.map((s) => {
@@ -53,6 +54,7 @@ export function StorageSettings() {
                   {pending ? ` · ${pending} ${s.kind === 'github' ? 'uncommitted' : 'unsaved'}` : ''}
                 </small>
               </div>
+              {s.id === home && <button className="btn sm" onClick={change}>Change</button>}
               {st === 'needs-auth' ? (
                 <button className="btn sm" onClick={() => reconnect(s.id)}>Reconnect</button>
               ) : (
@@ -86,7 +88,7 @@ export function StorageSettings() {
 
         <button className="model add" onClick={change}>
           <Lock size={16} />
-          <div className="col"><b>{locked ? 'Locked with a passcode' : 'Not locked'}</b><small>{locked ? 'Change the passcode, turn it off, or choose where new docs go' : 'Add a passcode, or choose where new docs go'}</small></div>
+          <div className="col"><b>Passcode</b><small>{locked ? 'On · Change it or turn it off' : 'Off · Add one to encrypt what Monolith saves'}</small></div>
         </button>
 
         <button className="model add" onClick={() => useStore.getState().setUI({ settingsOpen: false, connectOpen: true })}>

@@ -2,7 +2,7 @@ import { Listen } from '../components/Listen'
 import { useEffect, useRef, useState } from 'react'
 import type { Editor as TEditor } from '@tiptap/react'
 import { formatDistanceToNow } from 'date-fns'
-import { ArrowDownWideNarrow, CheckSquare, ChevronRight, Download, FilePlus2, FolderInput, MoreHorizontal, Trash2, Upload, Copy, Star, StarOff, RotateCcw, Folder, Check, CircleAlert, Loader2, GitCommitHorizontal, FileText, SmilePlus } from 'lucide-react'
+import { ArrowDownWideNarrow, CheckSquare, ChevronRight, Download, FilePlus2, FolderInput, MoreHorizontal, Trash2, Upload, Copy, Star, RotateCcw, Folder, Check, CircleAlert, Loader2, GitCommitHorizontal, FileText, SmilePlus } from 'lucide-react'
 import { useStore } from '../store'
 import { MobileBack } from '../components/MobileBack'
 import { confirmDialog } from '../components/Overlays'
@@ -13,7 +13,8 @@ import { htmlToText, itemEmoji } from '../lib/util'
 import { createFile, isDirty, kindLabel, resolve, useSync } from '../storage/sync'
 import { SourceIcon } from '../components/StorageSettings'
 
-const NO_SKETCH = ['sketch']
+// Docs kept as Markdown files in a folder, GitHub or Drive: no sketches, and no attachments (those sources hold text only).
+const NO_SKETCH = ['sketch', 'file']
 
 const EMOJIS = ['📘', '📗', '📕', '🧠', '💡', '🧪', '📐', '🎯', '🗂️', '📝', '🚀', '🌱', '⚙️', '🎨', '📊', '🧭', '🏛️', '✨', '🔬']
 
@@ -71,10 +72,16 @@ export function DocView({ item }: { item: Item }) {
     }
     input.click()
   }
-  const exportMd = () => {
+  /** The doc as one Markdown file that stands on its own: pictures embedded, attachments listed by name. */
+  const asMarkdown = async () => {
+    if (!ed) return ''
+    const [{ inlineFiles }, { htmlToMarkdown }] = await Promise.all([import('../lib/files'), import('../lib/markdown')])
+    return `# ${item.title}\n\n${htmlToMarkdown(await inlineFiles(ed.getHTML()))}`
+  }
+  const exportMd = async () => {
     if (!ed) return
     const a = document.createElement('a')
-    a.href = URL.createObjectURL(new Blob([`# ${item.title}\n\n${ed.getMarkdown()}`], { type: 'text/markdown' }))
+    a.href = URL.createObjectURL(new Blob([await asMarkdown()], { type: 'text/markdown' }))
     a.download = `${item.title || kind}.md`
     a.click()
     URL.revokeObjectURL(a.href)
@@ -128,7 +135,8 @@ export function DocView({ item }: { item: Item }) {
               !isDir && <span className="muted small hide-sm">Edited {formatDistanceToNow(item.updatedAt, { addSuffix: true })} · {words} words</span>
             )}
             {!isDir && <Listen id={item.id} text={() => `${item.title}. ${htmlToText(useStore.getState().items.find((i) => i.id === item.id)?.content ?? '')}`} />}
-            <button className="tb" onClick={() => st.updateItem(item.id, { pinned: !item.pinned })} title={item.pinned ? 'Remove from favorites' : 'Add to favorites'}>{item.pinned ? <StarOff size={17} /> : <Star size={17} />}</button>
+            {/* A filled star means it's a favorite (a struck-out star read as "not a favorite"). */}
+            <button className={`tb ${item.pinned ? 'on' : ''}`} onClick={() => st.updateItem(item.id, { pinned: !item.pinned })} title={item.pinned ? 'Remove from favorites' : 'Add to favorites'} aria-pressed={item.pinned}><Star size={17} fill={item.pinned ? 'currentColor' : 'none'} /></button>
             <div className="drop-wrap">
               <button className="tb" aria-label="More options" aria-expanded={more} onClick={() => setMore(!more)}><MoreHorizontal size={17} /></button>
               {more && (
@@ -153,7 +161,7 @@ export function DocView({ item }: { item: Item }) {
                   )}
                   {!isDir && <button onClick={() => (importMd(), setMore(false))}><Upload size={14} /> Import Markdown…</button>}
                   {!isDir && <button onClick={() => (exportMd(), setMore(false))}><Download size={14} /> Export Markdown</button>}
-                  {!isDir && <button onClick={() => (navigator.clipboard.writeText(`# ${item.title}\n\n${ed?.getMarkdown()}`), toast('Copied as Markdown'), setMore(false))}><Copy size={14} /> Copy as Markdown</button>}
+                  {!isDir && <button onClick={async () => (setMore(false), await navigator.clipboard.writeText(await asMarkdown()), toast('Copied as Markdown'))}><Copy size={14} /> Copy as Markdown</button>}
                   {!isDir && (
                     <button
                       className="danger"

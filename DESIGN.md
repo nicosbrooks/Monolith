@@ -230,6 +230,15 @@ Three files load in order: `src/index.css` (base), `src/theme.css`, `src/soft.cs
 - New patterns go in `src/soft.css` under a commented section, with their own class prefix (Home uses `hm-`).
 - When a pattern is replaced, delete the old rules in all three files in the same change.
 
+### Files in docs
+- A picture shows inline at its natural size (at most the text column), with a soft corner; selected, it gets a faint outline.
+- Any other file is a card on the soft fill: a file icon tile, the name (one line), "PDF · 2.3 MB" in faint tabular text, then **Open** and **Download**. A file that isn't on this device says so in place of its size.
+- On iOS an attachment shows its name and "Open it on your computer".
+
+### Lists in the sidebar
+- Docs and Recordings both list their items in the sidebar while you're in that section; there's no second list column (only Recently Deleted keeps one). Each section row has its own + (New doc / Start recording).
+- Titles get two lines before they're cut, with the full title as the tooltip. Hover buttons take no room until they show.
+
 ## Coverage
 
 | Area | Follows this file? |

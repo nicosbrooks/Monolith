@@ -122,6 +122,8 @@ interface State {
 const now = Date.now()
 const today = startOfDay(new Date())
 
+/** The docs a new workspace starts with. Their example sentences explain features; they're never suggested as real plans. */
+export const SAMPLE_IDS = new Set(['welcome', 'doc-guide'])
 const seedItems: Item[] = [
   {
     id: 'welcome',

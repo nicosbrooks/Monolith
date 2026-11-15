@@ -184,7 +184,9 @@ export function LectureView({ item }: { item: Item }) {
     } catch (e) {
       const fallback = liveToSegments()
       setLec({ status: 'done', transcript: fallback.length ? fallback : lec.transcript })
-      toast('Transcription failed: ' + (e as Error).message)
+      const msg = (e as Error)?.message || ''
+      // A download that didn't arrive gets plain words, not the browser's "Failed to fetch".
+      toast(/fetch|network|load failed/i.test(msg) || !navigator.onLine ? 'The speech model couldn’t download. Check your connection and try again.' : `Transcription failed: ${msg}`)
     } finally {
       setStatus(null)
     }

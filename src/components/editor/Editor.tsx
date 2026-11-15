@@ -2,10 +2,11 @@ import { useEditor, EditorContent, type Editor as TEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import { Placeholder } from '@tiptap/extension-placeholder'
 import { baseExtensions } from './extensions'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Bold, Italic, Underline, Strikethrough, Code, Link2, Highlighter, MessageCircle, ChevronDown } from 'lucide-react'
 import { Sketch } from './SketchNode'
-import { BLOCKS, insertImageFile, type Block } from './blocks'
+import { BLOCKS, insertFiles, setStoresFiles, type Block } from './blocks'
+import { externalize } from '../../lib/files'
 import { runAIBlock, setActiveEditor, transformSelection } from '../../ai/actions'
 
 interface Props {
@@ -56,7 +57,7 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
 
   const editor = useEditor({
     extensions: [
-      ...baseExtensions(),
+      ...baseExtensions(true),
       Placeholder.configure({
         placeholder: ({ node, pos }) =>
           pos === 0 && placeholder ? placeholder : node.type.name === 'heading' ? 'Heading' : 'Type / for blocks…',
@@ -87,21 +88,22 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
         return false
       },
       handleDrop: (view, e) => {
-        const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/'))
+        const files = [...(e.dataTransfer?.files || [])]
         if (!files.length || !editorRef.current) return false
         const pos = view.posAtCoords({ left: e.clientX, top: e.clientY })?.pos
-        files.forEach((f) => insertImageFile(editorRef.current!, f, pos))
+        void insertFiles(editorRef.current, files, pos)
         return true
       },
       handlePaste: (_view, e) => {
-        const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'))
+        const files = [...(e.clipboardData?.files || [])]
         if (!files.length || !editorRef.current) return false
-        files.forEach((f) => insertImageFile(editorRef.current!, f))
+        void insertFiles(editorRef.current, files)
         return true
       },
     },
     onUpdate: ({ editor }) => {
       detectSlash(editor)
+      storeEmbedded(editor)
       clearTimeout(saveTimer.current)
       saveTimer.current = window.setTimeout(() => onChangeRef.current(editor.getHTML(), editor), 250)
     },
@@ -110,14 +112,46 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
   })
   const editorRef = useRef(editor)
   editorRef.current = editor
+  // Tiptap's EditorContent, on its way out, redraws a live editor without its node views, so every picture in the doc
+  // starts loading once more. Destroying the editor first (this runs before EditorContent's cleanup) skips that.
+  useLayoutEffect(() => () => void (editorRef.current && !editorRef.current.isDestroyed && editorRef.current.destroy()), [])
   // Tell the parent once we're mounted (not during render, which React warns about).
   const onReadyRef = useRef(onReady)
   onReadyRef.current = onReady
   useEffect(() => {
     if (!editor) return
+    setStoresFiles(editor, !exclude?.includes('file'))
     setActiveEditor(editor)
     onReadyRef.current?.(editor)
-  }, [editor])
+    storeEmbedded(editor)
+  }, [editor]) // eslint-disable-line
+
+  /**
+   * Pictures embedded in the doc as data (from older versions, pasted from a web page or another app, or synced from
+   * the phone) move into the file store, and the doc keeps a short reference. Runs in the background; not undoable,
+   * because nothing visible changes.
+   */
+  const storing = useRef(false)
+  function storeEmbedded(ed: TEditor) {
+    if (storing.current || ed.isDestroyed || exclude?.includes('file') || !ed.getHTML().includes('src="data:image/')) return
+    storing.current = true
+    void (async () => {
+      try {
+        const srcs = new Set<string>()
+        ed.state.doc.descendants((n) => void (n.type.name === 'image' && String(n.attrs.src).startsWith('data:') && srcs.add(n.attrs.src)))
+        for (const src of srcs) {
+          const html = await externalize(`<img src="${src}">`)
+          const ref = html.match(/src="(monolith-file:[0-9a-f]+)"/)?.[1]
+          if (!ref || ed.isDestroyed) continue
+          const tr = ed.state.tr
+          ed.state.doc.descendants((n, pos) => void (n.type.name === 'image' && n.attrs.src === src && tr.setNodeMarkup(pos, undefined, { ...n.attrs, src: ref })))
+          if (tr.docChanged) ed.view.dispatch(tr.setMeta('addToHistory', false))
+        }
+      } finally {
+        storing.current = false
+      }
+    })()
+  }
 
   const mounted = useRef(false)
   useEffect(() => {

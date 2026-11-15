@@ -555,11 +555,13 @@ kbd {
   width: 18px;
   text-align: center;
 }
+/* Out of the layout until the row is hovered or focused, so titles get the whole width. */
 .nav .hover-only {
-  opacity: 0;
+  display: none;
 }
-.nav:hover .hover-only {
-  opacity: 1;
+.nav:hover .hover-only,
+.nav:focus-within .hover-only {
+  display: grid;
 }
 .twisty {
   display: grid;
@@ -2789,4 +2791,9 @@ kbd {
   .cal-head h2 {
     min-width: 0;
   }
+}
+
+/* On the calendar the row of day labels sits right under the top controls: notifications go just below it. */
+.app:has(.main.sec-calendar) .toaster {
+  top: calc(var(--cal-head, 104px) + 8px + env(safe-area-inset-top));
 }

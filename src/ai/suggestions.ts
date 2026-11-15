@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { differenceInMinutes, format, isSameDay } from 'date-fns'
-import { useStore } from '../store'
+import { SAMPLE_IDS, useStore } from '../store'
 import type { Suggestion } from '../types'
 import { eventColor, findDatedCommitments } from '../lib/dates'
 import { htmlToText } from '../lib/util'
@@ -29,6 +29,7 @@ export function useRuleSuggestions(): Suggestion[] {
     // 1. Dates mentioned in recent writing → calendar
     const recent = [active, ...live.filter((i) => i.id !== activeId).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5)].filter(Boolean)
     for (const it of recent) {
+      if (SAMPLE_IDS.has(it!.id)) continue // "Problem set due Friday 5pm" in the welcome doc is an example, not a plan
       for (const p of findDatedCommitments(htmlToText(it!.content), now)) {
         const exists = events.some(
           (e) => isSameDay(e.start, p.start) && (norm(e.title).includes(norm(p.title).slice(0, 12)) || norm(p.title).includes(norm(e.title).slice(0, 12))),

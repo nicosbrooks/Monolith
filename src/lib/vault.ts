@@ -124,15 +124,20 @@ export async function unlock(passcode: string) {
   return true
 }
 
-/** Re-save recordings with the current write key (sealed, or in the clear while the lock is turned off). */
+/** Re-save recordings and doc files with the current write key (sealed, or in the clear while the lock is turned off). */
 async function resealAudio() {
-  const ids = (await keys()).filter((k): k is string => typeof k === 'string' && k.startsWith('audio:'))
+  const ids = (await keys()).filter((k): k is string => typeof k === 'string' && (k.startsWith('audio:') || k.startsWith('file:')))
   for (const id of ids) {
     const v = await get(id)
-    const sealedNow = !!v && !(v instanceof Blob)
+    // Doc files are stored as a record with the file in `data`; recordings are the file itself.
+    const rec = id.startsWith('file:') ? (v as { data: Blob | { sealed: Uint8Array; type: string } } | undefined) : undefined
+    const inner = rec ? rec.data : v
+    const sealedNow = !!inner && !(inner instanceof Blob)
     if (sealedNow === !!writeKey) continue
-    const blob = await openBlob(v)
-    if (blob) await set(id, await sealBlob(blob))
+    const blob = await openBlob(inner)
+    if (!blob) continue
+    const next = await sealBlob(blob)
+    await set(id, rec ? { ...rec, data: next } : next)
   }
 }
 

@@ -12,6 +12,8 @@ import { confirmDialog, openMenu, type MenuItem } from './Overlays'
 import { toast } from './Toast'
 import { APP_NAME } from '../brand'
 import { itemEmoji } from '../lib/util'
+import { startRecording } from '../lib/recordNext'
+import { rowMenu } from '../views/ItemList'
 
 export function Logo({ size = 20 }: { size?: number }) {
   return (
@@ -66,7 +68,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
         </div>
         {/* The doc tree opens under Docs while you're there, instead of a second list of docs below. */}
         {s.section === 'docs' && !s.folderId && <div className="side-tree"><DocTree /></div>}
-        {nav('lectures', 'Recordings', Mic)}
+        <div className={`nav-row ${s.section === 'lectures' ? 'here' : ''}`}>
+          {nav('lectures', 'Recordings', Mic)}
+          <button className="icon-btn sm nav-add" title="Start recording" aria-label="Start recording" onClick={() => startRecording()}><Plus size={14} /></button>
+        </div>
+        {/* Like docs: recordings are listed here while you're in Recordings, not in a second column. */}
+        {s.section === 'lectures' && <div className="side-tree"><RecordingList /></div>}
         {nav('calendar', 'Calendar', CalendarDays)}
 
         {(s.folders.length > 0 || newFolder !== null) && (
@@ -157,7 +164,7 @@ function Tree({ docs, depth = 0, parent = null }: { docs: Item[]; depth?: number
                   <ChevronRight size={12} />
                 </span>
                 <span className="emoji">{d.file?.dir ? <Folder size={14} strokeWidth={1.8} /> : itemEmoji(d) || <FileText size={14} />}</span>
-                <button type="button" className="tree-title" onClick={(e) => { e.stopPropagation(); useStore.getState().open(d.id) }}>{d.title || 'Untitled'}</button>
+                <button type="button" className="tree-title" title={d.title || undefined} onClick={(e) => { e.stopPropagation(); useStore.getState().open(d.id) }}>{d.title || 'Untitled'}</button>
                 {d.file?.conflict ? <i className="file-dot conflict" title="Changed in two places" /> : isDirty(d) ? <i className="file-dot" title="Unsaved changes" /> : null}
                 {(!d.sourceId || d.file?.dir) && (
                   <button
@@ -203,6 +210,25 @@ export function docMenu(d: Item): MenuItem[] {
 }
 
 /** Your docs as a tree. Inside a folder, every doc in it sits at the top level even if its parent lives elsewhere. */
+/** Recordings, newest first (pinned on top). Only re-renders when a recording changes, not while typing in a doc. */
+function RecordingList() {
+  const recs = useStore(useShallow((s) => s.items.filter((i) => i.kind === 'lecture' && !i.deletedAt)))
+  const activeId = useStore((s) => s.activeId)
+  const sorted = [...recs].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt - a.createdAt)
+  if (!sorted.length) return <div className="side-empty">No recordings yet</div>
+  return (
+    <>
+      {sorted.map((r) => (
+        <div key={r.id} className={`nav sub doc ${activeId === r.id ? 'on' : ''}`} style={{ paddingLeft: 8 }} onClick={() => useStore.getState().open(r.id)} onContextMenu={(e) => openMenu(e, rowMenu(r))}>
+          <span className="twisty hide" />
+          <span className="emoji"><Mic size={14} /></span>
+          <button type="button" className="tree-title" title={r.title || undefined} onClick={(e) => { e.stopPropagation(); useStore.getState().open(r.id) }}>{r.title || 'Untitled'}</button>
+        </div>
+      ))}
+    </>
+  )
+}
+
 function DocTree({ folderId }: { folderId?: string }) {
   const items = useStore((s) => s.items)
   let docs = items.filter((i) => i.kind === 'doc' && !i.deletedAt && !i.sourceId && (!folderId || i.folderId === folderId))

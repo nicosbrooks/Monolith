@@ -220,9 +220,27 @@ struct MarkdownImage: View {
         return img
     }
 
+    /// The text inside `![…]`: the file's name for an attachment.
+    private var alt: String {
+        guard let open = source.range(of: "!["), let close = source.range(of: "](") , open.upperBound <= close.lowerBound else { return "" }
+        return String(source[open.upperBound..<close.lowerBound])
+    }
+
     var body: some View {
         Group {
-            if let img = embedded {
+            if src.hasPrefix("monolith-file:") {
+                // An attachment kept on the computer (pictures arrive embedded): show what it is, not a broken image.
+                HStack(spacing: 10) {
+                    Image(systemName: "doc").foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(alt.isEmpty ? "File" : alt).lineLimit(1)
+                        Text("Open it on your computer").font(.footnote).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(12)
+                .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 12))
+            } else if let img = embedded {
                 Image(uiImage: img).resizable().scaledToFit()
             } else {
                 AsyncImage(url: URL(string: src)) { phase in

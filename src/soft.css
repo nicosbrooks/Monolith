@@ -1155,14 +1155,21 @@ body {
   background: #151514;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
+/* Titles get two lines before they're cut short, so most show in full; the full title is also the tooltip. */
 .tree-title {
   flex: 1;
   min-width: 0;
-  align-self: stretch;
   text-align: left;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: break-word;
+  line-height: 1.3;
+  /* Margin, not padding: the clamp clips at the padding edge, so padding would show a sliver of a third line. */
+  align-self: center;
+  margin-block: 5px;
 }
 .note-move {
   display: flex;
@@ -1207,8 +1214,13 @@ body {
   height: 38px;
   flex: none;
 }
+/* At least one line high; a long doc title can take a second line (see .tree-title). */
 .nav.sub {
-  height: 34px;
+  height: auto;
+  min-height: 34px;
+}
+.nav .tree-title {
+  white-space: normal;
 }
 .side-label {
   margin: 22px 0 6px;
@@ -1846,5 +1858,31 @@ body {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+
+/* Pictures and attachments in docs (FileNode.ts) */
+.ProseMirror .file-node { margin: 10px 0; border-radius: 12px; outline: 2px solid transparent; outline-offset: 2px; transition: outline-color 0.15s; }
+.ProseMirror .file-node.is-selected { outline-color: var(--text-3); }
+.ProseMirror .file-node img { display: block; max-width: 100%; height: auto; border-radius: 12px; }
+.file-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--card-hover); max-width: 520px; }
+.file-card .file-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--btn); color: var(--text-2); flex: none; }
+.file-card .file-text { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.file-card .file-text b { font-weight: 550; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-card .file-text small { color: var(--text-3); font-size: 13px; font-variant-numeric: tabular-nums; }
+.file-card.missing .file-text small { color: var(--text-3); font-style: italic; }
+@media (max-width: 520px) { .file-card { flex-wrap: wrap; } .file-card .file-text { flex-basis: calc(100% - 48px); } }
+
+/* Phones: the page fades out under the Ask bar and + button, as on desktop, so rows never collide with them. */
+@media (max-width: 680px) {
+  .p-dock::before {
+    content: '';
+    position: absolute;
+    inset: -44px -12px calc(-10px - env(safe-area-inset-bottom));
+    z-index: -1;
+    background: linear-gradient(to bottom, transparent, var(--content) 58%);
+    pointer-events: none;
+  }
+  .p-dock { isolation: isolate; }
 }
 

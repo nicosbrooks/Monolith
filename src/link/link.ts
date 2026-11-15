@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { del, get, set } from 'idb-keyval'
 import { useStore } from '../store'
 import type { CalEvent, Item } from '../types'
+import { inlineFiles } from '../lib/files'
 import { aesKey, b64u, deriveKey, equal, hmac, newKeyPair, open, random, seal } from './crypto'
 
 /**
@@ -265,7 +266,8 @@ async function toRec(i: Item): Promise<Rec> {
     updatedAt: i.updatedAt,
     deletedAt: i.deletedAt,
     title: i.title,
-    body: htmlToMarkdown(i.content),
+    // The phone can't reach this browser's file store: pictures travel embedded, attachments as references.
+    body: htmlToMarkdown(await inlineFiles(i.content)),
     emoji: i.emoji,
     pinned: i.pinned,
     folder: st.folders.find((f) => f.id === i.folderId)?.name,

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { isToday, isYesterday, differenceInDays, format } from 'date-fns'
 import { LayoutGrid, List, Pin, PinOff, Search, SquarePen, Mic, Hash, X, Trash2, RotateCcw, FolderInput, Inbox, Ellipsis, FolderPlus, Settings, ChevronLeft } from 'lucide-react'
 import { motion } from 'motion/react'
@@ -8,7 +8,8 @@ import { formatDuration, preview } from '../lib/util'
 import { confirmDialog, openMenu, type MenuItem } from '../components/Overlays'
 import { toast } from '../components/Toast'
 import { useLongPress, useMobile, useScrolled } from '../lib/useMobile'
-import { recordWhenOpened } from '../lib/recordNext'
+import { startRecording } from '../lib/recordNext'
+import { fileUrl, hashOf } from '../lib/files'
 import { PhoneTitle } from '../components/Phone'
 
 function group(t: number) {
@@ -29,10 +30,7 @@ export function ItemList({ kind, trash }: { kind?: ItemKind; trash?: boolean }) 
   const [q, setQ] = useState('')
   const [grid, setGrid] = useState(false)
   const st = useStore.getState()
-  const newItem = () => {
-    const made = st.createItem(kind!, kind === 'lecture' ? { title: `Recording · ${format(new Date(), 'MMM d')}` } : {})
-    if (kind === 'lecture') recordWhenOpened(made.id)
-  }
+  const newItem = () => (kind === 'lecture' ? startRecording() : st.createItem(kind!))
   const newFolder = () => {
     const name = prompt('New folder')?.trim()
     if (name) st.createFolder(name)
@@ -169,7 +167,7 @@ export function ItemList({ kind, trash }: { kind?: ItemKind; trash?: boolean }) 
   )
 }
 
-function rowMenu(item: Item): MenuItem[] {
+export function rowMenu(item: Item): MenuItem[] {
   const st = useStore.getState()
   const what = item.kind === 'lecture' ? 'lecture' : item.kind
   if (item.deletedAt)
@@ -188,6 +186,16 @@ function rowMenu(item: Item): MenuItem[] {
   ]
 }
 
+/** A doc's first picture, from the file store when it's a stored file (see lib/files.ts). */
+function Thumb({ src }: { src: string }) {
+  const hash = hashOf(src)
+  const [url, setUrl] = useState(hash ? '' : src)
+  useEffect(() => {
+    if (hash) void fileUrl(hash).then((u) => setUrl(u ?? ''))
+  }, [hash])
+  return url ? <img src={url} alt="" loading="lazy" decoding="async" /> : null
+}
+
 function Row({ item, on, grid }: { item: Item; on: boolean; grid: boolean }) {
   const hold = useLongPress((e) => openMenu(e, rowMenu(item)))
   const img = grid ? item.content.match(/<img[^>]+src="([^"]+)"/)?.[1] : undefined
@@ -195,7 +203,7 @@ function Row({ item, on, grid }: { item: Item; on: boolean; grid: boolean }) {
     <motion.button layout="position" className={`row-item ${on ? 'on' : ''}`} onClick={() => useStore.setState({ activeId: item.id })} onContextMenu={(e) => openMenu(e, rowMenu(item))} {...hold}>
       {grid && (
         <div className="thumb">
-          {img ? <img src={img} alt="" /> : <div className="thumb-text" dangerouslySetInnerHTML={{ __html: item.content.replace(/<img[^>]*>/g, '').slice(0, 1200) }} />}
+          {img ? <Thumb src={img} /> : <div className="thumb-text" dangerouslySetInnerHTML={{ __html: item.content.replace(/<img[^>]*>/g, '').slice(0, 1200) }} />}
         </div>
       )}
       <div className="row-title">

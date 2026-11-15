@@ -6,7 +6,7 @@ import { useShortcuts } from './Overlays'
 import { AnimatePresence, motion } from 'motion/react'
 import { useStore } from '../store'
 import { htmlToText, itemEmoji } from '../lib/util'
-import { recordWhenOpened } from '../lib/recordNext'
+import { startRecording } from '../lib/recordNext'
 import { eventColor, parseQuickEvent, whenLabel } from '../lib/dates'
 
 export function CommandPalette() {
@@ -98,7 +98,7 @@ export function CommandPalette() {
                 <Command.Group heading="Actions">
                   {[
                     { l: q ? `New doc “${q}”` : 'New doc', i: FileText, k: '⌘N', f: () => st.createItem('doc', q ? { title: q } : {}) },
-                    { l: 'Start recording', i: Mic, f: () => { const made = st.createItem('lecture', { title: q || `Recording · ${format(new Date(), 'MMM d')}` }); recordWhenOpened(made.id) } },
+                    { l: 'Start recording', i: Mic, f: () => void startRecording(q) },
                     { l: 'Go home', i: Home, f: () => st.go('home') },
                     { l: 'Go to Calendar', i: CalendarDays, f: () => st.go('calendar') },
                     { l: 'Open the assistant', i: MessageCircle, k: '⌘J', f: () => st.setUI({ aiOpen: !st.aiOpen }) },

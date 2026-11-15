@@ -63,9 +63,9 @@ function findTask(text: string, items: Item[]) {
   for (const exact of [true, false])
     for (const i of items) {
       if (i.deletedAt || !i.content.includes('data-checked="false"')) continue
-      const div = document.createElement('div')
-      div.innerHTML = i.content
-      for (const li of div.querySelectorAll('li[data-checked="false"]')) {
+      const tpl = document.createElement('template') // inert: pictures in it don't load
+      tpl.innerHTML = i.content
+      for (const li of tpl.content.querySelectorAll('li[data-checked="false"]')) {
         const n = norm(li.textContent || '')
         if (exact ? n === t : n.includes(t) || t.includes(n)) return { item: i, text: (li.textContent || '').trim() }
       }
@@ -240,11 +240,11 @@ export function perform(a: Act): () => void {
       const doc = st.items.find((i) => i.id === a.docId)
       if (!doc) return () => {}
       const before = doc.content
-      const div = document.createElement('div')
-      div.innerHTML = before
-      const li = [...div.querySelectorAll('li[data-checked="false"]')].find((x) => (x.textContent || '').trim() === a.title)
+      const tpl = document.createElement('template') // inert: pictures in it don't load
+      tpl.innerHTML = before
+      const li = [...tpl.content.querySelectorAll('li[data-checked="false"]')].find((x) => (x.textContent || '').trim() === a.title)
       li?.setAttribute('data-checked', 'true')
-      setDocHtml(doc.id, div.innerHTML)
+      setDocHtml(doc.id, tpl.innerHTML)
       return () => setDocHtml(doc.id, before)
     }
     default: {

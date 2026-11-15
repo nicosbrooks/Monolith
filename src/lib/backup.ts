@@ -4,6 +4,7 @@ import { loadAudio, saveAudio, saveNow, useStore, type Settings } from '../store
 import { random } from '../link/crypto'
 import type { CalEvent, Folder, Item } from '../types'
 import { APP_NAME } from '../brand'
+import { exportFiles, importFiles, type FileMeta } from './files'
 
 // The whole workspace in one encrypted file: docs, recordings (with audio), calendar, folders and preferences.
 // Nothing leaves the browser except as the file the person saves. Restoring it in any browser brings everything back,
@@ -35,6 +36,8 @@ interface Payload {
   settings: Partial<Settings>
   dismissed: string[]
   audio: Record<string, { type: string; data: string }>
+  /** Pictures and attachments in docs, by content hash (see lib/files.ts). Missing in backups from before files. */
+  files?: Record<string, FileMeta & { data: string }>
 }
 export interface Opened { header: Header; payload: Payload }
 
@@ -78,7 +81,8 @@ export async function exportWorkspace(password: string): Promise<Blob> {
     if (blob) audio[i.id] = { type: blob.type, data: b64.encode(new Uint8Array(await blob.arrayBuffer())) }
   }
   const { home: _h, setupAt: _a, ...settings } = s.settings
-  const payload: Payload = { app: APP_NAME, version: 1, items, folders: s.folders, events: s.events, settings, dismissed: s.dismissed, audio }
+  const files = await exportFiles(items.map((i) => i.content), b64.encode)
+  const payload: Payload = { app: APP_NAME, version: 1, items, folders: s.folders, events: s.events, settings, dismissed: s.dismissed, audio, files }
 
   const salt = random(16)
   const iv = random(12)
@@ -128,6 +132,8 @@ export async function unlockBackup(p: { header: Header; body: Uint8Array }, pass
  * them); this browser's passcode, if any, stays on and the restored data is saved under it.
  */
 export async function restore({ payload }: Opened) {
+  // Files first, so docs that use them never show them as missing.
+  await importFiles(payload.files ?? {}, b64.decode)
   const s = useStore.getState()
   // Docs from a source that's still connected stay as they are; their copies in the backup are skipped, not doubled.
   const fromSources = s.items.filter((i) => i.sourceId)

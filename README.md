@@ -9,7 +9,7 @@ npm run dev   # http://localhost:5199
 
 ## What's in it
 
-- **Notes** (Apple Notes-style): title/heading/body/monospace styles, checklists (move checked to bottom), tables, images (paste/drag), freehand **sketch** blocks (pen, highlighter, eraser; pressure-sensitive), folders, #tags, pinning, gallery view, Recently Deleted, Markdown export.
+- **Notes** (Apple Notes-style): title/heading/body/monospace styles, checklists (move checked to bottom), tables, pictures and **file attachments** (paste, drag or `/File`; pictures are resized, every file is stored once on the device and opens or downloads from its card), freehand **sketch** blocks (pen, highlighter, eraser; pressure-sensitive), folders, #tags, pinning, gallery view, Recently Deleted, Markdown export.
 - **Docs** (Slite-style): nested pages, emoji icons, `/` slash commands, Markdown shortcuts, table of contents, Markdown import/export.
 - **Lectures**: record or import audio → live captions → on-device Whisper transcript (click a line to jump in the audio) → AI study notes and flashcards.
 - **Calendar**: week/month views, drag to create/move/resize, natural-language quick add ("calc review thu 4pm for 2h"), link events to notes or recordings.

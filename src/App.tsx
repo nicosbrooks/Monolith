@@ -16,6 +16,7 @@ import { startLink, useLink } from './link/link'
 import { PhoneDocList, TabBar } from './components/Phone'
 import { Setup, Unlock } from './components/Setup'
 import { BackupDialog } from './components/BackupDialog'
+import { startRecording } from './lib/recordNext'
 import { checkVault, useVault } from './lib/vault'
 
 void checkVault()
@@ -78,6 +79,7 @@ export default function App() {
     }
     // Find the best engine this machine already has, quietly.
     void startAI()
+    void import('./lib/fileUpkeep').then((m) => m.startFileUpkeep())
     // Warm the editor and calendar in the background so the first open is instant.
     const idle = window.requestIdleCallback || ((f: () => void) => setTimeout(f, 800))
     idle(() => void Promise.all([views.doc(), views.calendar()]).catch(() => {}))
@@ -148,7 +150,8 @@ export default function App() {
         kind === 'doc' ? <PhoneDocList /> : <ItemList kind={kind} trash={section === 'trash'} />
       ) : (
         <>
-          {kind !== 'doc' && !mobile && <ItemList kind={kind} trash={section === 'trash'} />}
+          {/* Docs and recordings are listed in the sidebar; only Recently Deleted has a list column. */}
+          {section === 'trash' && !mobile && <ItemList kind={kind} trash />}
           <div className="detail">{detail}</div>
         </>
       )
@@ -200,7 +203,17 @@ export default function App() {
 
 function Empty({ kind }: { kind?: string }) {
   if (!kind) return <div className="empty-detail blank"><b>Nothing selected</b><p>Pick something from the list to see it here.</p></div>
-  if (kind === 'lecture') return <div className="empty-detail blank"><span className="blank-ico"><Mic size={22} strokeWidth={1.7} /></span><b>Pick a recording</b><p>Its transcript and notes open here.</p></div>
+  if (kind === 'lecture') {
+    const any = useStore.getState().items.some((i) => i.kind === 'lecture' && !i.deletedAt)
+    return (
+      <div className="empty-detail blank">
+        <span className="blank-ico"><Mic size={22} strokeWidth={1.7} /></span>
+        <b>{any ? 'No recording open' : 'No recordings yet'}</b>
+        <p>{any ? 'Pick one in the sidebar, or start a new one.' : 'Record a class or meeting. You get a transcript, and notes written for you.'}</p>
+        <button className="btn primary" onClick={() => startRecording()}><Mic size={15} /> Start recording</button>
+      </div>
+    )
+  }
   return (
     <div className="empty-detail blank">
       <span className="blank-ico"><FileText size={22} strokeWidth={1.7} /></span>

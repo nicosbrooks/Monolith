@@ -33,9 +33,10 @@ export interface Todo {
 
 export function extractOpenTodos(html: string, itemId: string): Todo[] {
   if (!html.includes('data-checked')) return []
-  const div = document.createElement('div')
-  div.innerHTML = html
-  return [...div.querySelectorAll('li[data-checked="false"]')]
+  // A <template> parses without loading anything (pictures in a plain <div> would start downloading).
+  const tpl = document.createElement('template')
+  tpl.innerHTML = html
+  return [...tpl.content.querySelectorAll('li[data-checked="false"]')]
     .map((li) => ({ itemId, text: (li.textContent || '').trim() }))
     .filter((t) => t.text)
 }
