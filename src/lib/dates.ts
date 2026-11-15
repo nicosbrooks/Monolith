@@ -32,7 +32,9 @@ const ORD = String.raw`(?:st|nd|rd|th)`
 const MER = String.raw`(a\.?m\.?|p\.?m\.?)`
 /** "at", "on", "by", "from" in front of a date or time belong to it, not to the title. */
 const LEAD = String.raw`(?:(?:on|at|by|from|starting(?: on| at)?|before|until|till|for|this|next|coming)\s+|@\s*)*`
-const WEEKDAY = String.raw`(sun|mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat)(?:day|nesday|sday|urday|s)?`
+// Full names (and plurals: "mondays"), or the short forms. A short form never takes an "s" ("thus" isn't Thursday), and
+// "sun" counts only before a date, a comma or full stop, or at the end ("watch the sun rise" isn't Sunday).
+const WEEKDAY = String.raw`((?:sun|mon|tues|wednes|thurs|fri|satur)day|mon|tues|tue|weds|wed|thurs|thur|thu|fri|sat|sun(?=[.,]|\s+\d|\s*$))(?:(?<=day)s)?(?![a-z])`
 
 const PART: Record<string, number> = { morning: 9, afternoon: 14, evening: 18, night: 20, tonight: 20 }
 
@@ -114,8 +116,14 @@ export function parseQuickEvent(input: string, now = new Date()): ParsedEvent | 
   } else if ((m = take(new RegExp(String.raw`\s${LEAD}the\s+(\d{1,2})${ORD}\b|\s(?:on|by)\s+(\d{1,2})${ORD}\b`, 'i')))) {
     markDue(m)
     const dd = +(m[1] ?? m[2])
-    const x = new Date(now.getFullYear(), now.getMonth(), dd)
-    day = startOfDay(x < today ? new Date(now.getFullYear(), now.getMonth() + 1, dd) : x)
+    // This month's, else next month's; a day the month doesn't have ("the 31st" in November) moves on, never rolls over.
+    const fit = (mo: number) => {
+      const x = new Date(now.getFullYear(), mo, dd)
+      return x.getMonth() === ((mo % 12) + 12) % 12 ? x : null
+    }
+    let x = fit(now.getMonth())
+    if (!x || x < today) x = fit(now.getMonth() + 1) ?? fit(now.getMonth() + 2)
+    if (x) day = startOfDay(x)
   } else if ((m = take(/\s(?:by\s+|on\s+)?(?:the\s+)?day\s+after\s+(?:tomorrow|tmrw|tmr)\b|\sovermorrow\b/i))) (markDue(m), (day = addDays(today, 2)))
   else if ((m = take(/\s(?:by\s+|on\s+|for\s+)?(?:tomorrow|tomorow|tommorow|tommorrow|tmrw|tmr|tmw)(?:\s+(morning|afternoon|evening|night))?\b/i))) {
     markDue(m)
@@ -168,8 +176,9 @@ export function parseQuickEvent(input: string, now = new Date()): ParsedEvent | 
   // A range: "3-5pm", "10am to 12", "from 3 to 4:30", "between 2 and 4pm", "9:30-11".
   const RANGE = new RegExp(String.raw`\s${LEAD}(?:between\s+)?${T}\s*(?:-|to|till|until|and)\s*${T}(?=[\s,.!?])`, 'i')
   const r = text.match(RANGE)
-  // Only a time range if something says so ("pages 3-5" isn't one).
-  if (r && (r[3] || r[6] || r[2] || r[5] || part !== null || /\b(from|between|at)\b/i.test(r[0])) && +r[1] <= 24 && +r[4] <= 24) {
+  // Only a time range if something says so ("pages 3-5" isn't one, even "tonight": "read chapters 3-5 tonight").
+  const counted = r?.index !== undefined && !r[3] && !r[6] && !r[2] && !r[5] && /\b(?:pages?|pp?|chapters?|ch|sections?|problems?|questions?|exercises?|qs?|slides?|lectures?|units?|modules?|lessons?|weeks?|days?|steps?|items?|parts?|nos?|numbers?|#)\.?\s*$/i.test(text.slice(0, r.index + 1))
+  if (r && !counted && (r[3] || r[6] || r[2] || r[5] || part !== null || /\b(from|between|at)\b/i.test(r[0])) && +r[1] <= 24 && +r[4] <= 24) {
     const range = take(RANGE)!
     markDue(range)
     start = { h: +range[1], m: +(range[2] ?? 0), mer: mer(range[3]) }

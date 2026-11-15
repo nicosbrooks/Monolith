@@ -1,5 +1,5 @@
 // Quick-add parser cases. Run: npm run test:dates  (Node 22.6+ runs TypeScript directly)
-// iOS mirrors the parser (QuickAdd in apple/iOS/Intelligence.swift); add a case here when either changes.
+// iOS mirrors the parser (apple/iOS/QuickAdd.swift); add a case here when either changes.
 import { parseQuickEvent } from '../src/lib/dates.ts'
 
 // Sunday, Nov 15 2026, 10:00 AM
@@ -78,8 +78,15 @@ const cases: [string, string, string, string, string?][] = [
   ['The midterm is on Nov 20 at 9am in Room 101.', 'Midterm', 'Fri 11/20 09:00', 'Fri 11/20 10:00', '@Room 101'],
   ['group project meeting in class friday', 'Group project meeting in class', 'Fri 11/20 00:00', 'all'],
   ['problem set 5 due thursday by 11:59pm', 'Problem set 5', 'Thu 11/19 23:59', 'Fri 11/20 00:29', 'due'],
+  ['read chapters 3-5 tonight', 'Read chapters 3-5', 'Sun 11/15 20:00', 'Sun 11/15 21:00'],
+  ['watch the sun rise tomorrow', 'Watch the sun rise', 'Mon 11/16 00:00', 'all'],
+  ['Sun Devils game at 7 tomorrow', 'Sun Devils game', 'Mon 11/16 07:00', 'Mon 11/16 08:00'],
+  ['essay due the 31st', 'Essay', 'Thu 12/31 00:00', 'all', 'due'],
+  ['brunch Sun 11/22', 'Brunch', 'Sun 11/22 00:00', 'all'],
+  ['brunch on sun', 'Brunch', 'Sun 11/22 00:00', 'all'],
+  ['tutoring mondays at 4pm', 'Tutoring', 'Mon 11/16 16:00', 'Mon 11/16 17:00'],
 ]
-const nulls = ['math 19a homework', 'buy milk', 'chapter 3 notes', 'room 4 key', 'read pages 3-5', 'CS 61B notes', 'v2.0 release', 'call mom']
+const nulls = ['math 19a homework', 'buy milk', 'chapter 3 notes', 'room 4 key', 'read pages 3-5', 'CS 61B notes', 'v2.0 release', 'call mom', 'the exam was moved, thus we meet later', 'bring sunscreen']
 
 let fail = 0
 for (const [input, title, start, end, flag] of cases) {

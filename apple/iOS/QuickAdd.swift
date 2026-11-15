@@ -32,7 +32,9 @@ enum QuickAdd {
     private static let ORD = #"(?:st|nd|rd|th)"#
     private static let MER = #"(a\.?m\.?|p\.?m\.?)"#
     private static let LEAD = #"(?:(?:on|at|by|from|starting(?: on| at)?|before|until|till|for|this|next|coming)\s+|@\s*)*"#
-    private static let WEEKDAY = #"(sun|mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat)(?:day|nesday|sday|urday|s)?"#
+    // Full names (and plurals: "mondays"), or the short forms. A short form never takes an "s" ("thus" isn't Thursday), and
+    // "sun" counts only before a date, a comma or full stop, or at the end ("watch the sun rise" isn't Sunday).
+    private static let WEEKDAY = #"((?:sun|mon|tues|wednes|thurs|fri|satur)day|mon|tues|tue|weds|wed|thurs|thur|thu|fri|sat|sun(?=[.,]|\s+\d|\s*$))(?:(?<=day)s)?(?![a-z])"#
     private static let part: [String: Int] = ["morning": 9, "afternoon": 14, "evening": 18, "night": 20, "tonight": 20]
 
     private struct Clock { var h: Int; var m: Int; var mer: String? }
@@ -164,9 +166,14 @@ enum QuickAdd {
         } else if let m = r.take(#"\s\#(LEAD)the\s+(\d{1,2})\#(ORD)\b|\s(?:on|by)\s+(\d{1,2})\#(ORD)\b"#) {
             markDue(m)
             let dd = Int(m[1] ?? m[2]!)!
-            var c = cal.dateComponents([.year, .month], from: now)
-            c.day = dd
-            if let x = cal.date(from: c) { day = x < today ? cal.date(byAdding: .month, value: 1, to: x) : x }
+            // This month's, else next month's; a day the month doesn't have ("the 31st" in November) moves on, never rolls over.
+            let first = cal.date(from: cal.dateComponents([.year, .month], from: now))!
+            func fit(_ ahead: Int) -> Date? {
+                guard let m0 = cal.date(byAdding: .month, value: ahead, to: first),
+                      let n = cal.range(of: .day, in: .month, for: m0)?.count, dd >= 1, dd <= n else { return nil }
+                return cal.date(byAdding: .day, value: dd - 1, to: m0)
+            }
+            if let x = fit(0), x >= today { day = x } else if let x = fit(1) ?? fit(2) { day = x }
         } else if let m = r.take(#"\s(?:by\s+|on\s+)?(?:the\s+)?day\s+after\s+(?:tomorrow|tmrw|tmr)\b|\sovermorrow\b"#) {
             markDue(m); day = addDays(today, 2)
         } else if let m = r.take(#"\s(?:by\s+|on\s+|for\s+)?(?:tomorrow|tomorow|tommorow|tommorrow|tmrw|tmr|tmw)(?:\s+(morning|afternoon|evening|night))?\b"#) {
@@ -210,8 +217,12 @@ enum QuickAdd {
         var end: Clock?
         let T = #"(\d{1,2})(?:[:.](\d{2}))?\s*\#(MER)?"#
         let RANGE = #"\s\#(LEAD)(?:between\s+)?\#(T)\s*(?:-|to|till|until|and)\s*\#(T)(?=[\s,.!?])"#
-        // Only a time range if something says so ("pages 3-5" isn't one).
-        if let g = r.find(RANGE), g[3] != nil || g[6] != nil || g[2] != nil || g[5] != nil || dayPart != nil || has(g.whole, #"\b(from|between|at)\b"#),
+        // Only a time range if something says so ("pages 3-5" isn't one, even "tonight": "read chapters 3-5 tonight").
+        let counted = { (g: Match) -> Bool in
+            g[2] == nil && g[3] == nil && g[5] == nil && g[6] == nil
+                && has((r.text as NSString).substring(to: g.range.location + 1), #"\b(?:pages?|pp?|chapters?|ch|sections?|problems?|questions?|exercises?|qs?|slides?|lectures?|units?|modules?|lessons?|weeks?|days?|steps?|items?|parts?|nos?|numbers?|#)\.?\s*$"#)
+        }
+        if let g = r.find(RANGE), !counted(g), g[3] != nil || g[6] != nil || g[2] != nil || g[5] != nil || dayPart != nil || has(g.whole, #"\b(from|between|at)\b"#),
            Int(g[1]!)! <= 24, Int(g[4]!)! <= 24 {
             r.cut(g); markDue(g)
             var s = Clock(h: Int(g[1]!)!, m: Int(g[2] ?? "0")!, mer: mer(g[3]))

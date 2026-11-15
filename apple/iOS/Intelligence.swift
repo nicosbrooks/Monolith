@@ -104,8 +104,10 @@ enum Assistant {
     /// question and anything newly relevant, and the model keeps what it already read, so they start fast.
     final class Conversation {
         private var mlx: ChatSession?
-        private var mlxID: String?
         private var apple: LanguageModelSession?
+        /// The model this conversation's material went to (an open model's id, or "apple"). Switching models,
+        /// either way, starts over, so the new one gets the dates, calendar and tasks too.
+        private var engine: String?
         /// Material already sent in this conversation, so it isn't sent twice.
         private var sent: Set<String> = []
         /// The day the material was written for: the Dates list goes stale at midnight.
@@ -115,7 +117,9 @@ enum Assistant {
         /// notes and docs, each sent the first time it's relevant.
         func ask(_ prompt: String, fixed: String, pieces: [String], onText: (@MainActor (String) -> Void)? = nil) async throws -> String {
             let today = Calendar.current.startOfDay(for: .now)
-            if today != day || (openModelID != nil && mlxID != openModelID) { reset(); day = today }
+            let current = openModelID ?? "apple"
+            if today != day || (engine != nil && engine != current) { reset(); day = today }
+            engine = current
             let first = sent.isEmpty
             let fresh = pieces.filter { !sent.contains($0) }
             // Small models have small context windows: the first turn is trimmed like a one-off question.
@@ -131,7 +135,7 @@ enum Assistant {
             let full = material.isEmpty ? prompt : "\(material)\n---\nQuestion: \(prompt)"
             do {
                 if let id = openModelID {
-                    if mlx == nil { mlx = try await OpenModels.shared.session(model: id, instructions: instructions); mlxID = id }
+                    if mlx == nil { mlx = try await OpenModels.shared.session(model: id, instructions: instructions) }
                     return try await OpenModels.stream(mlx!, prompt: full, onText: onText)
                 }
                 guard isAvailable else { throw ModelError.unavailable }
@@ -155,7 +159,7 @@ enum Assistant {
             }
         }
 
-        func reset() { mlx = nil; mlxID = nil; apple = nil; sent = [] }
+        func reset() { mlx = nil; apple = nil; engine = nil; sent = [] }
     }
 
     static func studyNotes(for transcript: String) async throws -> String {

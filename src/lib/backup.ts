@@ -67,8 +67,9 @@ function countsOf(items: Item[], events: CalEvent[]): Counts {
 /** Everything in this browser as an encrypted file. */
 export async function exportWorkspace(password: string): Promise<Blob> {
   const s = useStore.getState()
-  // Folder docs become ordinary docs in the backup; the folder connection itself can't travel.
-  const items = s.items.filter((i) => !i.file?.dir).map(({ sourceId: _s, file: _f, ...i }) => i as Item)
+  // Folder docs become ordinary docs in the backup; the folder connection itself can't travel. Its sub-folders come
+  // along as plain parent docs, so the docs inside them keep their place in the tree.
+  const items = s.items.map(({ sourceId: _s, file: _f, ...i }) => i as Item)
   const audio: Payload['audio'] = {}
   const audioKeys = new Set((await keys()).filter((k): k is string => typeof k === 'string' && k.startsWith('audio:')))
   for (const i of items) {
@@ -85,7 +86,6 @@ export async function exportWorkspace(password: string): Promise<Blob> {
   const packed = await pipe(enc.encode(JSON.stringify(payload)), new CompressionStream('gzip'))
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, B(packed)))
   const header: Header = { kdf: 'PBKDF2-SHA256', iter: ITER, salt: b64.encode(salt), iv: b64.encode(iv), created: Date.now(), counts: countsOf(items, s.events) }
-  useStore.getState().setSettings({ lastBackup: Date.now() })
   return new Blob([MAGIC, JSON.stringify(header), '\n', B(ct)], { type: 'application/octet-stream' })
 }
 
@@ -129,9 +129,11 @@ export async function unlockBackup(p: { header: Header; body: Uint8Array }, pass
  */
 export async function restore({ payload }: Opened) {
   const s = useStore.getState()
+  // Docs from a source that's still connected stay as they are; their copies in the backup are skipped, not doubled.
   const fromSources = s.items.filter((i) => i.sourceId)
+  const connected = new Set(fromSources.map((i) => i.id))
   useStore.setState({
-    items: [...payload.items, ...fromSources],
+    items: [...payload.items.filter((i) => !connected.has(i.id)), ...fromSources],
     folders: payload.folders ?? [],
     events: payload.events ?? [],
     dismissed: payload.dismissed ?? [],

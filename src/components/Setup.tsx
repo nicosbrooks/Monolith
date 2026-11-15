@@ -4,7 +4,7 @@ import { ArrowLeft, FolderOpen, Laptop, Lock } from 'lucide-react'
 import { saveNow, useStore } from '../store'
 import { APP_NAME } from '../brand'
 import { hasFolderAccess } from '../storage/folder'
-import { connectFolder, rewriteSealedFiles } from '../storage/sync'
+import { connectFolder, folderAccess, rewriteSealedFiles } from '../storage/sync'
 import { openBackup } from '../lib/backup'
 import { clearPasscode, PASSCODE_MIN, setPasscode, unlock, useVault } from '../lib/vault'
 
@@ -54,12 +54,15 @@ export function Setup() {
         setBusy('Locking…')
         await setPasscode(pass)
         await saveNow()
-        if (hadLock) await rewriteSealedFiles()
       } else if (!lock && hadLock) {
         setBusy('Unlocking your files…')
-        await clearPasscode()
-        await saveNow()
-        await rewriteSealedFiles()
+        // Folder access first, while this still counts as a click.
+        const missing = await folderAccess()
+        if (missing.length) throw new Error(`Allow access to “${missing[0]}” to turn the passcode off, so its files can be saved readable.`)
+        await clearPasscode(async () => {
+          await saveNow()
+          await rewriteSealedFiles()
+        })
       }
       st.setSettings({ name: name.trim(), setupAt: settings.setupAt ?? Date.now() })
       useStore.setState({ setupOpen: false, section: 'home', activeId: null })

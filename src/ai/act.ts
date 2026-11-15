@@ -28,9 +28,15 @@ export const ACT_GUIDE = `The user asked you to do something in the app. Reply w
 @doc {"title":"<title>","md":"<markdown body>"}
 Take dates from the Dates list. Only do what the user asked for.`
 
-/** Only a request to do something gets the action format; questions get plain answers. */
-export const wantsAction = (text: string) =>
-  /\b(add|schedule|book|put|create|make|write|draft|save|remind|plan out|set up|block (off|out)|new (note|doc|event|task)|move|reschedule|push|postpone|shift|cancel|delete|remove|clear|mark|check off|tick off|finish(ed)?|done with|complete(d)?)\b/i.test(text)
+/**
+ * Only a request to do something gets the action format; questions get plain answers. The verb has to be the request
+ * itself ("move my 3pm to 4", "can you add…"), not just a word in a question ("how do I complete the lab?").
+ */
+const ACT_VERB = String.raw`(?:add|schedule|book|put|create|make|write|draft|save|remind|plan out|set up|block (?:off|out)|move|reschedule|push|postpone|shift|cancel|delete|remove|clear|mark|check off|tick off|finish|complete)`
+const LEAD = String.raw`^\s*(?:(?:please|pls|ok(?:ay)?|hey|now|also|and|then|just)[,\s]+)*(?:(?:can|could|would|will) you\s+(?:please\s+)?|i(?:['’]d| would)? (?:like|want|need) (?:you )?to\s+|let['’]?s\s+|go ahead and\s+)?`
+const COMMAND = new RegExp(LEAD + ACT_VERB + String.raw`\b`, 'i')
+const ANYWHERE = /\b(?:new (?:note|doc|event|task)|remind me|(?:to|on|off|from) my (?:calendar|schedule|list)|as (?:done|complete|finished)|i(?:['’]?m| am)? done with|i (?:finished|completed))\b/i
+export const wantsAction = (text: string) => text.split(/[.!?\n]+\s*/).some((s) => COMMAND.test(s)) || ANYWHERE.test(text)
 
 /** Drop events already on the calendar (same title, same day), so nothing is offered twice. */
 export function fresh(acts: Act[], events: { title: string; start: number }[]) {

@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { format } from 'date-fns'
 import { FileArchive, X } from 'lucide-react'
 import { APP_NAME } from '../brand'
+import { useStore } from '../store'
 import { BACKUP_EXT, BACKUP_MIN, backupName, download, exportWorkspace, peek, restore, unlockBackup, useBackup, type Counts } from '../lib/backup'
 import { toast } from './Toast'
 
@@ -48,8 +49,25 @@ function Export({ done }: { done: () => void }) {
       if (problem) return setError(problem)
       setBusy(true)
       try {
-        download(await exportWorkspace(pass), backupName())
-        toast('Backup downloaded')
+        // Where the browser lets us, ask where to save first (it needs the click), so a cancel isn't counted as a backup.
+        const pick = (window as { showSaveFilePicker?: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker
+        if (pick) {
+          let handle: FileSystemFileHandle
+          try {
+            handle = await pick({ suggestedName: backupName(), types: [{ description: 'Backup', accept: { 'application/octet-stream': [BACKUP_EXT] } }] })
+          } catch (err) {
+            if ((err as DOMException).name === 'AbortError') return
+            throw err
+          }
+          const out = await handle.createWritable()
+          await out.write(await exportWorkspace(pass))
+          await out.close()
+          toast('Backup saved')
+        } else {
+          download(await exportWorkspace(pass), backupName())
+          toast('Backup downloaded')
+        }
+        useStore.getState().setSettings({ lastBackup: Date.now() })
         done()
       } catch (err) {
         setError((err as Error).message || 'The backup couldn’t be made. Try again.')

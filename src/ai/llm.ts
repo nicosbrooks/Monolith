@@ -657,7 +657,9 @@ export function enqueue<T>(fn: () => Promise<T>): Promise<T> {
 export function background<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const c = new AbortController()
   behind = c
-  const run = () => (c.signal.aborted ? Promise.reject(new DOMException('Gave way', 'AbortError')) : fn(c.signal))
+  const gaveWay = () => new DOMException('Gave way', 'AbortError')
+  // A stopped run can still resolve with what it had so far; that's cut off mid-sentence, so it counts as a failure.
+  const run = () => (c.signal.aborted ? Promise.reject(gaveWay()) : fn(c.signal).then((v) => (c.signal.aborted ? Promise.reject(gaveWay()) : v)))
   const p = queue.then(run, run)
   queue = p.catch(() => {})
   return p.finally(() => behind === c && (behind = null))

@@ -79,21 +79,41 @@ function sealed(p: FileProvider): FileProvider {
 /** The folder as it is on disk, without decryption, to tell which files Monolith encrypted. */
 const rawFolders = new Map<string, FileProvider>()
 
+/** Ask for access to every connected folder (browsers need a click for this). Returns the names still without access. */
+export async function folderAccess() {
+  const missing: string[] = []
+  for (const s of useStore.getState().sources.filter((x) => x.kind === 'folder')) {
+    if (!rawFolders.has(s.id)) await provider(s, true).catch(() => null)
+    if (!rawFolders.has(s.id)) missing.push(s.name)
+  }
+  return missing
+}
+
+/** The paths of a folder's docs that are stored encrypted on disk. */
+async function sealedPaths(id: string, raw: FileProvider) {
+  const out: string[] = []
+  for (const i of itemsOf(id)) {
+    if (!i.file?.path || i.file.dir || i.deletedAt) continue
+    const text = await raw.read({ path: i.file.path, rev: i.file.rev || '' }).catch(() => '')
+    if (text.startsWith(FILE_HEADER)) out.push(i.id)
+  }
+  return out
+}
+
 /**
- * After the passcode is turned off or changed: write the files Monolith encrypted again, in the clear or under the
- * new passcode. Files it never encrypted are left exactly as they are. Run while the content is still in memory.
+ * While the passcode is being turned off: write the files Monolith encrypted again in the clear, from the copy in
+ * memory. Files it never encrypted are left exactly as they are. Throws if a folder can't be reached or a file is still
+ * encrypted afterwards, so the caller keeps the passcode (and with it, a way to read those files).
  */
 export async function rewriteSealedFiles() {
+  const missing = await folderAccess()
+  if (missing.length) throw new Error(`Allow access to “${missing[0]}” first, so its encrypted files can be saved readable.`)
   const st = useStore.getState()
   for (const s of st.sources.filter((x) => x.kind === 'folder')) {
-    const raw = rawFolders.get(s.id)
-    if (!raw) continue
-    for (const i of itemsOf(s.id)) {
-      if (!i.file?.path || i.file.dir || i.deletedAt) continue
-      const text = await raw.read({ path: i.file.path, rev: i.file.rev || '' }).catch(() => '')
-      if (text.startsWith(FILE_HEADER)) st.patchFile(i.id, { baseHtml: '\u0000rewrite' })
-    }
+    const raw = rawFolders.get(s.id)!
+    for (const id of await sealedPaths(s.id, raw)) st.patchFile(id, { baseHtml: '\u0000rewrite' })
     await flush(s.id)
+    if ((await sealedPaths(s.id, raw)).length) throw new Error(`Some files in “${s.name}” couldn’t be saved readable. Try again.`)
   }
 }
 

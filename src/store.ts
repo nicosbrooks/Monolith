@@ -15,18 +15,19 @@ let saveTimer = 0
 const flushSave = () => {
   clearTimeout(saveTimer)
   saveTimer = 0
-  if (!pending) return
+  if (!pending) return saving
   const { k, v } = pending
   pending = null
   // In order, so a slow encrypt can't let an older copy land after a newer one.
-  saving = saving.then(async () => set(k, await sealText(v))).catch(() => {})
+  const write = saving.then(async () => set(k, await sealText(v)))
+  saving = write.catch((e) => console.error('Saving failed', e))
+  return write
 }
 let saving: Promise<unknown> = Promise.resolve()
-/** Save everything now, e.g. right after the passcode is turned on or off so the stored copy matches. */
+/** Save everything now, e.g. right after the passcode is turned on or off so the stored copy matches. Rejects if the write fails. */
 export function saveNow() {
   useStore.setState({})
-  flushSave()
-  return saving
+  return flushSave()
 }
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', flushSave)

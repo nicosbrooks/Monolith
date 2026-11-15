@@ -20,20 +20,35 @@ export const SEALED = 'monolith:sealed:v1:'
 /** Files written to a folder start with this line, so a person opening one sees why it isn't readable. */
 export const FILE_HEADER = '<!-- Encrypted by Monolith. Unlock Monolith to read it. -->\n'
 
-interface Rec { salt: string; iter: number; check: string }
+// The data is encrypted with a random data key. The passcode only wraps that key, so changing the passcode rewrites
+// one small record and nothing else, and no crash can leave data under a key that's gone.
+// v1 records (before the data key) derived the data key straight from the passcode; they're upgraded on unlock.
+interface RecV1 { salt: string; iter: number; check: string }
+interface RecV2 { v: 2; salt: string; iter: number; wrapped: string }
+type Rec = RecV1 | RecV2
 
 /** 'checking' until we know whether a passcode is set; 'locked' while one is set and not entered yet. */
 export const useVault = create<{ state: 'checking' | 'none' | 'locked' | 'open' }>(() => ({ state: 'checking' }))
 
+/** Reads with this key. */
 let key: CryptoKey | null = null
+/** The data key's bytes, kept so a new passcode can wrap the same key. */
+let raw: Uint8Array | null = null
+/** Writes with this key; null while the lock is being turned off, so everything is saved in the clear. */
+let writeKey: CryptoKey | null = null
 let ready: () => void
 /** Resolves once saved data can be read: right away with no passcode, after unlocking with one. */
 export const vaultReady = new Promise<void>((r) => (ready = r))
 
-async function derive(passcode: string, salt: Uint8Array, iter: number) {
-  const base = await crypto.subtle.importKey('raw', enc.encode(passcode.normalize('NFKC')), 'PBKDF2', false, ['deriveKey'])
-  return crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: B(salt), iterations: iter }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
-}
+const pbkdf2 = async (passcode: string, salt: Uint8Array, iter: number, extractable: boolean) =>
+  crypto.subtle.deriveKey(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: B(salt), iterations: iter },
+    await crypto.subtle.importKey('raw', enc.encode(passcode.normalize('NFKC')), 'PBKDF2', false, ['deriveKey']),
+    { name: 'AES-GCM', length: 256 },
+    extractable,
+    ['encrypt', 'decrypt'],
+  )
+const importData = (bytes: Uint8Array) => crypto.subtle.importKey('raw', B(bytes), 'AES-GCM', false, ['encrypt', 'decrypt'])
 
 async function sealBytes(k: CryptoKey, data: Uint8Array) {
   const iv = random(12)
@@ -52,7 +67,7 @@ export const hasKey = () => !!key
 
 /** Encrypt text if a passcode is on; otherwise return it unchanged. */
 export async function sealText(text: string) {
-  return key ? SEALED + b64u.encode(await sealBytes(key, enc.encode(text))) : text
+  return writeKey ? SEALED + b64u.encode(await sealBytes(writeKey, enc.encode(text))) : text
 }
 /** Decrypt text sealed by `sealText`; plain text passes through. */
 export async function openText(text: string) {
@@ -63,7 +78,7 @@ export async function openText(text: string) {
 
 /** Audio and other files: an encrypted copy, or the blob as is. */
 export async function sealBlob(b: Blob): Promise<Blob | { sealed: Uint8Array; type: string }> {
-  return key ? { sealed: await sealBytes(key, new Uint8Array(await b.arrayBuffer())), type: b.type } : b
+  return writeKey ? { sealed: await sealBytes(writeKey, new Uint8Array(await b.arrayBuffer())), type: b.type } : b
 }
 export async function openBlob(v: Blob | { sealed: Uint8Array; type: string } | undefined) {
   if (!v || v instanceof Blob) return v
@@ -78,53 +93,80 @@ export async function checkVault() {
   else (useVault.setState({ state: 'none' }), ready())
 }
 
+/** The record that wraps `bytes` under `passcode`. */
+async function wrap(passcode: string, bytes: Uint8Array): Promise<RecV2> {
+  const salt = random(16)
+  const kek = await pbkdf2(passcode, salt, ITER, false)
+  return { v: 2, salt: b64u.encode(salt), iter: ITER, wrapped: b64u.encode(await sealBytes(kek, bytes)) }
+}
+
 /** True if the passcode was right. */
 export async function unlock(passcode: string) {
   const rec = await get<Rec>(RECORD)
   if (!rec) return true
-  const k = await derive(passcode, b64u.decode(rec.salt), rec.iter)
+  let bytes: Uint8Array
   try {
-    if (dec.decode(await openBytes(k, b64u.decode(rec.check))) !== CHECK) return false
+    if ('v' in rec) bytes = await openBytes(await pbkdf2(passcode, b64u.decode(rec.salt), rec.iter, false), b64u.decode(rec.wrapped))
+    else {
+      // v1: the passcode-derived key is the data key. Keep it, and wrap it so later changes don't re-encrypt.
+      const k = await pbkdf2(passcode, b64u.decode(rec.salt), rec.iter, true)
+      if (dec.decode(await openBytes(k, b64u.decode(rec.check))) !== CHECK) return false
+      bytes = new Uint8Array(await crypto.subtle.exportKey('raw', k))
+      await set(RECORD, await wrap(passcode, bytes))
+    }
   } catch {
     return false
   }
-  key = k
+  raw = bytes
+  key = writeKey = await importData(bytes)
   useVault.setState({ state: 'open' })
   ready()
   return true
 }
 
-/** Decrypt recordings with the old key and save them again under the new one (or in the clear). */
-async function rekeyAudio(next: CryptoKey | null) {
+/** Re-save recordings with the current write key (sealed, or in the clear while the lock is turned off). */
+async function resealAudio() {
   const ids = (await keys()).filter((k): k is string => typeof k === 'string' && k.startsWith('audio:'))
   for (const id of ids) {
-    const blob = await openBlob(await get(id))
-    if (!blob) continue
-    const prev = key
-    key = next
-    try {
-      await set(id, await sealBlob(blob))
-    } finally {
-      key = prev
-    }
+    const v = await get(id)
+    const sealedNow = !!v && !(v instanceof Blob)
+    if (sealedNow === !!writeKey) continue
+    const blob = await openBlob(v)
+    if (blob) await set(id, await sealBlob(blob))
   }
 }
 
-/** Turn the lock on (or change the passcode). The caller then re-saves everything so it's written encrypted. */
+/**
+ * Turn the lock on, or change the passcode. Changing it only re-wraps the data key, so nothing else is rewritten.
+ * Turning it on: the caller then re-saves the workspace so it's stored encrypted (plain data stays readable meanwhile).
+ */
 export async function setPasscode(passcode: string) {
-  const salt = random(16)
-  const k = await derive(passcode, salt, ITER)
-  await rekeyAudio(k)
-  await set(RECORD, { salt: b64u.encode(salt), iter: ITER, check: b64u.encode(await sealBytes(k, enc.encode(CHECK))) } satisfies Rec)
-  key = k
+  const bytes = raw ?? random(32)
+  await set(RECORD, await wrap(passcode, bytes))
+  const fresh = !raw
+  raw = bytes
+  key = writeKey = await importData(bytes)
   useVault.setState({ state: 'open' })
+  if (fresh) await resealAudio()
 }
 
-/** Turn the lock off. The caller then re-saves everything so it's written in the clear. */
-export async function clearPasscode() {
-  await rekeyAudio(null)
+/**
+ * Turn the lock off. `resave` must write everything else in the clear (it runs with writes unsealed but reads still
+ * able to decrypt). The passcode record is deleted only after it succeeds, so a failure or crash leaves the lock on
+ * and every file still readable with the passcode.
+ */
+export async function clearPasscode(resave: () => Promise<void>) {
+  const prev = writeKey
+  writeKey = null
+  try {
+    await resealAudio()
+    await resave()
+  } catch (e) {
+    writeKey = prev
+    throw e
+  }
   await del(RECORD)
-  key = null
+  key = raw = null
   useVault.setState({ state: 'none' })
 }
 
