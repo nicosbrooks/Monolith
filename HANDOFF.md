@@ -358,7 +358,7 @@ Direction confirmed by the user: everything stays on-device (no cloud models). P
 - **iOS speech to text:** lectures use Apple's SpeechAnalyzer/SpeechTranscriber (iOS 26) when the language's model is installed (`LiveSpeech.transcriber()`; a supported but missing model starts downloading for next time). `Feeder` converts mic audio to the analyzer's format on the audio thread. One continuous stream, no one-minute restarts; sentence lines carry word times. Files (watch recordings) use it too. SFSpeechRecognizer remains the fallback. **Builds; not tested on a device** (needs a mic and real hardware).
 - **Web speech to text:** `src/ai/stt.ts` + `stt.worker.ts` replace Whisper. Live transcription runs on the device while recording: audio is cut at pauses (adaptive noise floor, 0.5 s pause after 2 s, hard cut at 15 s at the quietest frame), each phrase is read by the model, and the phrase in progress is shown about once a second. The live lines *are* the transcript, so it's ready the moment recording stops (files still go through `transcribe`). Chrome's Web Speech captions were removed (they send audio to Google). Models: Moonshine Base (Fast, ≈100 MB, default) and Whisper Large v3 Turbo (Most accurate, ≈560 MB, 4-bit). The setting key is still `whisperModel`; `sttModel()` maps old Whisper ids to the default.
 - **Measured** (hidden pane, throttled): Moonshine read a 14 s clip in 2.7 s warm; good punctuation and numbers, but misheard "eigenvalues". Parakeet CTC 0.6B (q4) took 0.3 s but outputs lowercase without punctuation and misheard words; its q4f16 build returned nothing, so it was dropped. **Whisper turbo was not yet measured** (the test was interrupted), and the live path has not been tried with a real microphone.
-- **Web model runtime:** researched, not built. Google's MediaPipe `LlmInference` (`@mediapipe/tasks-genai` 0.10.30, Oct 25) runs `gemma-4-E2B-it-gpu.litertlm` (2.3 GB) at a claimed ~4,850 tok/s prefill / 73 tok/s decode on an M4 Max. Prefill is where our 3–5 s first-token wait comes from. Next: benchmark it against WebLLM's Gemma 4 E2B on the same ~2.5k-token prompt, and adopt it as the Gemma engine only if it's clearly faster (it's a second 2.3 GB download).
+- **Web model runtime:** LiteRT-LM for Gemma 4 E2B was built in a parallel local session (`src/ai/litert.worker.ts`, `litert-cache.ts`); see "Local follow-up: smaller prompts and TurboQuant" below for its benchmark. Google's claimed web numbers: ~4,850 tok/s prefill / 73 tok/s decode on an M4 Max.
 - Not done yet: Phonon on iOS (gradium-ai/xn-ptts Swift package), streaming read-aloud on web, FluidAudio Parakeet on iOS as an optional accurate model.
 
 ## Next steps (in priority order)
@@ -402,3 +402,36 @@ Nothing below could be checked in the cloud session (no real GPU, huggingface.co
 - Deploy per `relay/DEPLOY.md`: relay Worker, Pages project with `VITE_RELAY_URL`, `GITHUB_CLIENT_ID`/`GOOGLE_CLIENT_ID` variables and `GITHUB_CLIENT_SECRET` secret; register the domain with GitHub and Google OAuth.
 - LFM 3 licence (iOS Default): free only under $10M annual revenue (LFM Open License v1.0).
 - Dev-only noise: React StrictMode's simulated unmount triggers one failed `monolith-file:` lookup per picture in the console; production is clean. Ignore, or move the destroy-before-unmount logic into Tiptap if it ever ships a fix.
+
+## Local follow-up: smaller prompts and TurboQuant (Nov 15)
+
+Local `main` was fast-forwarded to `origin/main` at `ce165a2`, which includes the earlier handoff changes. The web changes and benchmark below are local and uncommitted. Keep using the test origin on port **5210**. Port **5199** holds the user's data.
+
+### What landed locally
+
+- Web chat keeps a short, stable system prompt and selects workspace evidence for each turn. [Context and retrieval](src/ai/context.ts) split the full transcript into timestamped passages, reserve evidence for explicitly named docs, and pack whole entries to fit the engine's window. Earlier evidence is dropped from replay when its source changes. The source links reflect what was included in that turn.
+- When a question specifies a duration, day, and a gap **between events**, Monolith calculates and returns a slot directly from the calendar. The model test found the correct noon slot but also suggested a slot after the last event. Moving a timed event now keeps its original duration unless the request specifies a new one. The model had shortened a two-hour seminar to one hour in both prompt variants. The audit covers both preserving the two hours and honoring an explicit 45-minute change. [Availability](src/ai/availability.ts) · [Action validation](src/ai/act.ts) · [Audit cases](scripts/assistant-cases.ts)
+- Calendar's web Ask bar now sends dated questions to chat, matching iOS, and closes its suggestions after adding an event. Search stops after the four matches it can display. The Ask bar interactions still need a live UI pass.
+
+### Web benchmark
+
+With Vite serving the test origin, open `http://127.0.0.1:5210/scripts/assistant-benchmark.html`. **Run prompt audit** checks seven synthetic cases at 2,048 and 4,096 tokens without loading a model. **Compare on Fast** and **Compare on Default** run both prompt layouts and record what model and engine actually answered. The broad comparison uses the same retrieval with the larger workspace snapshot.
+
+The full paired run used Gemma 4 E2B through LiteRT-LM in a visible, isolated macOS WebKit window. These are medians across seven cases with the model already loaded.
+
+| Measure | Broad prompt | Focused prompt |
+| --- | ---: | ---: |
+| Time to first visible text | 1.21 s | 0.32 s |
+| Full response | 1.98 s | 1.22 s |
+| Estimated input tokens | 1,293 | 285 |
+| Runtime context tokens after response, including output | 1,665 | 296 |
+
+First text was faster in all seven pairs. A follow-up with a matching prefix reported reuse and first text in 98 ms. In one headless Firefox CPU pair, Qwen 3 0.6B gave the same correct transcript answer with first text at 239 s for broad and 13.5 s for focused. Treat that as one fallback case. WebKit Fast loaded Qwen 3.5 0.8B through WebLLM, then produced a disposed-object error or empty output. There is no valid Fast GPU timing or peak memory comparison. The web build, seven prompt cases at both window sizes, and all 86 web date cases passed. The earlier iPhone simulator build and all 86 Swift date cases also passed.
+
+### Next steps
+
+1. **Reproduce the web results in regular browser sessions.** Use the same fixtures on the Fast and Default tiers in Safari, Firefox, and Chrome where available. Investigate the WebKit Fast generation failure separately from prompt packing. Record which engine ran, model load versus warm response latency, answer failures, and peak memory where measurable. Also exercise Stop, reload from OPFS, and a chat long enough to evict earlier turns. Keep the synthetic A/B and the normal UI smoke tests on 5210.
+2. **Trial TurboQuant on a real iPhone.** The pinned `mlx-swift-lm` 3.32.3 already exposes `KVCacheConfiguration(strategy: .turboQuant(.balanced))`. Try it in `OpenModels.session` with the same model, prompts, and generation settings in both runs. Compare against the default cache at several context lengths. Measure peak memory, first text, decode speed, and answer quality. Check which layers actually use the compressed cache, especially with the custom LFM3 model and Gemma's sliding-window layers. Keep the default cache available until the trial shows a benefit. [Pinned MLX release](https://github.com/ml-explore/mlx-swift-lm/releases/tag/3.32.3) · [MLX KV cache documentation](https://github.com/ml-explore/mlx-swift-lm/blob/main/Libraries/MLXLMCommon/Documentation.docc/kv-cache-quantization.md) · [TurboQuant paper](https://arxiv.org/abs/2504.19874)
+3. **Keep TurboQuant separate from web prompt packing.** The pinned LiteRT-LM and WebLLM browser APIs expose no TurboQuant option that was found in this pass. Revisit when a supported browser runtime ships it. Shorter prompts reduce work before the first answer, while a compressed KV cache is primarily a way to lower memory pressure as a conversation grows. [LiteRT-LM tracking issue](https://github.com/google-ai-edge/LiteRT-LM/issues/1951)
+4. **Extend context handling only where the fixtures show misses.** Port tested retrieval and budgeting to iOS using the same fixtures. On long web chats, track which excerpts are still in the retained window and retrieve them again when needed. When older chat turns need compaction, preserve goals, decisions, constraints, and unresolved questions with references back to the original turns. Record confirmed actions from app state. Keep learned compression and multi-pass reasoning as experiments gated by a measured gain in quality, latency, or memory.
+5. **Keep experience changes within the existing flows.** For any Mobbin reference, identify what triggers the behavior, what happens next, and whether Monolith has the same need before adapting it. Share actual web and iPhone screenshots during UI work.
