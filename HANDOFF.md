@@ -351,3 +351,45 @@ User: compress uploads automatically (on by default, can be turned off), sound-w
 - **Alignment** (measured, not eyeballed): sidebar row icons centred (`.nav .emoji` grid), folder icon 17 px like other rows (text at 61 px everywhere); recording view has a crumb in the bar and an editable large title in the content column like docs, and `.recorder.bare` once there's audio so Transcribe lines up with the player (all at the same left edge).
 - **Tested:** CSV 162 KB → 30 KB stored, downloads identical; ZIP untouched; Large 2560 / Small 1280; compression off keeps the original JPEG; type icons; Rename; Remove; recording at 32 kbps; Settings screenshot; file, setup/flows and migration suites pass on fresh origins. One unexplained result: the migration test once reported the *open* doc's picture still embedded when run on an origin reused from an earlier run; it passed on a fresh origin, and the re-run was interrupted. Worth checking: open an old doc with an embedded picture after a previous session and confirm it converts.
 - Not committed to `main`; branch `claude/inspiring-planck-9mqp4n` only. Not tested: iOS (not compiled), real PDF viewing, imported audio files aren't re-encoded (only new recordings use the quality setting).
+
+## Next steps (in priority order)
+State at hand-off: all work is on `claude/inspiring-planck-9mqp4n` (last commit "Compress uploads by default…"). `main` is at "Remove Ollama and MLX-server support" (a318528). The user said not to push to `main` until they've tried it.
+
+### 1. Verify on a real machine before merging to `main`
+Nothing below could be checked in the cloud session (no real GPU, huggingface.co and the jsDelivr CDN blocked, no Xcode). Test on :5210 (never :5199, which holds the user's data).
+- **Gemma on LiteRT-LM (Chrome):** pick Default (Gemma 4 E2B, ~2 GB download). Confirm: progress shows; it answers; a follow-up answers quickly (conversation reuse in `litert.worker.ts`); Stop works mid-answer; reload loads from OPFS without downloading (DevTools › Application › Storage › OPFS shows `litert-community__gemma-4-E2B-it-litert-lm.litertlm` + `.json` marker). Then Enhanced (Gemma 4 E4B) on a machine with ≥8 GB: note its real download size and memory, and adjust `needMB` (4400) in `llm.ts` if needed.
+- **Gating:** if `resolveModel('hf://litert-community/gemma-4-E2B-it-litert-lm')` fails with 401/403, the repos are gated: the tiers fall back to WebLLM (Qwen 3.5 2B / Gemma 4 E2B). Then either host the `.litertlm` files ourselves (Cloudflare R2; Pages' 25 MiB file limit rules Pages out) or switch the Gemma tiers back to WebLLM.
+- **Fallback path:** in Firefox and Safari, see what happens with LiteRT-LM (expected: fallback to WebLLM). Record which engine actually answered (`useAI.getState().loadedModel`).
+- **Long chats:** ask 6+ follow-ups that pull in notes; they must keep answering (`fit()` keeps the window at 4,096 tokens).
+- **GPU loss:** sleep the laptop mid-session, wake, ask again; it should reload the model from cache and answer (`gpuLost` in `chat()`).
+- **Files:** paste a phone photo, drop a PDF, a CSV and a ZIP; Open the PDF (real Chrome shows it; headless couldn't); Download each; Rename/Remove from ···; reload; Settings › Files › Small, then off. Turn the passcode on and off with files present.
+- **Migration on a used profile:** the one unexplained test result. Copy an older workspace (or use a profile from before the file store) with a doc that has an embedded picture, open that doc, wait a few seconds, check the stored doc HTML has `monolith-file:` and no `data:image`. If it stays embedded, debug `storeEmbedded` in `Editor.tsx` (the `storing` ref and the `exclude` closure from the first render are suspects).
+- **Phone sync with files:** pair the iPhone, open a doc with a picture and an attachment on the phone (picture embedded; attachment shows "Open it on your computer"), edit it on the phone, confirm the web copy keeps its references (the background upkeep re-stores the picture, same hash).
+- **iOS:** build in Xcode (`QuickAdd.swift` WEEKDAY/day-of-month/range changes, `Intelligence.swift` Conversation engine reset, `OpenModels.swift` tiers, `Markdown.swift` attachment label were never compiled). Run the 86 date cases against the Swift port, as before.
+- When all of the above pass: merge the branch into `main` (fast-forward if `main` hasn't moved).
+
+### 2. Files: finish the platform
+- **Folder / GitHub / Drive docs:** they still embed pictures and can't hold attachments (sources store text only). Add a binary write to the providers (`FileProvider.write` takes text today; folder: `createWritable` with a Blob; GitHub: blob API with base64; Drive: multipart upload), write files to `assets/<hash>.<ext>` beside the doc, and convert `monolith-file:` references to relative Markdown links on write (and back on read). Then remove `'file'` from `NO_SKETCH` in `DocView.tsx`.
+- **Sync files to the phone properly:** today pictures travel embedded in the Markdown (large payloads; every edit resends them) and attachments don't travel at all. Add a file channel to the relay protocol: send `monolith-file:` hashes the other side lacks, chunked and encrypted with the pairing key, deduplicated by hash. iOS then needs a file store (Application Support/files/<hash>) and the same reference format.
+- **Adding files on iOS:** PhotosPicker + fileImporter into that store; same resize rules (`MAX_SIDE` by `pictureSize`), HEIC/JPEG output.
+- **Imported audio** (recordings › Use an audio file) isn't compressed: decode with WebCodecs/AudioContext and re-encode to Opus at the chosen quality when it's large (WAV/AIFF/FLAC).
+- **Video attachments:** no compression yet; consider an inline player in the card for audio/video instead of Open in a new tab.
+- **Storage limits:** call `navigator.storage.estimate()` and warn in Settings › Files when near the quota; `collectGarbage` only removes unreferenced files.
+
+### 3. Assistant
+- **LiteRT-LM follow-ups:** `@litert-lm/core` is pinned at 0.19.0 ("early preview"). Watch for: vision/audio input (Gemma 4 can read pictures; would let the assistant look at stored pictures), a built-in cache (would replace `litert-cache.ts`), and a module-worker-friendly loader (would remove the `importScripts`/`Module.locateFile` shims in `litert.worker.ts`). Re-test speed against WebLLM for the Enhanced tier.
+- **Conversation reuse misses:** `litert.worker.ts` reuses a conversation only if the new request is exactly the previous messages plus one question; AIPanel rewrites past turns (`said()` strips action lines), so action turns start a new conversation. Make the history the worker records match what AIPanel will send next.
+- **Transformers.js fallback** (Firefox without WebLLM, no-GPU browsers) still reads prompts in one pass; it's capped at a 2,048-token window in `fit()`. If transformers.js ships chunked prefill (issue #1836), raise it.
+- **The `ONNX_MODELS` list** still includes Qwen 3 0.6B and LFM 2 1.2B, untested since the Firefox 160 benchmarks.
+
+### 4. UI/UX follow-ups seen but not done
+- Phone Home: the greeting plus the assistant card fill the first screen; consider a smaller greeting on phones.
+- The Ask bar's suggestion chips stay open after adding an event from it on Calendar (input keeps focus).
+- Settings has grown long (You, Appearance, Phone, Storage, Files, Assistant, Speech…): consider grouping or a sidebar of sections.
+- `DESIGN.md` › Coverage still lists Docs, editor, Recordings detail, Calendar and most of Settings as "not yet reviewed"; review them against the file now that the patterns are settled.
+- Keyboard: setup traps focus correctly now; check the other dialogs (Backup, Link, Connect) the same way.
+
+### 5. Before a public launch
+- Deploy per `relay/DEPLOY.md`: relay Worker, Pages project with `VITE_RELAY_URL`, `GITHUB_CLIENT_ID`/`GOOGLE_CLIENT_ID` variables and `GITHUB_CLIENT_SECRET` secret; register the domain with GitHub and Google OAuth.
+- LFM 3 licence (iOS Default): free only under $10M annual revenue (LFM Open License v1.0).
+- Dev-only noise: React StrictMode's simulated unmount triggers one failed `monolith-file:` lookup per picture in the console; production is clean. Ignore, or move the destroy-before-unmount logic into Tiptap if it ever ships a fix.
