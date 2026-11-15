@@ -17,9 +17,11 @@ export interface ModelInfo {
 
 /**
  * Open models that run in a browser tab, all 2B or smaller so they download quickly and answer fast. Downloaded once,
- * then cached offline. Each runs in the engine that suits it: WebLLM, or Transformers.js for models WebLLM doesn't
- * have (those carry `onnx`). Monolith switches engines itself; people only pick a tier.
- * Same tiers as the iPhone and iPad app, so Fast / Default / Enhanced mean the same everywhere.
+ * then cached offline. All three run in WebLLM: compiled WebGPU kernels, long prompts read in chunks, and each chat's
+ * shared start kept in memory between turns, so follow-ups don't re-read it. (LFM 3, the iPhone's Default, is left out
+ * here: in the browser it only runs through Transformers.js, which reads a prompt in one pass. Prompts of ~900 tokens
+ * crash Safari's GPU process that way, and every turn re-reads the whole chat.)
+ * Same tier names as the iPhone and iPad app.
  */
 export const MODELS: ModelInfo[] = [
   {
@@ -30,13 +32,11 @@ export const MODELS: ModelInfo[] = [
     needMB: 1630,
   },
   {
-    // Liquid AI's on-device model (Oct 2026): best in class at following instructions, about 1.1 GB.
-    id: 'onnx:LFM3-1.7B',
-    name: 'LFM 3 1.7B',
+    id: 'Qwen3.5-2B-q4f16_1-MLC',
+    name: 'Qwen 3.5 2B',
     tier: 'default',
-    note: 'Quick and accurate, about 1 GB',
-    needMB: 1800,
-    onnx: { repo: 'onnx-community/LFM3-1.7B-ONNX', gpu: 'q4f16' },
+    note: 'Quick and capable',
+    needMB: 2250,
   },
   {
     id: 'gemma-4-E2B-it-q4f16_1-MLC',
@@ -45,16 +45,9 @@ export const MODELS: ModelInfo[] = [
     note: 'Sharpest writing and reasoning',
     needMB: 3390,
   },
-  // Default where LFM 3 can't run (it needs the other engine on WebGPU).
-  {
-    id: 'Qwen3.5-2B-q4f16_1-MLC',
-    name: 'Qwen 3.5 2B',
-    tier: 'more',
-    note: 'Strong all-rounder',
-    needMB: 2250,
-  },
 ]
-const FALLBACK_DEFAULT = 'Qwen3.5-2B-q4f16_1-MLC'
+/** Default where Qwen 3.5 2B won't fit. */
+const FALLBACK_DEFAULT = 'Qwen3.5-0.8B-q4f16_1-MLC'
 
 /**
  * The tiers where WebLLM can't run: Firefox (fewer GPU buffers than WebLLM's kernels need) and browsers with no
@@ -70,11 +63,10 @@ export const ONNX_MODELS: ModelInfo[] = [
     needMB: 900,
     onnx: { repo: 'onnx-community/Qwen3-0.6B-ONNX', gpu: 'q4f16', cpu: 'q4' },
   },
-  MODELS[1],
   {
     id: 'onnx:LFM2-1.2B',
     name: 'LFM 2 1.2B',
-    tier: 'more',
+    tier: 'default',
     note: 'Liquid AI’s quick small model',
     needMB: 1400,
     onnx: { repo: 'onnx-community/LFM2-1.2B-ONNX', gpu: 'q4f16', cpu: 'q4' },
@@ -244,7 +236,7 @@ export function resolvedModel() {
 
 /** Models earlier versions offered. Their downloads (up to 5 GB each) are cleared once, since nothing uses them now. */
 const RETIRED = ['Qwen3.5-4B-q4f16_1-MLC', 'Qwen3.5-9B-q4f16_1-MLC', 'Qwen3-8B-q4f16_1-MLC', 'Phi-4-mini-instruct-q4f16_1-MLC']
-const RETIRED_ONNX = ['onnx-community/Qwen3-1.7B-ONNX', 'onnx-community/Qwen3-4B-ONNX']
+const RETIRED_ONNX = ['onnx-community/Qwen3-1.7B-ONNX', 'onnx-community/Qwen3-4B-ONNX', 'onnx-community/LFM3-1.7B-ONNX']
 async function clearRetired() {
   try {
     const { deleteModelAllInfoInCache, hasModelInCache } = await import('@mlc-ai/web-llm')
@@ -464,60 +456,127 @@ export async function deleteModel(modelId: string) {
   refreshCache()
 }
 
+/** Rough token count, on the safe side: about 3.2 characters a token (English is nearer 4). */
+const tokensOf = (t: string) => Math.ceil(t.length / 3.2) + 4
+/** Tokens a model can see at once. WebLLM's builds of all three tiers use 4,096. The other engine reads a prompt in one
+ *  pass, which costs memory in proportion to its length, so it's kept shorter there. */
+const windowOf = () => (loadedEngine === 'onnx' ? 2048 : 4096)
+
+/**
+ * Fit a chat inside the model's window, leaving room for the answer. The system message and the newest question always
+ * stay; older turns go oldest first (a pair at a time, so the chat still starts with a question); if the newest
+ * question alone is too long, its middle is cut, keeping the opening paragraph and the end.
+ */
+export function fit(messages: Msg[], window: number, reserve: number): Msg[] {
+  const budget = window - reserve - 48
+  const sys = messages[0]?.role === 'system' ? messages[0] : null
+  const rest = sys ? messages.slice(1) : messages
+  if (!rest.length) return messages
+  const last = rest[rest.length - 1]
+  const used = (sys ? tokensOf(sys.content) : 0) + tokensOf(last.content)
+  if (used > budget) {
+    const room = Math.floor(Math.max(200, (budget - (sys ? tokensOf(sys.content) : 0)) * 3.2))
+    // Keep the opening paragraph (instructions come first in some prompts) and the end (the question comes last in
+    // chat); the middle, usually pasted material, is what gives way.
+    const para = last.content.indexOf('\n\n')
+    const head = para > 0 ? Math.min(para, Math.floor(room * 0.4)) : 0
+    return [...(sys ? [sys] : []), { ...last, content: last.content.slice(0, head) + '\n…\n' + last.content.slice(-(room - head - 3)) }]
+  }
+  let total = used
+  let from = rest.length - 1
+  while (from > 0 && total + tokensOf(rest[from - 1].content) <= budget) total += tokensOf(rest[--from].content)
+  while (from < rest.length - 1 && rest[from].role !== 'user') from++
+  return [...(sys ? [sys] : []), ...rest.slice(from)]
+}
+
+/** The GPU went away (sleep, a driver reset, another tab using all its memory); the model has to be loaded again. */
+const gpuLost = (e: unknown) => /device (was |is )?lost|devicelost|gpudevice|destroyed|instance reference no longer exists|dispose/i.test(message(e))
+const tooLong = (e: unknown) => /exceed context window|context window size/i.test(message(e))
+
 /** Stream a chat completion from the model running in this browser. Returns the full text. */
 export async function chat(messages: Msg[], onToken?: (full: string) => void, opts: { signal?: AbortSignal; temperature?: number; maxTokens?: number } = {}): Promise<string> {
   useAI.setState({ busy: true })
+  const reserve = opts.maxTokens ?? 1024
   try {
-    if (loadedEngine === 'onnx') {
-      // Hybrid reasoning models (Qwen 3, LFM 3) answer directly; notes and chat don't need a visible chain of thought.
-      const direct = /^onnx:(Qwen3|LFM3)/.test(useAI.getState().loadedModel ?? '')
-      let full = ''
-      const stop = () => onnx?.postMessage({ type: 'stop' })
-      opts.signal?.addEventListener('abort', stop)
-      try {
-        await onnxCall(
-          {
-            type: 'chat',
-            messages,
-            maxTokens: opts.maxTokens ?? 1024,
-            temperature: opts.temperature ?? 0.6,
-            think: !direct,
-          },
-          (r) => {
-            if (r.type === 'token' || r.type === 'done') {
-              full = r.full
-              onToken?.(clean(full))
-            }
-            return r.type === 'done'
-          },
-        )
-      } finally {
-        opts.signal?.removeEventListener('abort', stop)
+    try {
+      return await generate(fit(messages, windowOf(), reserve), onToken, opts)
+    } catch (e) {
+      if (opts.signal?.aborted) throw e
+      // The estimate was short for this text (code, other scripts): try again with a much smaller share of the window.
+      if (tooLong(e)) return await generate(fit(messages, Math.floor(windowOf() * 0.6), reserve), onToken, opts)
+      // Load the same model again (from the browser's cache, no download) and answer once more.
+      if (gpuLost(e) || !isReady()) {
+        const id = useAI.getState().loadedModel
+        await resetEngines()
+        await loadModel(id ?? undefined)
+        if (!isReady()) throw new Error('The assistant stopped and couldn’t restart. Reload the page to try again.')
+        return await generate(fit(messages, windowOf(), reserve), onToken, opts)
       }
-      return clean(full)
+      throw e
     }
-    if (!engine) throw new Error('The assistant is still getting ready.')
-    // Qwen 3 thinks out loud by default; for notes and chat a direct answer is faster and just as good.
-    const direct = useAI.getState().loadedModel?.startsWith('Qwen3') ? noThink(messages) : messages
-    const stream = await engine.chat.completions.create({
-      messages: direct,
-      stream: true,
-      temperature: opts.temperature ?? 0.6,
-      max_tokens: opts.maxTokens ?? 1024,
-    })
-    let full = ''
-    for await (const chunk of stream) {
-      if (opts.signal?.aborted) {
-        engine.interruptGenerate()
-        break
-      }
-      full += chunk.choices[0]?.delta?.content ?? ''
-      onToken?.(clean(full))
-    }
-    return clean(full)
   } finally {
     useAI.setState({ busy: false })
   }
+}
+
+/** Drop both engines after the GPU was lost, so the next load starts clean. */
+async function resetEngines() {
+  webllmWorker?.terminate()
+  webllmWorker = null
+  engine = null
+  onnx?.terminate()
+  onnx = null
+  loadedEngine = null
+  useAI.setState({ status: 'idle', loadedModel: null })
+}
+
+async function generate(messages: Msg[], onToken: ((full: string) => void) | undefined, opts: { signal?: AbortSignal; temperature?: number; maxTokens?: number }): Promise<string> {
+  if (loadedEngine === 'onnx') {
+    const direct = useAI.getState().loadedModel?.startsWith('onnx:Qwen3')
+    let full = ''
+    const stop = () => onnx?.postMessage({ type: 'stop' })
+    opts.signal?.addEventListener('abort', stop)
+    try {
+      await onnxCall(
+        {
+          type: 'chat',
+          messages,
+          maxTokens: opts.maxTokens ?? 1024,
+          temperature: opts.temperature ?? 0.6,
+          think: !direct,
+        },
+        (r) => {
+          if (r.type === 'token' || r.type === 'done') {
+            full = r.full
+            onToken?.(clean(full))
+          }
+          return r.type === 'done'
+        },
+      )
+    } finally {
+      opts.signal?.removeEventListener('abort', stop)
+    }
+    return clean(full)
+  }
+  if (!engine) throw new Error('The assistant is still getting ready.')
+  // Qwen thinks out loud by default; for notes and chat a direct answer is faster and just as good.
+  const direct = useAI.getState().loadedModel?.startsWith('Qwen3') ? noThink(messages) : messages
+  const stream = await engine.chat.completions.create({
+    messages: direct,
+    stream: true,
+    temperature: opts.temperature ?? 0.6,
+    max_tokens: opts.maxTokens ?? 1024,
+  })
+  let full = ''
+  for await (const chunk of stream) {
+    if (opts.signal?.aborted) {
+      engine.interruptGenerate()
+      break
+    }
+    full += chunk.choices[0]?.delta?.content ?? ''
+    onToken?.(clean(full))
+  }
+  return clean(full)
 }
 
 // Every user turn, not just the last: earlier turns must read the same as when they were sent, or the model's cache is thrown away.

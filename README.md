@@ -46,7 +46,7 @@ The product name lives in `src/brand.ts`.
 
 ## Local AI
 
-- **Language model**: three tiers, all 2B or smaller, the same on web and iPhone: **Fast** Qwen 3.5 0.8B, **Default** LFM 3 1.7B (Liquid AI), **Enhanced** Gemma 4 E2B. In the browser they run through [WebLLM](https://github.com/mlc-ai/web-llm) or [Transformers.js](https://github.com/huggingface/transformers.js) (LFM 3), in a Web Worker on WebGPU; Monolith picks the engine. Downloaded once, cached in the browser, works offline.
+- **Language model**: three tiers, all 2B or smaller: **Fast** Qwen 3.5 0.8B, **Default** Qwen 3.5 2B, **Enhanced** Gemma 4 E2B, all through [WebLLM](https://github.com/mlc-ai/web-llm) in a Web Worker on WebGPU. Firefox without WebLLM, and browsers with no WebGPU, use [Transformers.js](https://github.com/huggingface/transformers.js) (Qwen 3 0.6B, LFM 2 1.2B). Monolith picks the engine. Downloaded once, cached in the browser, works offline. (iPhone and iPad run LFM 3 1.7B as Default, through MLX.)
 - **Speech-to-text**: Moonshine Base (fast, English) or Whisper Large v3 Turbo (most accurate) via [Transformers.js](https://github.com/huggingface/transformers.js), WebGPU with WASM fallback.
 - **Nothing to install.** Monolith downloads, caches and runs every model itself; there's no separate AI app to set up.
 
