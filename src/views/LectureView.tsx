@@ -75,7 +75,8 @@ export function LectureView({ item }: { item: Item }) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
       streamRef.current = stream
       chunks.current = []
-      const m = new MediaRecorder(stream)
+      // Settings › Files › Recordings: voice quality (32 kbps Opus, about 14 MB an hour) unless high quality is chosen.
+      const m = new MediaRecorder(stream, { audioBitsPerSecond: settings.recordingQuality === 'high' ? 96_000 : 32_000 })
       m.ondataavailable = (e) => e.data.size && chunks.current.push(e.data)
       m.onstop = async () => {
         const blob = new Blob(chunks.current, { type: m.mimeType })
@@ -292,7 +293,8 @@ export function LectureView({ item }: { item: Item }) {
     <div className="doc-pane lecture">
       <div className="toolbar">
         <MobileBack item={item} />
-        <input className="lec-title" value={item.title} placeholder="Untitled recording" onChange={(e) => st.updateItem(item.id, { title: e.target.value })} />
+        {/* Same layout as a doc: the name in the bar, the editable title above the content. */}
+        <div className="crumbs"><span className="cur">{item.title || 'Untitled recording'}</span></div>
         <span className="grow" />
         <span className="muted small hide-sm">{format(item.createdAt, 'EEE, MMM d · h:mm a')}</span>
         {item.deletedAt ? (
@@ -319,7 +321,17 @@ export function LectureView({ item }: { item: Item }) {
 
       <div className="page-scroll">
         <div className="page wide">
-          <div className={`recorder ${recording ? 'live' : ''}`}>
+          <textarea
+            className="doc-title"
+            aria-label="Recording title"
+            rows={1}
+            value={item.title}
+            placeholder="Untitled recording"
+            onChange={(e) => st.updateItem(item.id, { title: e.target.value.replace(/\n/g, '') })}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), e.currentTarget.blur())}
+          />
+          {/* A card while there's something to start or watch; just the button once there's audio, so it lines up with the player. */}
+          <div className={`recorder ${recording ? 'live' : lec.hasAudio ? 'bare' : ''}`}>
             {recording ? (
               <>
                 <div className="rec-dot" />

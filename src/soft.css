@@ -1886,3 +1886,19 @@ body {
   .p-dock { isolation: isolate; }
 }
 
+
+/* Recording view: once there's audio, the Transcribe button sits on the content edge like the player below it. */
+.recorder.bare { padding: 0; background: none; border: 0; margin-top: 4px; }
+/* Sidebar row icons are centred on the text line, whatever icon they hold. */
+.nav .emoji { display: grid; place-items: center; height: 18px; line-height: 0; }
+/* File menus: on a card, after Open; on a picture, in its corner while hovered or selected. */
+.ProseMirror .file-node { position: relative; }
+.file-card .file-more { flex: none; }
+.ProseMirror .file-more.on-picture { position: absolute; top: 8px; right: 8px; background: var(--raised); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25); opacity: 0; transition: opacity 0.15s; }
+.ProseMirror .file-node:hover .file-more.on-picture,
+.ProseMirror .file-node.is-selected .file-more.on-picture,
+.ProseMirror .file-more.on-picture:focus-visible { opacity: 1; }
+@media (hover: none) { .ProseMirror .file-more.on-picture { opacity: 1; } }
+/* Settings: a label on the left, its choice on the right. */
+.modal .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.modal .set-row > span { color: var(--text-2); font-size: 14px; }

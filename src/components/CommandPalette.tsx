@@ -1,7 +1,7 @@
 import { Command } from 'cmdk'
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { CalendarDays, CalendarPlus, FileText, Home, Mic, Moon, Settings, MessageCircle, StickyNote, Sun, HardDriveUpload, Smartphone, Keyboard } from 'lucide-react'
+import { CalendarDays, CalendarPlus, FileText, Home, Mic, AudioWaveform, Moon, Settings, MessageCircle, StickyNote, Sun, HardDriveUpload, Smartphone, Keyboard } from 'lucide-react'
 import { useShortcuts } from './Overlays'
 import { AnimatePresence, motion } from 'motion/react'
 import { useStore } from '../store'
@@ -33,7 +33,7 @@ export function CommandPalette() {
     .sort((a, b) => b.score - a.score || b.i.updatedAt - a.i.updatedAt)
     .slice(0, 12)
 
-  const Icon = { note: StickyNote, doc: FileText, lecture: Mic }
+  const Icon = { note: StickyNote, doc: FileText, lecture: AudioWaveform }
 
   return (
     <AnimatePresence>

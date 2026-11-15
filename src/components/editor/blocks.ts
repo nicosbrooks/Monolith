@@ -37,26 +37,24 @@ export const setStoresFiles = (editor: Editor, on: boolean) => void storing.set(
  */
 export async function insertFiles(editor: Editor, files: File[], pos?: number) {
   const store = storing.get(editor) ?? true
+  type FileNode = { type: 'image'; attrs: { src: string; alt: string } }
+  const nodes: FileNode[] = []
   for (const file of files) {
-    let node: { type: 'image'; attrs: { src: string; alt: string } }
     try {
       if (store) {
         const { ref, name } = await addFile(file)
-        node = { type: 'image', attrs: { src: ref, alt: name } }
+        nodes.push({ type: 'image', attrs: { src: ref, alt: name } })
       } else if (file.type.startsWith('image/')) {
-        node = { type: 'image', attrs: { src: await readDataUrl(file), alt: file.name } }
-      } else {
-        toast('Docs kept in a folder, GitHub or Drive can hold pictures, but not other files.')
-        continue
-      }
+        nodes.push({ type: 'image', attrs: { src: await readDataUrl(file), alt: file.name } })
+      } else toast('Docs kept in a folder, GitHub or Drive can hold pictures, but not other files.')
     } catch (e) {
       toast((e as Error).message || `Couldn’t add “${file.name}”.`)
-      continue
     }
-    if (editor.isDestroyed) return
-    if (pos !== undefined) editor.chain().focus().insertContentAt(pos, node).run()
-    else editor.chain().focus().insertContent(node).run()
   }
+  // All at once: an inserted file is selected, so inserting the next one separately would replace it.
+  if (!nodes.length || editor.isDestroyed) return
+  if (pos !== undefined) editor.chain().focus().insertContentAt(pos, nodes).run()
+  else editor.chain().focus().insertContent(nodes).run()
 }
 
 const readDataUrl = (f: Blob) =>

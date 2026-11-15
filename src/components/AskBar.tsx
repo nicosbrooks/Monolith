@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowUp, ArrowUpRight, CalendarPlus, FileText, MessageCircle, Mic, StickyNote } from 'lucide-react'
+import { ArrowUp, ArrowUpRight, CalendarPlus, FileText, MessageCircle, AudioWaveform, StickyNote } from 'lucide-react'
 import { useStore } from '../store'
 import { eventColor, parseQuickEvent, whenLabel } from '../lib/dates'
 import { htmlToText, itemEmoji } from '../lib/util'
@@ -92,7 +92,7 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
     return () => window.removeEventListener('keydown', k)
   }, [])
 
-  const Icon = { note: StickyNote, doc: FileText, lecture: Mic }
+  const Icon = { note: StickyNote, doc: FileText, lecture: AudioWaveform }
   const open = focused && (!!text || ctx.chips.length > 0)
 
   return (

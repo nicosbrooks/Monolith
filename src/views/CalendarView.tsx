@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   addDays, addMonths, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, isToday, startOfDay, startOfMonth, startOfWeek, differenceInMinutes, addMinutes,
 } from 'date-fns'
-import { ChevronLeft, ChevronRight, MapPin, Plus, Trash2, X, StickyNote, Mic, Layers, Eye, EyeOff, Loader2, Link2, CircleAlert } from 'lucide-react'
+import { ChevronLeft, ChevronRight, MapPin, Plus, Trash2, X, StickyNote, Mic, Layers, Eye, EyeOff, Loader2, Link2, CircleAlert, AudioWaveform } from 'lucide-react'
 import { importFile, refreshStale, subscribe, unsubscribe, updateSub, useCalendars, useSubEvents } from '../lib/calendars'
 import { openMenu } from '../components/Overlays'
 import { toast } from '../components/Toast'
@@ -397,7 +397,7 @@ function EventEditor({ id, onClose }: { id: string; onClose: () => void }) {
       <div className="linked">
         <small className="muted">Linked</small>
         {linked ? (
-          <button className="btn sm" onClick={() => st.open(linked.id)}>{linked.kind === 'lecture' ? <Mic size={13} /> : <StickyNote size={13} />} {linked.title || 'Untitled'}</button>
+          <button className="btn sm" onClick={() => st.open(linked.id)}>{linked.kind === 'lecture' ? <AudioWaveform size={13} /> : <StickyNote size={13} />} {linked.title || 'Untitled'}</button>
         ) : (
           <div className="row">
             <button className="btn sm" onClick={() => link('doc')}><Plus size={13} /> Notes</button>

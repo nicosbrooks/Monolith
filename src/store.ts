@@ -68,6 +68,12 @@ export interface Settings {
   lastBackup?: number
   /** Integrations turned on in this browser (Settings › Integrations). */
   integrations?: ('location' | 'weather')[]
+  /** Settings › Files. Unset means on: pictures resized, other files compressed where it helps. */
+  compressFiles?: boolean
+  /** Longest side of a stored picture when compressing: small 1280, medium 1920, large 2560 (default). */
+  pictureSize?: 'small' | 'medium' | 'large'
+  /** Recording bitrate: voice (32 kbps Opus, ~14 MB an hour, the default) or high (96 kbps). */
+  recordingQuality?: 'voice' | 'high'
 }
 
 interface State {

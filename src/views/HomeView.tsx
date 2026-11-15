@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { addDays, format, formatDistanceToNowStrict, isSameDay, isToday, startOfDay } from 'date-fns'
-import { ArrowUpRight, CalendarDays, FileText, ListChecks, MapPin, Mic, StickyNote } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, FileText, ListChecks, MapPin, AudioWaveform, StickyNote } from 'lucide-react'
 import { useMobile, useScrolled } from '../lib/useMobile'
 import { PhoneTitle } from '../components/Phone'
 import { useStore } from '../store'
@@ -15,7 +15,7 @@ import { openMenu } from '../components/Overlays'
 import { docMenu } from '../components/Sidebar'
 import { awayFor, greeting, startersTitle } from '../lib/greeting'
 
-const KindIcon = { note: StickyNote, doc: FileText, lecture: Mic }
+const KindIcon = { note: StickyNote, doc: FileText, lecture: AudioWaveform }
 
 const same = (a: string, b: string) => a.replace(/\W+/g, '').toLowerCase() === b.replace(/\W+/g, '').toLowerCase()
 const SHOWN = 5

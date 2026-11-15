@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   LayoutGrid, CalendarDays, FileText, Mic, Trash2, Plus, Folder, Settings, ChevronRight, PanelLeft, FolderPlus, 
-  RefreshCw, GitCommitHorizontal, CircleAlert, Pencil, Star, StarOff, FilePlus2, Unplug, Inbox,
+  AudioWaveform, RefreshCw, GitCommitHorizontal, CircleAlert, Pencil, Star, StarOff, FilePlus2, Unplug, Inbox,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
@@ -109,7 +109,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                   ])
                 }
               >
-                <Folder size={16} strokeWidth={1.8} />
+                <Folder size={17} strokeWidth={1.8} />
                 <span>{f.name}</span>
               </button>
               {s.section === 'docs' && s.folderId === f.id && <div className="side-tree"><DocTree folderId={f.id} /></div>}
@@ -221,7 +221,7 @@ function RecordingList() {
       {sorted.map((r) => (
         <div key={r.id} className={`nav sub doc ${activeId === r.id ? 'on' : ''}`} style={{ paddingLeft: 8 }} onClick={() => useStore.getState().open(r.id)} onContextMenu={(e) => openMenu(e, rowMenu(r))}>
           <span className="twisty hide" />
-          <span className="emoji"><Mic size={14} /></span>
+          <span className="emoji"><AudioWaveform size={14} /></span>
           <button type="button" className="tree-title" title={r.title || undefined} onClick={(e) => { e.stopPropagation(); useStore.getState().open(r.id) }}>{r.title || 'Untitled'}</button>
         </div>
       ))}

@@ -1,10 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Check, Monitor, Moon, Sun, Trash2, X } from 'lucide-react'
 import { useStore } from '../store'
 import { chooseModel, deleteModel, fits, modelForTier, models, refreshCache, resolvedModel, useAI } from '../ai/llm'
 import { STT_MODELS, sttModel } from '../ai/stt'
 import { StorageSettings } from './StorageSettings'
+import { toast } from './Toast'
 import { openLink } from './LinkDialog'
 import { useLink } from '../link/link'
 import { deviceSummary, setIntegration, useDevice } from '../lib/integrations'
@@ -63,6 +64,8 @@ export function SettingsModal() {
               </section>
 
               <StorageSettings />
+
+              <FilesSettings />
 
               <section>
                 <h3>Assistant</h3>
@@ -138,6 +141,84 @@ export function SettingsModal() {
 }
 
 /** One choice in the model list: pick it and it's used (downloading first if it has to). */
+/** Settings › Files: how much pictures, attachments and recordings are made smaller, and what they take up. */
+function FilesSettings() {
+  const settings = useStore((s) => s.settings)
+  const set = useStore((s) => s.setSettings)
+  const on = settings.compressFiles !== false
+  const [use, setUse] = useState<{ files: number; stored: number; original: number } | null>(null)
+  const refresh = () => void import('../lib/files').then((f) => f.storageUse()).then(setUse).catch(() => {})
+  useEffect(refresh, [])
+  const mb = (n: number) => (n < 1e6 ? `${Math.round(n / 1e3)} KB` : `${(n / 1e6).toFixed(n < 1e8 ? 1 : 0)} MB`)
+  return (
+    <section>
+      <h3>Files</h3>
+      <label className="toggle">
+        <input type="checkbox" checked={on} onChange={(e) => set({ compressFiles: e.target.checked })} />
+        <span />
+        Make files smaller
+      </label>
+      <p className="small muted">
+        {on
+          ? 'Pictures are resized as you add them. Other files are compressed without losing anything, when that helps. Files you already added stay as they are.'
+          : 'Files are kept exactly as you add them. They take more space and sync more slowly.'}
+      </p>
+      {on && (
+        <div className="set-row">
+          <span>Pictures</span>
+          <div className="seg">
+            {(
+              [
+                ['small', 'Small', '1280 px'],
+                ['medium', 'Medium', '1920 px'],
+                ['large', 'Large', '2560 px'],
+              ] as const
+            ).map(([k, label, hint]) => (
+              <button key={k} title={`Longest side ${hint}`} className={(settings.pictureSize ?? 'large') === k ? 'on' : ''} onClick={() => set({ pictureSize: k })}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="set-row">
+        <span>Recordings</span>
+        <div className="seg">
+          {(
+            [
+              ['voice', 'Voice', 'About 14 MB an hour'],
+              ['high', 'High quality', 'About 43 MB an hour'],
+            ] as const
+          ).map(([k, label, hint]) => (
+            <button key={k} title={hint} className={(settings.recordingQuality ?? 'voice') === k ? 'on' : ''} onClick={() => set({ recordingQuality: k })}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {use && use.files > 0 && (
+        <p className="small muted set-row">
+          <span>
+            {use.files} file{use.files === 1 ? '' : 's'} in docs use {mb(use.stored)}
+            {use.original > use.stored * 1.05 ? ` (${mb(use.original - use.stored)} saved)` : ''}
+          </span>
+          <button
+            className="btn sm"
+            onClick={async () => {
+              const f = await import('../lib/files')
+              const freed = await f.collectGarbage(useStore.getState().items.map((i) => i.content), true)
+              toast(freed ? `Cleared ${mb(freed)} of files no doc uses` : 'Every file is in use')
+              refresh()
+            }}
+          >
+            Clear unused
+          </button>
+        </p>
+      )}
+    </section>
+  )
+}
+
 function ModelRow({ name, note, on, progress, onPick, onRemove }: { name: string; note: string; on: boolean; progress?: number; onPick: () => void; onRemove?: () => void }) {
   return (
     <div className={`model ${on ? 'on' : ''}`} role="radio" aria-checked={on} tabIndex={0} onClick={onPick} onKeyDown={(e) => e.key === 'Enter' && onPick()}>
