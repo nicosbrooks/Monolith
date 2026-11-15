@@ -1052,8 +1052,9 @@ body {
 .app.collapsed:not(.mobile) .main {
   margin-left: 0;
 }
+/* Flush with the section rows: same highlight edge, titles in the same column (see the padding in Sidebar.tsx). */
 .side-tree {
-  margin: 2px 0 6px 10px;
+  margin: 2px 0 6px 0;
 }
 .side-label .hover-only {
   opacity: 0;
@@ -1904,3 +1905,16 @@ body {
 .modal .set-row > span { color: var(--text-2); font-size: 14px; }
 /* An attachment is as wide as its card, so selecting it outlines the card, not the whole column. */
 .ProseMirror .file-node:has(> .file-card) { width: fit-content; max-width: 100%; }
+
+/* Sidebar items sit flush with their section (Docs, Recordings and folders are types, not deeper levels). Their icon
+   column matches the section icons (18 px); a doc with sub-docs shows its arrow in place of the icon on hover/focus,
+   and keeps it while open. */
+.nav.sub .emoji { width: 18px; position: relative; }
+.nav.sub .emoji .chev { display: none; color: var(--text-3); transition: transform 0.15s; }
+.nav.sub .emoji.open .chev { transform: rotate(90deg); }
+.nav.sub:hover .emoji.has-kids .ico,
+.nav.sub:focus-within .emoji.has-kids .ico { display: none; }
+.nav.sub:hover .emoji.has-kids .chev,
+.nav.sub:focus-within .emoji.has-kids .chev { display: block; }
+.nav.sub .emoji.has-kids { cursor: pointer; border-radius: 4px; }
+.nav.sub .emoji.has-kids:hover { background: var(--card-hover); }

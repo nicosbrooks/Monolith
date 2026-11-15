@@ -156,14 +156,21 @@ function Tree({ docs, depth = 0, parent = null }: { docs: Item[]; depth?: number
             <div key={d.id}>
               <div
                 className={`nav sub doc ${section === 'docs' && activeId === d.id ? 'on' : ''}`}
-                style={{ paddingLeft: 8 + depth * 14 }}
+                style={{ paddingLeft: 17 + depth * 12 }}
                 onClick={() => useStore.getState().open(d.id)}
                 onContextMenu={(e) => openMenu(e, docMenu(d))}
               >
-                <span className={`twisty ${kids ? '' : 'hide'} ${open ? 'open' : ''}`} onClick={(e) => (e.stopPropagation(), toggle())}>
-                  <ChevronRight size={12} />
+                {/* Items line up with the section rows; a doc with sub-docs swaps its icon for the arrow on hover. */}
+                <span
+                  className={`emoji ${kids ? 'has-kids' : ''} ${open ? 'open' : ''}`}
+                  role={kids ? 'button' : undefined}
+                  aria-label={kids ? (open ? 'Collapse' : 'Expand') : undefined}
+                  aria-expanded={kids ? open : undefined}
+                  onClick={kids ? (e) => (e.stopPropagation(), toggle()) : undefined}
+                >
+                  <span className="ico">{d.file?.dir ? <Folder size={15} strokeWidth={1.8} /> : itemEmoji(d) || <FileText size={15} />}</span>
+                  {kids && <ChevronRight size={13} className="chev" />}
                 </span>
-                <span className="emoji">{d.file?.dir ? <Folder size={14} strokeWidth={1.8} /> : itemEmoji(d) || <FileText size={14} />}</span>
                 <button type="button" className="tree-title" title={d.title || undefined} onClick={(e) => { e.stopPropagation(); useStore.getState().open(d.id) }}>{d.title || 'Untitled'}</button>
                 {d.file?.conflict ? <i className="file-dot conflict" title="Changed in two places" /> : isDirty(d) ? <i className="file-dot" title="Unsaved changes" /> : null}
                 {(!d.sourceId || d.file?.dir) && (
@@ -219,9 +226,8 @@ function RecordingList() {
   return (
     <>
       {sorted.map((r) => (
-        <div key={r.id} className={`nav sub doc ${activeId === r.id ? 'on' : ''}`} style={{ paddingLeft: 8 }} onClick={() => useStore.getState().open(r.id)} onContextMenu={(e) => openMenu(e, rowMenu(r))}>
-          <span className="twisty hide" />
-          <span className="emoji"><AudioWaveform size={14} /></span>
+        <div key={r.id} className={`nav sub doc ${activeId === r.id ? 'on' : ''}`} style={{ paddingLeft: 17 }} onClick={() => useStore.getState().open(r.id)} onContextMenu={(e) => openMenu(e, rowMenu(r))}>
+          <span className="emoji"><span className="ico"><AudioWaveform size={15} /></span></span>
           <button type="button" className="tree-title" title={r.title || undefined} onClick={(e) => { e.stopPropagation(); useStore.getState().open(r.id) }}>{r.title || 'Untitled'}</button>
         </div>
       ))}
