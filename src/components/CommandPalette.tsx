@@ -1,11 +1,12 @@
 import { Command } from 'cmdk'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { CalendarDays, CalendarPlus, ListChecks, Square, FileText, Home, Mic, AudioWaveform, Moon, Settings, MessageCircle, StickyNote, Sun, HardDriveUpload, Smartphone, Keyboard } from 'lucide-react'
 import { useShortcuts } from './Overlays'
 import { AnimatePresence, motion } from 'motion/react'
 import { useStore } from '../store'
-import { htmlToText, itemEmoji } from '../lib/util'
+import { itemEmoji } from '../lib/util'
+import { fullText, searchText } from '../lib/text'
 import { startRecording } from '../lib/recordNext'
 import { related } from '../ai/system1'
 import { eventColor, parseQuickEvent, whenLabel } from '../lib/dates'
@@ -24,17 +25,21 @@ export function CommandPalette() {
 
   // full-text matches with snippet
   const ql = q.toLowerCase().trim()
-  const hits = items
-    .filter((i) => !i.deletedAt)
-    .map((i) => {
-      const text = htmlToText(i.content) + ' ' + (i.lecture?.transcript.map((s) => s.text).join(' ') || '')
-      const idx = ql ? text.toLowerCase().indexOf(ql) : -1
-      const inTitle = ql && i.title.toLowerCase().includes(ql)
-      return { i, snippet: idx >= 0 ? '…' + text.slice(Math.max(0, idx - 30), idx + 70).replace(/\s+/g, ' ') + '…' : '', score: inTitle ? 2 : idx >= 0 ? 1 : ql ? 0 : 0.5 }
-    })
-    .filter((h) => h.score > 0)
-    .sort((a, b) => b.score - a.score || b.i.updatedAt - a.i.updatedAt)
-    .slice(0, 12)
+  // Only while the menu is open (it stays mounted), and only when the words or the docs change.
+  const hits = useMemo(() => {
+    if (!open) return []
+    const found: { i: (typeof items)[number]; idx: number; score: number }[] = []
+    for (const i of items) {
+      if (i.deletedAt) continue
+      const idx = ql ? searchText(i).indexOf(ql) : -1
+      const score = ql && i.title.toLowerCase().includes(ql) ? 2 : idx >= 0 ? 1 : ql ? 0 : 0.5
+      if (score > 0) found.push({ i, idx, score })
+    }
+    return found
+      .sort((a, b) => b.score - a.score || b.i.updatedAt - a.i.updatedAt)
+      .slice(0, 12)
+      .map(({ i, idx }) => ({ i, snippet: idx >= 0 ? '…' + fullText(i).slice(Math.max(0, idx - 30), idx + 70).replace(/\s+/g, ' ') + '…' : '' }))
+  }, [open, items, ql])
 
   const Icon = { note: StickyNote, doc: FileText, lecture: AudioWaveform }
   // Open tasks whose words match: picking one opens the doc it's in.

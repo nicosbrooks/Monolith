@@ -6,7 +6,8 @@ import type { Item } from '../types'
 import { linkMention, unlinkedMentions, useWorkspace } from '../lib/graph'
 import { toast } from './Toast'
 import { useOwnEvents } from '../lib/events'
-import { htmlToText, itemEmoji } from '../lib/util'
+import { itemEmoji } from '../lib/util'
+import { textOf } from '../lib/text'
 import { related, useSystem1 } from '../ai/system1'
 
 const KindIcon = { note: FileText, doc: FileText, lecture: AudioWaveform }
@@ -31,7 +32,7 @@ export function Connections({ item }: { item: Item }) {
     setNear([])
     if (!ready) return
     let live = true
-    const about = `${item.title}. ${htmlToText(item.content).slice(0, 600)}`
+    const about = `${item.title}. ${textOf(item).slice(0, 600)}`
     if (about.trim().length < 40) return
     void related(about, 8, 600).then((r) => live && setNear(r.filter((x) => x.id !== item.id && x.score > 0.5).map((x) => x.id)))
     return () => void (live = false)

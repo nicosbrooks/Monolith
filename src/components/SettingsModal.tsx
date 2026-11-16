@@ -104,6 +104,10 @@ export function SettingsModal() {
                       <button key={t} className={`tier ${on ? 'on' : ''}`} onClick={() => chooseModel(m.id)} disabled={t === 'enhanced' && !fits(m)}>
                         <b>{t === 'fast' ? 'Fast' : t === 'default' ? 'Default' : 'Enhanced'}</b>
                         <small>{t === 'enhanced' && !fits(m) ? 'Not on this device' : m.name}</small>
+                        {/* Where its download stands, when that's worth saying. */}
+                        {!(t === 'enhanced' && !fits(m)) && !loadingThis && (ai.cached[m.id] || ai.partial[m.id] !== undefined) && (
+                          <small className="tier-state">{ai.cached[m.id] ? 'Downloaded' : `${Math.round(ai.partial[m.id] * 100)}% downloaded · continues when picked`}</small>
+                        )}
                         {loadingThis && (
                           <span className="bar">
                             <i
@@ -137,7 +141,10 @@ export function SettingsModal() {
                     </div>
                   </details>
                 )}
-                <p className="muted small">Open models download the first time you pick them, then work offline.</p>
+                <p className="muted small">
+                  Open models download the first time you pick them, then work offline. A download that’s interrupted carries on from where it stopped.
+                  {ai.free !== undefined && ai.free < 6 * 1024 ** 3 ? ` This browser has ${(ai.free / 1024 ** 3).toFixed(1)} GB free.` : ''}
+                </p>
               </section>
 
               <Integrations />

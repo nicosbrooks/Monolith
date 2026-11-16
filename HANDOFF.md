@@ -548,3 +548,42 @@ Rules for each are in `DESIGN.md` (Repeating events, Tasks on the calendar, Earl
 - A repeat can't be "every Monday and Wednesday" in one event (make two), and has no "N times" end, only a date.
 - Reminders can't fire while the app is closed: there is no server to send them. A push service would be the only way.
 - Still open from before: iOS Tasks/links, relative links inside connected folders (Export already writes them, so the same mapping can be reused in `storage/sync.ts`), and flattening the three CSS files.
+
+## Models and speed (Nov 16, cloud session, 0.12.0)
+Nothing here could be run against a real model: huggingface.co and jsDelivr are blocked in the cloud session and there is no GPU. So this pass changed only what could be measured or tested without one, and left the model line-up and every model id alone.
+
+### Speed, measured on a 3,000-doc workspace (5.9 MB saved), before → after
+| | Before | After |
+|---|---|---|
+| Opening Docs (long tasks) | 664 ms | 60 ms |
+| Typing in a doc (long tasks per 60 characters) | 163 ms | 0 |
+| Command menu, typing 17 characters | 1,820 ms (22 long tasks) | 708 ms (1) |
+| Ask bar, typing 18 characters | 962 ms | 625 ms |
+| Opening Home (long tasks) | 383 ms | 0 |
+| Files downloaded at launch, no WebLLM model stored | 7.40 MB | 1.45 MB |
+
+Typing figures include Playwright's own 30 ms a key (510–540 ms is the floor). What changed:
+- **`src/lib/text.ts`:** a doc's plain text is worked out once per doc object and remembered (`textOf`, `fullText`, `searchText`, `wordCount`). Search, the Ask bar, Home, word counts, suggestions and the assistant's passages all use it. Before, the command menu parsed every doc's HTML on every keystroke, and did so even while closed, each time a doc changed.
+- **Sidebar tree:** children were found by scanning every doc for every row (9 million comparisons at 3,000 docs). Now grouped once. A level shows 100 rows, then "Show 100 more of N"; the open doc is always shown.
+- **Saving (`store.ts`):** zustand's JSON storage turned the whole workspace into text on every state change, including opening a menu. The store now hands over the object and text is made only when a save happens; a change to nothing that's saved causes no save; a save waits for a 0.4 s pause, at most 2 s while changes keep coming (it was every 0.5 s). Hidden or closed tab still saves at once. **Trade-off:** a crashed tab can lose up to 2 s of typing instead of 0.5 s.
+- **Launch:** `refreshCache`, `clearRetired` and `clearFallbacks` imported WebLLM's 6 MB library at every start to ask what was downloaded. They now check first whether its cache (`webllm/model` in the Cache API, the name read from the library's source) exists at all.
+
+### Model downloads
+- **`src/ai/resumable.ts`:** LiteRT-LM models (Gemma, EmbeddingGemma) are written in place in OPFS as they arrive (a sync access handle in the worker, flushed every 32 MB), with a `<file>.part.json` note of the address and length. The next try sends `Range: bytes=<have>-` with `If-Range`; a 200 answer restarts cleanly; a part from a different file is never reused (addresses are compared without their query string, since download links are signed afresh). Free space is checked first (`navigator.storage.estimate`).
+- Tested in `tests/e2e/download.spec.ts` against a local server that cuts the connection twice: the right ranges are asked for and the finished file matches byte for byte.
+- A failed download now says "What arrived is kept, so the next try carries on from there", and running out of space is an error on screen instead of a silent fall-back to another multi-gigabyte model.
+- Settings › Assistant shows "Downloaded" or "40% downloaded · continues when picked" under a tier, and the free space when it's under 6 GB.
+- WebLLM and Transformers.js downloads are unchanged: those libraries fetch and cache their own files.
+
+### Follow-ups in the same conversation (the "conversation reuse misses" item above)
+`src/ai/reuse.ts` decides whether a request continues the conversation LiteRT-LM holds. It compares a key per message instead of the exact text: every answer has the same key, a question's key leaves out the per-turn action instructions (`turnKey` in `chat()`'s options, set by `AIPanel`), and a conversation made with room for a longer answer serves a shorter one. Retries, edits, dropped turns and changed evidence still start afresh. 12 cases in `scripts/test-reuse.ts` (`npm run test:reuse`, in `check`, `test` and CI).
+
+### Check on a real machine
+1. Start a Gemma download, turn Wi-Fi off part-way, turn it on, pick the tier again: it should continue, not restart (DevTools › Network shows a `Range` request and a 206). Hugging Face redirects to a signed CDN address; if `resolveModel` returns that signed address rather than the stable one, the comparison without the query string still matches, but confirm the 206.
+2. Ask a question, then an action ("move calc review to Thursday 3pm"), then two more questions, with `onMetrics` logging: `reused` should be true for every turn except the first and the action turn, and `prefillTokens` should be small on those.
+3. With a Fast (WebLLM) model downloaded, Settings should still show it as downloaded after a reload (the cache-name check).
+
+### Left alone, on purpose
+- Model ids and tiers. I can't confirm from here which builds exist or how fast they are.
+- Storing each doc under its own key, so a save writes only what changed. It's the real fix for very large workspaces, but it touches the passcode lock, backup and restore, and the migration of existing data. Worth doing with the user's real data backed up first.
+- The first question after launch still builds passages for every doc on the main thread (about a third of a second at 3,000 docs when System 1 hasn't already done it).

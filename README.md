@@ -51,6 +51,7 @@ The product name lives in `src/brand.ts`.
 
 - **Language model**: **Fast** Qwen 3.5 0.8B through [WebLLM](https://github.com/mlc-ai/web-llm); **Default** Gemma 4 E2B and **Enhanced** Gemma 4 E4B through Google's [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM), each in a Web Worker on WebGPU. Monolith picks the engine and falls back to WebLLM models if LiteRT-LM can't start on a device. Firefox without WebLLM, and browsers with no WebGPU, use [Transformers.js](https://github.com/huggingface/transformers.js) (Qwen 3 0.6B, LFM 2 1.2B). Models download once and are kept in the browser (Gemma in the site's private storage), so they work offline. (iPhone and iPad run LFM 3 1.7B as Default, through MLX.)
 - **Speech-to-text**: Moonshine Base (fast, English) or Whisper Large v3 Turbo (most accurate) via [Transformers.js](https://github.com/huggingface/transformers.js), WebGPU with WASM fallback.
+- **Downloads pick up where they stopped.** A Gemma or EmbeddingGemma download that's interrupted (Wi-Fi drops, the laptop sleeps, the tab closes) keeps what arrived and asks only for the rest next time. Before starting, Monolith checks the browser has room and says so plainly if it doesn't.
 - **Nothing to install.** Monolith downloads, caches and runs every model itself; there's no separate AI app to set up.
 
 Needs a WebGPU browser for the in-browser model: Chrome, Edge, Arc, or Safari 26+.

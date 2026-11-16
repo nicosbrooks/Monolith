@@ -1,5 +1,6 @@
 import { resolveModel } from '@litert-lm/core'
 import { cachedModel, markCached, modelFileName } from './litert-cache'
+import { discard, download, DownloadError } from './resumable'
 
 // Shared by the LiteRT-LM workers (Gemma, and EmbeddingGemma for System 1). Not imported by the page.
 
@@ -15,36 +16,21 @@ export async function modelFile(repo: string, onProgress?: (progress: number, lo
     if (again) return again
     const { huggingFace, model } = await resolveModel(`hf://${repo}`, backend !== undefined ? { backend } : {})
     const src = huggingFace?.source ?? (typeof model === 'string' ? { url: model } : (model as { url: string; size?: number }))
-    const res = await fetch(src.url)
-    if (!res.ok || !res.body) throw new Error(`The model couldn’t download (${res.status}).`)
-    const total = src.size ?? Number(res.headers.get('content-length')) ?? 0
     const dir = await navigator.storage.getDirectory()
-    const handle = await dir.getFileHandle(modelFileName(name), { create: true })
-    const out = await handle.createWritable()
-    let got = 0
-    let last = 0
+    // Carries on from where an earlier try stopped (resumable.ts). A try that fails keeps what arrived; one whose
+    // result can't be trusted is removed so the next starts clean.
+    let got: number
     try {
-      const reader = res.body.getReader()
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        await out.write(value)
-        got += value.byteLength
-        if (total && got - last > 4_000_000) {
-          last = got
-          onProgress?.(got / total, got, total)
-        }
-      }
-      await out.close()
+      got = await download(dir, modelFileName(name), src, onProgress)
     } catch (e) {
-      await out.abort().catch(() => {})
-      await dir.removeEntry(modelFileName(name)).catch(() => {})
-      throw e
+      if (!(e instanceof DownloadError) || !e.resumable) {
+        await discard(dir, modelFileName(name))
+        throw e
+      }
+      // Say that nothing was lost: the next try picks up from here.
+      throw new Error(/not enough space/i.test(e.message) ? e.message : 'The model download stopped part-way. What arrived is kept, so the next try carries on from there.')
     }
-    if (total && got !== total) {
-      await dir.removeEntry(modelFileName(name)).catch(() => {})
-      throw new Error('The model download was cut short. Check your connection and try again.')
-    }
+    const handle = await dir.getFileHandle(modelFileName(name))
     await markCached(name, { size: got, url: src.url, sha256: (src as { sha256?: string }).sha256 })
     return handle.getFile()
   })

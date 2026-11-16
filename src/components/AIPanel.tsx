@@ -296,7 +296,7 @@ function Chat() {
         const titles = sources.filter((source) => source.id !== null).slice(0, 2).map((source) => `“${source.title}”`)
         put('', { sources, acts: [], status: titles.length ? `Reading ${titles.join(' and ')}…` : act ? 'Working it out…' : 'Thinking…' })
         return [{ role: 'system', content: CHAT_RULES }, ...history, { role: 'user', content: packed.content }]
-      }, (t) => setMsgs([...next, { role: 'assistant', content: t }]), { signal: controller.signal, temperature: 0.3, maxTokens: act ? 800 : 500 }))
+      }, (t) => setMsgs([...next, { role: 'assistant', content: t }]), { signal: controller.signal, temperature: 0.3, maxTokens: act ? 800 : 500, turnKey: (m) => m.content.replace(`${ACT_GUIDE}\n\n`, '') }))
       if (packed && !controller.signal.aborted) sent.current.set(base.length, { ...packed, workspace })
       const now = useStore.getState()
       const acts = act ? fresh(pinToAsked(splitActs(full, { events: ownEvents(now.events), items: now.items, openId: useCtx ? active?.id : null }).acts, text), ownEvents(now.events)) : []

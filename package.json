@@ -1,7 +1,7 @@
 {
   "name": "monolith",
   "private": true,
-  "version": "0.11.0",
+  "version": "0.12.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,9 +12,10 @@
     "relay:deploy": "npm --prefix relay run deploy",
     "relay:smoke": "npm --prefix relay run smoke --",
     "test:dates": "node scripts/test-dates.ts",
+    "test:reuse": "node scripts/test-reuse.ts",
     "test:e2e": "playwright test --trace off",
-    "test": "npm run test:dates && npm run test:e2e",
-    "check": "tsc -b && oxlint && npm run test:dates",
+    "test": "npm run test:dates && npm run test:reuse && npm run test:e2e",
+    "check": "tsc -b && oxlint && npm run test:dates && npm run test:reuse",
     "budget": "node scripts/bundle-budget.mjs"
   },
   "dependencies": {

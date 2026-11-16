@@ -1,6 +1,6 @@
 import { addDays, format, startOfDay } from 'date-fns'
 import type { CalEvent, Item } from '../types'
-import { htmlToText } from '../lib/util'
+import { textOf } from '../lib/text'
 import { dueLabel, readWorkspace } from '../lib/graph'
 import { APP_NAME } from '../brand'
 import { promptBudget, tokensOf } from './prompt'
@@ -99,7 +99,7 @@ export function chunks(i: Item): Chunk[] {
     }
     cur += (cur ? '\n' : '') + part
   }
-  for (const para of htmlToText(i.content).split(/\n+/)) pieces(para).forEach(add)
+  for (const para of textOf(i).split(/\n+/)) pieces(para).forEach(add)
   if (cur) out.push(chunk(i, cur))
   cur = ''
   for (const segment of i.lecture?.transcript ?? []) {

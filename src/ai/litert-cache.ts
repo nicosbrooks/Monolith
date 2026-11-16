@@ -34,5 +34,5 @@ export async function markCached(repo: string, m: Omit<Marker, 'storedAt'>) {
 /** Remove a model and its marker (the marker first, so a half-removed model never looks cached). */
 export async function removeModel(repo: string) {
   const d = await dir()
-  for (const name of [markerName(repo), modelFileName(repo)]) await d.removeEntry(name).catch(() => {})
+  for (const name of [markerName(repo), `${modelFileName(repo)}.part.json`, modelFileName(repo)]) await d.removeEntry(name).catch(() => {})
 }

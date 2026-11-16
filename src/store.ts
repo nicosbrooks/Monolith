@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
+import { persist, type PersistStorage } from 'zustand/middleware'
 import { del, get, set } from 'idb-keyval'
 import { addDays, addHours, set as setDate, startOfDay } from 'date-fns'
 import type { CalEvent, FileMeta, Folder, Item, ItemKind, Section, Source } from './types'
@@ -8,25 +8,35 @@ import { APP_NAME } from './brand'
 import { openBlob, openText, sealBlob, sealText, vaultReady } from './lib/vault'
 import { occurrenceOf } from './lib/repeat'
 
-// Writes are batched: typing changes state several times a second, and each save serializes
-// everything. We save at most every 500 ms, and immediately when the tab is hidden or closed.
+// Saving. Typing changes state several times a second, and a save writes the whole workspace, so:
+//  - nothing is turned into text until a save actually happens (it used to be on every change, including opening a menu);
+//  - a change that touches nothing that's saved doesn't cause a save at all;
+//  - a save waits for a pause in the changes (0.4 s), but never more than 2 s while they keep coming;
+//  - it happens at once when the tab is hidden or closed.
+type Saved = { state: Record<string, unknown>; version?: number }
 let loaded = false
-let pending: { k: string; v: string } | null = null
+let pending: { k: string; v: Saved } | null = null
+let lastSaved: Record<string, unknown> | null = null
 let saveTimer = 0
+let firstPending = 0
 const flushSave = () => {
   clearTimeout(saveTimer)
   saveTimer = 0
+  firstPending = 0
   if (!pending) return saving
   const { k, v } = pending
   pending = null
+  lastSaved = v.state
+  const text = JSON.stringify(v)
   // In order, so a slow encrypt can't let an older copy land after a newer one.
-  const write = saving.then(async () => set(k, await sealText(v)))
+  const write = saving.then(async () => set(k, await sealText(text)))
   saving = write.catch((e) => console.error('Saving failed', e))
   return write
 }
 let saving: Promise<unknown> = Promise.resolve()
 /** Save everything now, e.g. right after the passcode is turned on or off so the stored copy matches. Rejects if the write fails. */
 export function saveNow() {
+  lastSaved = null // write even if nothing changed: what's stored may need re-encrypting
   useStore.setState({})
   return flushSave()
 }
@@ -34,18 +44,25 @@ if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', flushSave)
   document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flushSave())
 }
-const idbStorage: StateStorage = {
+const idbStorage: PersistStorage<unknown> = {
   // With a passcode on, nothing can be read until it's entered.
   getItem: async (k) => {
     await vaultReady
     const raw = await get<string>(k)
-    return raw == null ? null : openText(raw)
+    return raw == null ? null : JSON.parse(await openText(raw))
   },
   setItem: (k, v) => {
     // Never save before the stored data has loaded: that would overwrite it with the starter content.
     if (!loaded) return
-    pending = { k, v }
-    if (!saveTimer) saveTimer = window.setTimeout(flushSave, 500)
+    const state = (v as Saved).state
+    // The same docs, events and settings as the last save (only something on screen changed): nothing to write.
+    const base = pending?.v.state ?? lastSaved
+    if (base && Object.keys(state).every((key) => state[key] === base[key])) return
+    pending = { k, v: v as Saved }
+    const now = Date.now()
+    firstPending ||= now
+    clearTimeout(saveTimer)
+    saveTimer = window.setTimeout(flushSave, Math.max(0, Math.min(400, firstPending + 2000 - now)))
   },
   removeItem: async (k) => del(k),
 }
@@ -407,7 +424,8 @@ export const useStore = create<State>()(
         }
         return p as State
       },
-      storage: createJSONStorage(() => idbStorage),
+      // The saved part of the state (see partialize) goes through as it is; text is made only when a save happens.
+      storage: idbStorage as unknown as PersistStorage<Partial<State>>,
       partialize: (s) => ({
         items: s.items,
         folders: s.folders,

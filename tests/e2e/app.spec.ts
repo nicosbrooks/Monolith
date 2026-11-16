@@ -283,3 +283,40 @@ test('a doc named in plain words is offered under Mentioned in, and one press li
   await page.locator('.cx-row', { hasText: 'Thesis' }).click()
   await expect(page.locator('.ProseMirror a[href="#doc/doc-guide"]')).toHaveText('study system')
 })
+
+test('a workspace of 2,000 docs opens, lists and searches without stalling', async ({ page }) => {
+  await start(page)
+  await page.waitForTimeout(1200) // let the first save land
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((ok) => { const r = indexedDB.open('keyval-store'); r.onsuccess = () => ok(r.result) })
+    const saved = JSON.parse(await new Promise<string>((ok) => { const r = db.transaction('keyval').objectStore('keyval').get('socratic-v1'); r.onsuccess = () => ok(r.result) }))
+    const now = Date.now()
+    for (let i = 0; i < 2000; i++) {
+      saved.state.items.push({ id: `seed${i}`, kind: 'doc', title: `Seed ${i}`, content: `<p>${'lecture notes on linear algebra and biology '.repeat(20)}${i === 1234 ? 'zebrafish' : ''}</p>`, folderId: null, parentId: null, pinned: false, tags: [], createdAt: now - i * 60000, updatedAt: now - i * 60000 })
+    }
+    await new Promise<void>((ok) => { const t = db.transaction('keyval', 'readwrite'); t.objectStore('keyval').put(JSON.stringify(saved), 'socratic-v1'); t.oncomplete = () => ok() })
+  })
+  await page.reload()
+  await page.locator('.sidebar .nav', { hasText: 'Docs' }).first().click()
+  // The sidebar draws the first hundred and offers the rest.
+  await expect(page.locator('.more-rows')).toContainText('Show 100 more of 2002')
+  expect(await page.locator('.sidebar .tree-title').count()).toBeLessThan(110)
+  await page.locator('.more-rows').click()
+  expect(await page.locator('.sidebar .tree-title').count()).toBeGreaterThan(190)
+  // A word that's in one doc out of two thousand is found as it's typed.
+  await page.locator('.sidebar .nav', { hasText: 'Home' }).click()
+  await page.keyboard.press('Control+k')
+  await expect(page.locator('[cmdk-input]')).toBeFocused()
+  const t = Date.now()
+  await page.keyboard.type('zebrafish')
+  await expect(page.locator('[cmdk-item]', { hasText: 'Seed 1234' })).toBeVisible()
+  expect(Date.now() - t).toBeLessThan(3000)
+  // And what was typed in a doc is still saved with this much around it.
+  await page.locator('[cmdk-item]', { hasText: 'Seed 1234' }).click()
+  await expect(page.locator('.doc-title')).toHaveValue('Seed 1234')
+  await page.locator('.ProseMirror').click()
+  await page.keyboard.type(' quokka')
+  await page.waitForTimeout(1200)
+  await page.reload()
+  await expect(page.locator('.ProseMirror')).toContainText('quokka')
+})

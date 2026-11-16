@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   LayoutGrid, CalendarDays, FileText, Mic, Trash2, Plus, Folder, Settings, ChevronRight, PanelLeft, FolderPlus, 
   AudioWaveform, RefreshCw, ListChecks, GitCommitHorizontal, CircleAlert, Pencil, Star, StarOff, FilePlus2, Unplug, Inbox,
@@ -144,19 +144,39 @@ function TasksNav({ nav }: { nav: (id: Section, label: string, Icon: typeof Layo
   return <>{nav('tasks', 'Tasks', ListChecks, n)}</>
 }
 
-function Tree({ docs, depth = 0, parent = null }: { docs: Item[]; depth?: number; parent?: string | null }) {
+/** How many rows a level shows before "Show more": a list of thousands is slow to draw and no use to read. */
+const ROWS = 100
+
+/** Docs grouped by parent, each group in order, worked out once for the whole tree. */
+function byParent(docs: Item[]) {
+  const map = new Map<string | null, Item[]>()
+  for (const d of docs) {
+    const list = map.get(d.parentId)
+    if (list) list.push(d)
+    else map.set(d.parentId, [d])
+  }
+  for (const list of map.values()) list.sort(docOrder)
+  return map
+}
+
+function Tree({ docs, depth = 0, parent = null, groups }: { docs: Item[]; depth?: number; parent?: string | null; groups?: Map<string | null, Item[]> }) {
   const activeId = useStore((s) => s.activeId)
   const section = useStore((s) => s.section)
   const [closed, setClosed] = useState<Record<string, boolean>>({})
+  const [shown, setShown] = useState(ROWS)
+  const map = useMemo(() => groups ?? byParent(docs), [groups, docs])
+  const level = map.get(parent) ?? []
+  // The open doc is always in view, even when it sits past the cut.
+  const at = level.findIndex((d) => d.id === activeId)
+  const rows = level.length <= shown ? level : at >= shown ? [...level.slice(0, shown), level[at]] : level.slice(0, shown)
   return (
     <>
-      {docs
-        .filter((d) => d.parentId === parent)
-        .sort(docOrder)
+      {rows
         .map((d) => {
-          const kids = docs.some((c) => c.parentId === d.id)
+          const kids = map.has(d.id)
           const holdsActive = () => {
-            for (let p = docs.find((x) => x.id === activeId); p; p = docs.find((x) => x.id === p!.parentId)) if (p.parentId === d.id) return true
+            const byId = (id: string | null) => (id ? docs.find((x) => x.id === id) : undefined)
+            for (let p = byId(activeId); p; p = byId(p.parentId)) if (p.parentId === d.id) return true
             return false
           }
           const open = closed[d.id] === undefined ? !d.file?.dir || holdsActive() : !closed[d.id]
@@ -197,10 +217,15 @@ function Tree({ docs, depth = 0, parent = null }: { docs: Item[]; depth?: number
                   </button>
                 )}
               </div>
-              {kids && open && <Tree docs={docs} depth={depth + 1} parent={d.id} />}
+              {kids && open && <Tree docs={docs} depth={depth + 1} parent={d.id} groups={map} />}
             </div>
           )
         })}
+      {level.length > shown && (
+        <button className="nav sub more-rows" style={{ paddingLeft: 17 + depth * 12 }} onClick={() => setShown((n) => n + ROWS)}>
+          Show {Math.min(ROWS, level.length - shown)} more of {level.length}
+        </button>
+      )}
     </>
   )
 }

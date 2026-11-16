@@ -2468,3 +2468,23 @@ body {
     margin: 18mm 16mm;
   }
 }
+
+/* Sidebar: a long list stops at 100 rows; this row shows the next hundred. */
+.nav.sub.more-rows {
+  color: var(--text-3);
+  font-size: 13px;
+}
+.nav.sub.more-rows:hover {
+  color: var(--text);
+}
+
+/* Settings › Assistant: where a model's download stands, under its name. */
+.tier .tier-state {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-3);
+}
+.tier.on .tier-state {
+  color: inherit;
+  opacity: 0.75;
+}

@@ -2,8 +2,10 @@ import { create } from 'zustand'
 import type { MLCEngineInterface } from '@mlc-ai/web-llm'
 import { useStore } from '../store'
 import { APP_NAME } from '../brand'
-import { cachedModel, removeModel } from './litert-cache'
+import { cachedModel, modelFileName, removeModel } from './litert-cache'
+import { partial } from './resumable'
 import { fit, tokensOf, type Msg } from './prompt'
+import { turnKeys } from './reuse'
 
 export type Tier = 'fast' | 'default' | 'enhanced' | 'more'
 export interface ModelInfo {
@@ -180,6 +182,10 @@ interface AIState {
   error: string | null
   busy: boolean
   cached: Record<string, boolean>
+  /** Models whose download stopped part-way: how much has arrived (0 to 1). The next try carries on from there. */
+  partial: Record<string, number>
+  /** Space this browser has left for downloads, in bytes, when it says. */
+  free?: number
 }
 
 export const useAI = create<AIState>(() => ({
@@ -190,6 +196,7 @@ export const useAI = create<AIState>(() => ({
   error: null,
   busy: false,
   cached: {},
+  partial: {},
 }))
 
 export const hasWebGPU = () => typeof navigator !== 'undefined' && 'gpu' in navigator && gpu.adapter !== false
@@ -214,6 +221,19 @@ async function onnxCached(repos: string[]): Promise<Set<string>> {
   return out
 }
 
+/**
+ * Whether WebLLM has stored anything at all in this browser. Its library is about 6 MB of code; asking it what's
+ * downloaded used to mean loading all of it at every launch. It keeps models in the Cache API under this name, so
+ * when that cache isn't there, nothing is downloaded and the library isn't needed yet.
+ */
+const webllmHasCache = async () => {
+  try {
+    return await caches.has('webllm/model')
+  } catch {
+    return false
+  }
+}
+
 export async function refreshCache() {
   try {
     await detectGPU()
@@ -224,9 +244,16 @@ export async function refreshCache() {
       })
       return
     }
-    const { hasModelInCache } = await import('@mlc-ai/web-llm')
+    const hasModelInCache = (await webllmHasCache()) ? (await import('@mlc-ai/web-llm')).hasModelInCache : async () => false
     const entries = await Promise.all(MODELS.map(async (m) => [m.id, m.litert ? !!(await cachedModel(m.litert.repo)) : await hasModelInCache(build(m.id))] as const))
-    useAI.setState({ cached: Object.fromEntries(entries) })
+    const dir = await navigator.storage.getDirectory().catch(() => null)
+    const parts = await Promise.all(MODELS.filter((m) => m.litert).map(async (m) => [m.id, dir ? await partial(dir, modelFileName(m.litert!.repo)) : undefined] as const))
+    const est = await navigator.storage?.estimate?.().catch(() => undefined)
+    useAI.setState({
+      cached: Object.fromEntries(entries),
+      partial: Object.fromEntries(parts.filter((p): p is readonly [string, number] => p[1] !== undefined)),
+      free: est?.quota ? Math.max(0, est.quota - (est.usage ?? 0)) : undefined,
+    })
   } catch {
     /* ignore */
   }
@@ -257,8 +284,11 @@ const RETIRED = ['Qwen3.5-4B-q4f16_1-MLC', 'Qwen3.5-9B-q4f16_1-MLC', 'Qwen3-8B-q
 const RETIRED_ONNX = ['onnx-community/Qwen3-1.7B-ONNX', 'onnx-community/Qwen3-4B-ONNX', 'onnx-community/LFM3-1.7B-ONNX']
 async function clearRetired() {
   try {
-    const { deleteModelAllInfoInCache, hasModelInCache } = await import('@mlc-ai/web-llm')
-    for (const id of RETIRED) for (const b of [id, id.replace('q4f16_1', 'q4f32_1')]) if (await hasModelInCache(b).catch(() => false)) await deleteModelAllInfoInCache(b)
+    if (await webllmHasCache()) {
+      const { deleteModelAllInfoInCache, hasModelInCache } = await import('@mlc-ai/web-llm')
+      for (const id of RETIRED) for (const b of [id, id.replace('q4f16_1', 'q4f32_1')]) if (await hasModelInCache(b).catch(() => false)) await deleteModelAllInfoInCache(b)
+    }
+    if (!(await caches.has('transformers-cache'))) return
     const c = await caches.open('transformers-cache')
     for (const k of await c.keys()) if (RETIRED_ONNX.some((r) => k.url.includes(`/${r}/`))) await c.delete(k)
   } catch {
@@ -298,7 +328,7 @@ export async function loadModel(modelId?: string) {
       await unloadWebLLM()
       unloadOnnx()
       if (await loadLitert(m, false)) return
-      if (isNetwork(lastLoadError)) return void useAI.setState({ status: 'error', error: NO_DOWNLOAD })
+      if (isNetwork(lastLoadError)) return void useAI.setState({ status: 'error', error: downloadError(lastLoadError) })
       litertFailed = true
     }
     return loadModel(m.fallback)
@@ -381,7 +411,9 @@ function unloadOnnx() {
 let lastLoadError: unknown = null
 const NO_DOWNLOAD = 'The model couldn’t download. Check your connection and try again.'
 /** A download that didn't arrive says nothing about whether the model runs here, so it never triggers a fallback. */
-const isNetwork = (e: unknown) => (typeof navigator !== 'undefined' && !navigator.onLine) || /failed to fetch|networkerror|network error|load failed|err_|fetch failed|timed? ?out|cut short|couldn’t download/i.test(message(e))
+const isNetwork = (e: unknown) => (typeof navigator !== 'undefined' && !navigator.onLine) || /failed to fetch|networkerror|network error|load failed|err_|fetch failed|timed? ?out|cut short|couldn’t download|download stopped|not enough space/i.test(message(e))
+/** What to say about a download that didn't finish: its own words when they say what happened (kept part-way, no space). */
+const downloadError = (e: unknown) => (/carries on from there|not enough space/i.test(message(e)) ? message(e) : NO_DOWNLOAD)
 
 /** Errors arrive as Error objects, strings, or nothing at all; always show something readable. */
 const message = (e: unknown) => (typeof e === 'string' ? e : (e as Error)?.message) || 'The assistant couldn’t start.'
@@ -465,7 +497,7 @@ async function loadLitert(m: ModelInfo, showError: boolean): Promise<boolean> {
       await unloadLitert()
       // The stored file itself is bad (damaged on disk, or a broken download): remove it so the next try downloads it again.
       if (/magic number|litertlm header|corrupt|truncated/i.test(message(e))) await removeModel(m.litert!.repo).catch(() => {})
-      useAI.setState(showError ? { status: 'error', error: isNetwork(e) ? NO_DOWNLOAD : message(e) } : { status: 'idle' })
+      useAI.setState(showError ? { status: 'error', error: isNetwork(e) ? downloadError(e) : message(e) } : { status: 'idle' })
     } finally {
       loading = null
     }
@@ -477,6 +509,7 @@ async function loadLitert(m: ModelInfo, showError: boolean): Promise<boolean> {
 /** Once Gemma runs in LiteRT-LM here, its WebLLM fallbacks aren't needed: free their downloads (over 1 GB each). */
 async function clearFallbacks() {
   try {
+    if (!(await webllmHasCache())) return
     const { deleteModelAllInfoInCache, hasModelInCache } = await import('@mlc-ai/web-llm')
     for (const f of MODELS.filter((x) => x.hidden))
       for (const b of [f.id, f.id.replace('q4f16_1', 'q4f32_1')]) if (await hasModelInCache(b).catch(() => false)) await deleteModelAllInfoInCache(b)
@@ -575,7 +608,14 @@ const gpuLost = (e: unknown) => /device (was |is )?lost|devicelost|gpudevice|des
 const tooLong = (e: unknown) => /exceed context window|context window size/i.test(message(e))
 
 type ChatMetrics = { engine: string; estimatedInputTokens: number; inputTokens?: number; contextTokens?: number; prefillTokens?: number; reused?: boolean }
-type ChatOptions = { signal?: AbortSignal; temperature?: number; maxTokens?: number; onMetrics?: (metrics: ChatMetrics) => void }
+type ChatOptions = {
+  signal?: AbortSignal
+  temperature?: number
+  maxTokens?: number
+  onMetrics?: (metrics: ChatMetrics) => void
+  /** What a question counts as when deciding whether this continues the chat the model holds (reuse.ts): its text without anything added for one turn only. */
+  turnKey?: (m: Msg) => string
+}
 
 /** Stream a chat completion from the model running in this browser. Returns the full text. */
 export async function chat(messages: Msg[] | ((window: number, reserve: number) => Msg[]), onToken?: (full: string) => void, opts: ChatOptions = {}): Promise<string> {
@@ -680,7 +720,7 @@ async function generate(messages: Msg[], onToken: ((full: string) => void) | und
     const stop = () => litert?.postMessage({ type: 'stop' })
     opts.signal?.addEventListener('abort', stop)
     try {
-      await litertCall({ type: 'chat', messages, maxTokens: opts.maxTokens ?? 1024, temperature: opts.temperature ?? 0.6, metrics: !!opts.onMetrics }, (r) => {
+      await litertCall({ type: 'chat', messages, keys: turnKeys(messages, opts.turnKey as ((m: { role: string; content: string }) => string) | undefined), maxTokens: opts.maxTokens ?? 1024, temperature: opts.temperature ?? 0.6, metrics: !!opts.onMetrics }, (r) => {
         if (r.type === 'token' || r.type === 'done') {
           full = r.full
           onToken?.(clean(full))

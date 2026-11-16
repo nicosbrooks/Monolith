@@ -10,6 +10,7 @@ import type { Item } from '../types'
 import { Editor } from '../components/editor/Editor'
 import { toast } from '../components/Toast'
 import { htmlToText, itemEmoji } from '../lib/util'
+import { wordCount } from '../lib/text'
 import { createFile, isDirty, kindLabel, resolve, useSync } from '../storage/sync'
 import { SourceIcon } from '../components/StorageSettings'
 import { Connections } from '../components/Connections'
@@ -103,7 +104,7 @@ export function DocView({ item }: { item: Item }) {
     ed.commands.setContent(template.innerHTML, { emitUpdate: true })
     setMore(false)
   }
-  const words = htmlToText(item.content).split(/\s+/).filter(Boolean).length
+  const words = wordCount(item)
 
   return (
     <div className="doc-pane doc">

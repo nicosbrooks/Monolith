@@ -19,6 +19,7 @@ jobs:
       - run: npx tsc -b
       - run: npx oxlint
       - run: npm run test:dates
+      - run: npm run test:reuse
       - run: npx vite build
       - run: npm run budget
       - run: npx playwright install --with-deps chromium

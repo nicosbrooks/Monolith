@@ -3,7 +3,8 @@ import { AnimatePresence, motion } from 'motion/react'
 import { ArrowUp, ArrowUpRight, CalendarPlus, ListPlus, FileText, MessageCircle, AudioWaveform, StickyNote } from 'lucide-react'
 import { useStore } from '../store'
 import { eventColor, parseQuickEvent, whenLabel } from '../lib/dates'
-import { htmlToText, itemEmoji } from '../lib/util'
+import { itemEmoji } from '../lib/util'
+import { searchText } from '../lib/text'
 import { toast } from './Toast'
 import { addTask, dueLabel, removeTask } from '../lib/graph'
 
@@ -80,7 +81,7 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
     const matches: typeof items = []
     for (const item of items) {
       if (item.deletedAt) continue
-      if (!item.title.toLowerCase().includes(ql) && !htmlToText(item.content).toLowerCase().includes(ql)) continue
+      if (!item.title.toLowerCase().includes(ql) && !searchText(item).includes(ql)) continue
       matches.push(item)
       if (matches.length === 4) break
     }

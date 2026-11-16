@@ -4,7 +4,8 @@ import { ArrowUpRight, CalendarDays, FileText, ListChecks, MapPin, AudioWaveform
 import { useMobile, useScrolled } from '../lib/useMobile'
 import { PhoneTitle } from '../components/Phone'
 import { useStore } from '../store'
-import { htmlToText, itemEmoji } from '../lib/util'
+import { itemEmoji } from '../lib/util'
+import { textOf } from '../lib/text'
 import { useWorkspace } from '../lib/graph'
 import { TaskRow } from './TasksView'
 import { isReady, useAI } from '../ai/llm'
@@ -64,7 +65,7 @@ export function HomeView() {
   // Starting points, built from what's actually on today. Each opens the assistant with the question asked,
   // so the person can take it anywhere from there. Never a fixed plan.
   const next = todays.find((e) => !e.allDay && e.end > now.getTime()) ?? todays.find((e) => e.end > now.getTime()) ?? upcoming[0]
-  const lastDoc = recent.find((r) => r.kind !== 'lecture' && htmlToText(r.content).trim())
+  const lastDoc = recent.find((r) => r.kind !== 'lecture' && textOf(r).trim())
   const starters: { icon: typeof FileText; text: string }[] = isReady()
     ? [
         next && { icon: CalendarDays, text: `Help me get ready for “${next.title}”` },

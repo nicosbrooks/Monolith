@@ -3,7 +3,7 @@ import { differenceInMinutes, format, isSameDay } from 'date-fns'
 import { SAMPLE_IDS, useStore } from '../store'
 import type { Suggestion } from '../types'
 import { eventColor, findDatedCommitments } from '../lib/dates'
-import { htmlToText } from '../lib/util'
+import { textOf } from '../lib/text'
 import { useOwnEvents } from '../lib/events'
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim()
@@ -31,7 +31,7 @@ export function useRuleSuggestions(): Suggestion[] {
     const recent = [active, ...live.filter((i) => i.id !== activeId).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5)].filter(Boolean)
     for (const it of recent) {
       if (SAMPLE_IDS.has(it!.id)) continue // "Problem set due Friday 5pm" in the welcome doc is an example, not a plan
-      for (const p of findDatedCommitments(htmlToText(it!.content), now)) {
+      for (const p of findDatedCommitments(textOf(it!), now)) {
         const exists = events.some(
           (e) => isSameDay(e.start, p.start) && (norm(e.title).includes(norm(p.title).slice(0, 12)) || norm(p.title).includes(norm(e.title).slice(0, 12))),
         )
@@ -101,7 +101,7 @@ export function useRuleSuggestions(): Suggestion[] {
     }
 
     // 4. Lectures with a transcript but no notes yet
-    for (const l of live.filter((i) => i.kind === 'lecture' && i.lecture?.transcript.length && htmlToText(i.content).length < 40).slice(0, 1)) {
+    for (const l of live.filter((i) => i.kind === 'lecture' && i.lecture?.transcript.length && textOf(i).length < 40).slice(0, 1)) {
       if (dismissed.includes(`lec:${l.id}`)) continue
       out.push({
         id: `lec:${l.id}`,
@@ -115,7 +115,7 @@ export function useRuleSuggestions(): Suggestion[] {
 
     // 6. Long doc with no structure
     if (active?.kind === 'doc') {
-      const words = htmlToText(active.content).split(/\s+/).length
+      const words = textOf(active).split(/\s+/).length
       if (words > 350 && !/<h[23]/.test(active.content) && !dismissed.includes(`struct:${active.id}`))
         out.push({ id: `struct:${active.id}`, icon: 'list', source: 'rule', title: 'This doc is getting long', detail: 'Ask the AI to suggest section headings.' })
     }
