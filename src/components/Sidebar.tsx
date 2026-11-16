@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   LayoutGrid, CalendarDays, FileText, Mic, Trash2, Plus, Folder, Settings, ChevronRight, PanelLeft, FolderPlus, 
-  AudioWaveform, RefreshCw, ListChecks, GitCommitHorizontal, CircleAlert, Pencil, Star, StarOff, FilePlus2, Unplug, Inbox,
+  AudioWaveform, RefreshCw, Search, ListChecks, GitCommitHorizontal, CircleAlert, Pencil, Star, StarOff, FilePlus2, Unplug, Inbox,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
@@ -25,28 +25,67 @@ export function Logo({ size = 20 }: { size?: number }) {
   )
 }
 
+/** Which sidebar groups are folded, remembered in this browser. */
+const FOLD_KEY = 'monolith-side-folded'
+function useFolded() {
+  const [folded, setFolded] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(FOLD_KEY) || '{}')
+    } catch {
+      return {}
+    }
+  })
+  const toggle = (id: string) =>
+    setFolded((f) => {
+      const next = { ...f, [id]: !f[id] }
+      try {
+        localStorage.setItem(FOLD_KEY, JSON.stringify(next))
+      } catch {
+        /* private window: folding just isn't remembered */
+      }
+      return next
+    })
+  return [folded, toggle] as const
+}
+
+/**
+ * The sidebar. Its shape never depends on where you are: the same rows in the same places on every page, so nothing
+ * moves when you open something. Places at the top, then your docs, folders and recordings as groups you can fold,
+ * then Recently Deleted and Settings at the bottom.
+ */
 export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
-  // Only what the sidebar itself shows; the note and doc trees subscribe to items on their own.
-  const view = useStore(useShallow((x) => ({ section: x.section, folderId: x.folderId, tagFilter: x.tagFilter, folders: x.folders, sources: x.sources })))
+  // Only what the sidebar itself shows; the doc trees subscribe to items on their own.
+  const view = useStore(useShallow((x) => ({ section: x.section, folders: x.folders, sources: x.sources })))
   const s = { ...useStore.getState(), ...view }
   const [newFolder, setNewFolder] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
+  const [folded, toggle] = useFolded()
   const deleteFolder = async (id: string, name: string) => {
     const n = useStore.getState().items.filter((i) => i.folderId === id && !i.deletedAt).length
     if (await confirmDialog({ title: `Delete “${name}”?`, body: n ? `Its ${n} doc${n > 1 ? 's' : ''} stay in Docs. Nothing is deleted.` : undefined, confirm: 'Delete folder' })) s.deleteFolder(id)
   }
 
   const nav = (id: Section, label: string, Icon: typeof LayoutGrid, n?: number) => (
-    <button className={`nav ${s.section === id && !(id === 'docs' && (s.folderId || s.tagFilter)) ? 'on' : ''}`} onClick={() => {
-      useStore.setState({ folderId: null })
-      s.go(id)
-      if (onNavigate && (id === 'docs' || id === 'lectures')) useStore.setState({ activeId: null })
-      onNavigate?.()
-    }}>
+    <button className={`nav ${s.section === id ? 'on' : ''}`} onClick={() => (s.go(id), onNavigate?.())}>
       <Icon size={17} strokeWidth={1.8} />
       <span>{label}</span>
-      {n ? <em>{n}</em> : null}
+      <em>{n || ''}</em>
     </button>
+  )
+
+  /** A group's heading: folds it, and has the one way to add to it. */
+  const group = (id: string, label: React.ReactNode, add?: { title: string; run: () => void; icon?: typeof Plus }, menu?: (e: React.MouseEvent) => void) => (
+    <div className="side-group" onContextMenu={menu}>
+      <button className="side-group-head" onClick={() => toggle(id)} aria-expanded={!folded[id]}>
+        <ChevronRight size={12} className={`side-chev ${folded[id] ? '' : 'open'}`} />
+        <span>{label}</span>
+      </button>
+      {add && (
+        <button className="icon-btn sm side-group-add" title={add.title} aria-label={add.title} onClick={add.run}>
+          {add.icon ? <add.icon size={13} /> : <Plus size={14} />}
+        </button>
+      )}
+    </div>
   )
 
   return (
@@ -57,35 +96,26 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <span>{APP_NAME}</span>
         </div>
         <div className="side-icons">
-          <button className="icon-btn" title="Collapse sidebar (⌘\)" onClick={() => s.setUI({ sidebarCollapsed: true })}><PanelLeft size={17} /></button>
-          <button className="icon-btn" title="Settings (⌘,)" aria-label="Settings" onClick={() => s.setUI({ settingsOpen: true })}><Settings size={16} strokeWidth={1.8} /></button>
+          <button className="icon-btn" title="Collapse sidebar (⌘\)" aria-label="Collapse sidebar" onClick={() => s.setUI({ sidebarCollapsed: true })}><PanelLeft size={17} /></button>
         </div>
       </div>
+      <button className="side-search" onClick={() => (s.setUI({ paletteOpen: true }), onNavigate?.())}>
+        <Search size={15} strokeWidth={1.9} />
+        <span>Search and commands</span>
+        <kbd>⌘K</kbd>
+      </button>
 
       <nav className="side-scroll">
         {nav('home', 'Home', LayoutGrid)}
         <TasksNav nav={nav} />
-        <div className={`nav-row ${s.section === 'docs' && !s.folderId ? 'here' : ''}`}>
-          {nav('docs', 'Docs', FileText)}
-          <button className="icon-btn sm nav-add" title="New doc (⌘N)" aria-label="New doc" onClick={() => (s.setFolder(null), s.createItem('doc'))}><Plus size={14} /></button>
-        </div>
-        {/* The doc tree opens under Docs while you're there, instead of a second list of docs below. */}
-        {s.section === 'docs' && !s.folderId && <div className="side-tree"><DocTree /></div>}
-        <div className={`nav-row ${s.section === 'lectures' ? 'here' : ''}`}>
-          {nav('lectures', 'Recordings', Mic)}
-          <button className="icon-btn sm nav-add" title="Start recording" aria-label="Start recording" onClick={() => startRecording()}><Plus size={14} /></button>
-        </div>
-        {/* Like docs: recordings are listed here while you're in Recordings, not in a second column. */}
-        {s.section === 'lectures' && <div className="side-tree"><RecordingList /></div>}
         {nav('calendar', 'Calendar', CalendarDays)}
 
-        {(s.folders.length > 0 || newFolder !== null) && (
-          <div className="side-label">
-            Folders
-            <button className="icon-btn sm hover-only" onClick={() => setNewFolder('')} title="New folder"><FolderPlus size={13} /></button>
-          </div>
-        )}
-        {s.folders.map((f) =>
+        {group('docs', 'Docs', { title: 'New doc (⌘N)', run: () => (useStore.setState({ folderId: null }), s.createItem('doc'), onNavigate?.()) })}
+        {!folded.docs && <div className="side-tree"><DocTree onNavigate={onNavigate} /></div>}
+
+        {(s.folders.length > 0 || newFolder !== null) && group('folders', 'Folders', { title: 'New folder', icon: FolderPlus, run: () => setNewFolder('') })}
+        <div className="side-tree">
+        {!folded.folders && s.folders.map((f) =>
           renaming?.id === f.id ? (
             <input
               key={f.id}
@@ -99,23 +129,24 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             />
           ) : (
             <div key={f.id}>
-              <button
-                className={`nav sub ${s.section === 'docs' && s.folderId === f.id ? 'on' : ''}`}
-                onClick={() => { s.setFolder(f.id); onNavigate?.() }}
+              <div
+                className="nav sub folder"
+                onClick={() => toggle(`f:${f.id}`)}
                 onDoubleClick={() => setRenaming({ id: f.id, name: f.name })}
                 onContextMenu={(e) =>
                   openMenu(e, [
+                    { label: 'New doc here', icon: FilePlus2, run: () => s.createItem('doc', { folderId: f.id }) },
                     { label: 'Rename', icon: Pencil, run: () => setRenaming({ id: f.id, name: f.name }) },
-                    { label: 'New doc here', icon: FilePlus2, run: () => (s.setFolder(f.id), s.createItem('doc', { folderId: f.id })) },
                     'sep',
                     { label: 'Delete folder', icon: Trash2, danger: true, run: () => deleteFolder(f.id, f.name) },
                   ])
                 }
               >
-                <Folder size={17} strokeWidth={1.8} />
-                <span>{f.name}</span>
-              </button>
-              {s.section === 'docs' && s.folderId === f.id && <div className="side-tree"><DocTree folderId={f.id} /></div>}
+                <span className="emoji"><span className="ico"><Folder size={15} strokeWidth={1.8} /></span></span>
+                <button type="button" className="tree-title" aria-expanded={!folded[`f:${f.id}`]}>{f.name}</button>
+                <button className="icon-btn sm hover-only" title="New doc here" aria-label={`New doc in ${f.name}`} onClick={(e) => (e.stopPropagation(), s.createItem('doc', { folderId: f.id }), onNavigate?.())}><Plus size={12} /></button>
+              </div>
+              {!folded[`f:${f.id}`] && <div className="side-tree nested"><DocTree folderId={f.id} onNavigate={onNavigate} /></div>}
             </div>
           ),
         )}
@@ -127,13 +158,24 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             value={newFolder}
             onChange={(e) => setNewFolder(e.target.value)}
             onBlur={() => (newFolder.trim() && s.createFolder(newFolder.trim()), setNewFolder(null))}
-            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+            onKeyDown={(e) => (e.key === 'Enter' ? (e.target as HTMLInputElement).blur() : e.key === 'Escape' && setNewFolder(null))}
           />
         )}
+        </div>
+
+        {group('recordings', 'Recordings', { title: 'Start recording', icon: Mic, run: () => (startRecording(), onNavigate?.()) })}
+        {!folded.recordings && <div className="side-tree"><RecordingList /></div>}
 
         {s.sources.map((src) => <SourceTree key={src.id} id={src.id} />)}
-        {nav('trash', 'Recently Deleted', Trash2)}
       </nav>
+      <div className="side-foot">
+        <TrashNav nav={nav} />
+        <button className="nav" onClick={() => (s.setUI({ settingsOpen: true }), onNavigate?.())}>
+          <Settings size={17} strokeWidth={1.8} />
+          <span>Settings</span>
+          <em><kbd>⌘,</kbd></em>
+        </button>
+      </div>
     </aside>
   )
 }
@@ -142,6 +184,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
 function TasksNav({ nav }: { nav: (id: Section, label: string, Icon: typeof LayoutGrid, n?: number) => React.ReactNode }) {
   const n = useWorkspace().tasks.length
   return <>{nav('tasks', 'Tasks', ListChecks, n)}</>
+}
+
+/** Recently Deleted, with how many things are waiting there. */
+function TrashNav({ nav }: { nav: (id: Section, label: string, Icon: typeof LayoutGrid, n?: number) => React.ReactNode }) {
+  const n = useStore((s) => s.items.reduce((k, i) => k + (i.deletedAt ? 1 : 0), 0))
+  return <>{nav('trash', 'Recently Deleted', Trash2, n)}</>
 }
 
 /** How many rows a level shows before "Show more": a list of thousands is slow to draw and no use to read. */
@@ -159,7 +207,7 @@ function byParent(docs: Item[]) {
   return map
 }
 
-function Tree({ docs, depth = 0, parent = null, groups }: { docs: Item[]; depth?: number; parent?: string | null; groups?: Map<string | null, Item[]> }) {
+function Tree({ docs, depth = 0, parent = null, groups, onNavigate }: { docs: Item[]; depth?: number; parent?: string | null; groups?: Map<string | null, Item[]>; onNavigate?: () => void }) {
   const activeId = useStore((s) => s.activeId)
   const section = useStore((s) => s.section)
   const [closed, setClosed] = useState<Record<string, boolean>>({})
@@ -186,7 +234,7 @@ function Tree({ docs, depth = 0, parent = null, groups }: { docs: Item[]; depth?
               <div
                 className={`nav sub doc ${section === 'docs' && activeId === d.id ? 'on' : ''}`}
                 style={{ paddingLeft: 17 + depth * 12 }}
-                onClick={() => useStore.getState().open(d.id)}
+                onClick={() => (useStore.getState().open(d.id), onNavigate?.())}
                 onContextMenu={(e) => openMenu(e, docMenu(d))}
               >
                 {/* Items line up with the section rows; a doc with sub-docs swaps its icon for the arrow on hover. */}
@@ -200,7 +248,7 @@ function Tree({ docs, depth = 0, parent = null, groups }: { docs: Item[]; depth?
                   <span className="ico">{d.file?.dir ? <Folder size={15} strokeWidth={1.8} /> : itemEmoji(d) || <FileText size={15} />}</span>
                   {kids && <ChevronRight size={13} className="chev" />}
                 </span>
-                <button type="button" className="tree-title" title={d.title || undefined} onClick={(e) => { e.stopPropagation(); useStore.getState().open(d.id) }}>{d.title || 'Untitled'}</button>
+                <button type="button" className="tree-title" title={d.title || undefined} onClick={(e) => { e.stopPropagation(); useStore.getState().open(d.id); onNavigate?.() }}>{d.title || 'Untitled'}</button>
                 {d.file?.conflict ? <i className="file-dot conflict" title="Changed in two places" /> : isDirty(d) ? <i className="file-dot" title="Unsaved changes" /> : null}
                 {(!d.sourceId || d.file?.dir) && (
                   <button
@@ -217,7 +265,7 @@ function Tree({ docs, depth = 0, parent = null, groups }: { docs: Item[]; depth?
                   </button>
                 )}
               </div>
-              {kids && open && <Tree docs={docs} depth={depth + 1} parent={d.id} groups={map} />}
+              {kids && open && <Tree docs={docs} depth={depth + 1} parent={d.id} groups={map} onNavigate={onNavigate} />}
             </div>
           )
         })}
@@ -250,31 +298,52 @@ export function docMenu(d: Item): MenuItem[] {
   ]
 }
 
-/** Your docs as a tree. Inside a folder, every doc in it sits at the top level even if its parent lives elsewhere. */
-/** Recordings, newest first (pinned on top). Only re-renders when a recording changes, not while typing in a doc. */
+/**
+ * Your own docs as a tree. Each doc shows once: in the folder its top-level doc is in, or under Docs when that has no
+ * folder. Sub-docs stay with their parent.
+ */
+function DocTree({ folderId = null, onNavigate }: { folderId?: string | null; onNavigate?: () => void }) {
+  const items = useStore((s) => s.items)
+  const docs = useMemo(() => {
+    const mine = items.filter((i) => i.kind === 'doc' && !i.deletedAt && !i.sourceId)
+    const byId = new Map(mine.map((d) => [d.id, d]))
+    const home = (d: Item) => {
+      let top = d
+      for (let n = 0; top.parentId && byId.has(top.parentId) && n < 50; n++) top = byId.get(top.parentId)!
+      return top.folderId ?? null
+    }
+    // A doc whose parent was deleted sits at the top level.
+    return mine.filter((d) => home(d) === folderId).map((d) => (d.parentId && !byId.has(d.parentId) ? { ...d, parentId: null } : d))
+  }, [items, folderId])
+  if (!docs.length) return folderId ? null : <div className="side-empty">No docs yet</div>
+  return <Tree docs={docs} onNavigate={onNavigate} />
+}
+
+/** Recordings, newest first (pinned on top), the latest few until you ask for more. Only re-renders when a recording changes. */
 function RecordingList() {
   const recs = useStore(useShallow((s) => s.items.filter((i) => i.kind === 'lecture' && !i.deletedAt)))
   const activeId = useStore((s) => s.activeId)
+  const [shown, setShown] = useState(6)
   const sorted = [...recs].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt - a.createdAt)
   if (!sorted.length) return <div className="side-empty">No recordings yet</div>
+  // The open recording is always in view, even past the cut.
+  const at = sorted.findIndex((r) => r.id === activeId)
+  const rows = at >= shown ? [...sorted.slice(0, shown), sorted[at]] : sorted.slice(0, shown)
   return (
     <>
-      {sorted.map((r) => (
+      {rows.map((r) => (
         <div key={r.id} className={`nav sub doc ${activeId === r.id ? 'on' : ''}`} style={{ paddingLeft: 17 }} onClick={() => useStore.getState().open(r.id)} onContextMenu={(e) => openMenu(e, rowMenu(r))}>
           <span className="emoji"><span className="ico"><AudioWaveform size={15} /></span></span>
           <button type="button" className="tree-title" title={r.title || undefined} onClick={(e) => { e.stopPropagation(); useStore.getState().open(r.id) }}>{r.title || 'Untitled'}</button>
         </div>
       ))}
+      {sorted.length > shown && (
+        <button className="nav sub more-rows" style={{ paddingLeft: 17 }} onClick={() => setShown((n) => n + 20)}>
+          Show {Math.min(20, sorted.length - shown)} more of {sorted.length}
+        </button>
+      )}
     </>
   )
-}
-
-function DocTree({ folderId }: { folderId?: string }) {
-  const items = useStore((s) => s.items)
-  let docs = items.filter((i) => i.kind === 'doc' && !i.deletedAt && !i.sourceId && (!folderId || i.folderId === folderId))
-  if (folderId) { const ids = new Set(docs.map((d) => d.id)); docs = docs.map((d) => (d.parentId && !ids.has(d.parentId) ? { ...d, parentId: null } : d)) }
-  if (!docs.length) return null
-  return <Tree docs={docs} />
 }
 
 function SourceTree({ id }: { id: string }) {

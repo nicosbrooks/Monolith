@@ -8,7 +8,7 @@ import { itemEmoji } from '../lib/util'
 import { textOf } from '../lib/text'
 import { useWorkspace } from '../lib/graph'
 import { TaskRow } from './TasksView'
-import { isReady, useAI } from '../ai/llm'
+import { useAI } from '../ai/llm'
 import { useRuleSuggestions } from '../ai/suggestions'
 import { useEvents } from '../lib/events'
 import { COLORS } from '../lib/colors'
@@ -28,7 +28,7 @@ export function HomeView() {
   const events = useEvents()
   const proactive = useStore((s) => s.settings.proactive)
   const st = useStore.getState()
-  useAI((s) => s.status)
+  const aiStatus = useAI((s) => s.status)
   const suggestions = useRuleSuggestions()
   const mobile = useMobile()
   const [scrolled, onScroll] = useScrolled()
@@ -66,14 +66,15 @@ export function HomeView() {
   // so the person can take it anywhere from there. Never a fixed plan.
   const next = todays.find((e) => !e.allDay && e.end > now.getTime()) ?? todays.find((e) => e.end > now.getTime()) ?? upcoming[0]
   const lastDoc = recent.find((r) => r.kind !== 'lecture' && textOf(r).trim())
-  const starters: { icon: typeof FileText; text: string }[] = isReady()
+  // Shown from the first frame, not once the model has loaded (that pushed the whole page down): asking loads it.
+  const starters: { icon: typeof FileText; text: string }[] = aiStatus !== 'unsupported'
     ? [
         next && { icon: CalendarDays, text: `Help me get ready for “${next.title}”` },
         todos.length > 1 ? { icon: ListChecks, text: `Which of my ${todos.length} tasks should I do first?` } : todos[0] && { icon: ListChecks, text: `Help me with “${todos[0].text}”` },
         lastDoc && { icon: FileText, text: `Summarize “${lastDoc.title || 'Untitled'}”` },
       ].filter((x): x is { icon: typeof FileText; text: string } => !!x)
     : []
-  const ask = (prompt: string) => useStore.setState({ askDraft: prompt, aiOpen: true })
+  const ask = (prompt: string) => void import('../ai/conversation').then((m) => m.ask(prompt))
   const tasks = todos.slice(0, SHOWN)
 
   return (
@@ -118,7 +119,7 @@ export function HomeView() {
             <div className="hm-asst-top">{startersTitle({ now, setupAt, soon: !!next && !next.allDay && next.start - now.getTime() < 90 * 60_000, onlyDocs: starters.length === 1 && starters[0].icon === FileText })}</div>
             <div className="hm-starters">
               {starters.map(({ icon: Icon, text }) => (
-                <button key={text} className="hm-starter" onClick={() => ask(text)} title="Ask the assistant">
+                <button key={text} className="hm-starter" onClick={() => ask(text)}>
                   <Icon size={16} strokeWidth={1.8} aria-hidden="true" />
                   <span>{text}</span>
                   <ArrowUpRight size={14} aria-hidden="true" />

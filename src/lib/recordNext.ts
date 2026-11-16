@@ -8,6 +8,7 @@ import { useStore } from '../store'
  */
 const pending = new Set<string>()
 export const recordWhenOpened = (id: string) => void pending.add(id)
+export const willRecordWhenOpened = (id: string) => pending.has(id)
 export const takeRecordWhenOpened = (id: string) => pending.delete(id)
 
 /** Every "Start recording" button: a new recording that starts as soon as it opens. */

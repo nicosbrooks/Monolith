@@ -187,19 +187,30 @@ export async function related(question: string, k = 6, ms = 300): Promise<{ id: 
 }
 
 // ─── What someone is asking for ────────────────────────────────────────────
-// Labelled examples; a request is the kind whose examples it's closest to in meaning. Only "ask" needs the general
-// model, so it's the signal to load it ahead of time (see llm.ts warmUp), while "add" and "find" never wake it.
+// Labelled examples; a request is the kind whose examples it's closest to in meaning. This is how the Ask bar and ⌘K
+// understand a request (src/ai/understand.ts); the rules in lib/request.ts are only the fallback until it's ready.
+// Only "ask" needs the general model, so it's also the signal to load it ahead (see llm.ts warmUp).
 
-export type Intent = 'ask' | 'add' | 'find'
+export type Intent = 'event' | 'task' | 'doc' | 'ask' | 'find'
 const EXAMPLES: Record<Intent, string[]> = {
+  event: [
+    'make an event for tomorrow', 'lunch with Sam tomorrow at noon', 'dentist on Friday at 3pm', 'schedule a meeting with my advisor',
+    'add study session Thursday 4-6', 'put dinner on my calendar Saturday', 'book a call next Tuesday at 10', 'create an event called demo day',
+    'block off Thursday afternoon for studying', 'gym every morning at 7', 'team standup at 9:30 tomorrow', 'flight to Boston on Dec 3',
+  ],
+  task: [
+    'remind me to buy milk', 'add a task to email the professor', 'new to-do: finish the lab report', 'I need to call the landlord',
+    'add pay rent to my list', 'todo review chapter 4', 'buy groceries', 'don’t forget to submit the form', 'essay draft by Friday',
+  ],
+  doc: [
+    'new doc about the trip', 'create a note for project ideas', 'start a page called reading list', 'make a new document',
+    'open a blank doc', 'new note: meeting recap', 'write a new page for my journal',
+  ],
   ask: [
     'what should I focus on today?', 'summarize my notes on this', 'explain this concept to me', 'help me write the introduction',
     'what did the lecture say about it?', 'make flashcards from this', 'how do I solve this problem', 'compare these two ideas',
-    'what am I missing in this essay', 'rewrite this paragraph more clearly',
-  ],
-  add: [
-    'lunch with Sam tomorrow at noon', 'dentist on Friday at 3pm', 'remind me to call mom tonight', 'essay due next Monday',
-    'add study session Thursday 4-6', 'meeting with advisor at 10am', 'gym every morning', 'new task: buy groceries',
+    'what am I missing in this essay', 'rewrite this paragraph more clearly', 'what’s on my calendar this week?',
+    'move my 3pm to 4', 'cancel lunch tomorrow', 'mark the essay as done', 'which tasks are overdue',
   ],
   find: [
     'chemistry notes', 'the doc about eigenvalues', 'open my essay draft', 'last week’s recording', 'grocery list',
@@ -222,7 +233,7 @@ export async function intent(text: string, ms = 250): Promise<{ kind: Intent; co
       prototypes = all.map((x, i) => ({ kind: x.kind, v: vecs.slice(i * DIMS, (i + 1) * DIMS) }))
     }
     const qv = await embedder!.embed([classify(text)])
-    const best: Record<Intent, number> = { ask: -1, add: -1, find: -1 }
+    const best: Record<Intent, number> = { event: -1, task: -1, doc: -1, ask: -1, find: -1 }
     for (const p of prototypes) {
       let sum = 0
       for (let i = 0; i < DIMS; i++) sum += p.v[i] * qv[i]

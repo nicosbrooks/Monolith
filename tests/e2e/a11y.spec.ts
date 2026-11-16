@@ -15,6 +15,8 @@ async function start(page: Page) {
 async function check(page: Page, where: string, include?: string) {
   // Measure what's on screen once things have faded in, not mid-animation.
   await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity), null, { timeout: 5000 }).catch(() => {})
+  // Motion's springs run on the main thread, not as Web Animations, so also wait for overlays to be fully shown.
+  await page.waitForFunction(() => [...document.querySelectorAll('.overlay, .modal')].every((e) => getComputedStyle(e).opacity === '1'), null, { timeout: 5000 }).catch(() => {})
   await page.waitForTimeout(300)
   let axe = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
   if (include) axe = axe.include(include)
@@ -42,8 +44,7 @@ for (const scheme of ['dark', 'light'] as const) {
 
     test('home, docs, recordings and calendar', async ({ page }) => {
       await check(page, 'home')
-      await page.getByText('Docs', { exact: true }).first().click()
-      await page.getByText('Study system').first().click()
+      await page.locator('.sidebar .tree-title', { hasText: 'Study system' }).click()
       await expect(page.locator('.ProseMirror')).toBeVisible()
       await check(page, 'a doc')
       // Study system is linked from the welcome doc, so its connections show; the welcome doc has a link in its text.
@@ -54,14 +55,14 @@ for (const scheme of ['dark', 'light'] as const) {
       await page.locator('.sidebar .nav', { hasText: 'Tasks' }).click()
       await expect(page.locator('.hm-task').first()).toBeVisible()
       await check(page, 'tasks')
-      await page.locator('.sidebar .nav', { hasText: 'Docs' }).click()
-      await page.getByText('Study system').first().click()
+      await page.locator('.sidebar .tree-title', { hasText: 'Study system' }).click()
       await page.getByRole('button', { name: 'More options' }).click()
       await page.getByText('Earlier versions').click()
+      await expect(page.locator('.modal .hist-blank')).toBeVisible()
       await check(page, 'earlier versions (empty)', '.modal')
       await page.keyboard.press('Escape')
-      await page.getByText('Recordings', { exact: true }).first().click()
-      await check(page, 'recordings')
+      await page.locator('.sidebar .nav', { hasText: 'Recently Deleted' }).click()
+      await check(page, 'recently deleted')
       await page.getByText('Calendar', { exact: true }).first().click()
       await expect(page.locator('input[placeholder*="Add an event"]').first()).toBeVisible()
       await check(page, 'calendar')

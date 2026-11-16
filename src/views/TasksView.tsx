@@ -47,7 +47,7 @@ export function TasksView() {
       {mobile && <PhoneTitle title="Tasks" scrolled={scrolled} />}
       <div className="hm">
         <header className="hm-head">
-          <h1>Tasks</h1>
+          {!mobile && <h1>Tasks</h1>}
           {ws.tasks.length > 0 && <p>{ws.tasks.length === 1 ? 'One thing to do' : `${ws.tasks.length} things to do`}, from {new Set(ws.tasks.map((t) => t.itemId)).size === 1 ? 'one doc' : `${new Set(ws.tasks.map((t) => t.itemId)).size} docs`}</p>}
         </header>
         {groups.map(({ g, tasks }) => (

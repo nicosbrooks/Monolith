@@ -576,7 +576,7 @@ Typing figures include Playwright's own 30 ms a key (510–540 ms is the floor).
 - WebLLM and Transformers.js downloads are unchanged: those libraries fetch and cache their own files.
 
 ### Follow-ups in the same conversation (the "conversation reuse misses" item above)
-`src/ai/reuse.ts` decides whether a request continues the conversation LiteRT-LM holds. It compares a key per message instead of the exact text: every answer has the same key, a question's key leaves out the per-turn action instructions (`turnKey` in `chat()`'s options, set by `AIPanel`), and a conversation made with room for a longer answer serves a shorter one. Retries, edits, dropped turns and changed evidence still start afresh. 12 cases in `scripts/test-reuse.ts` (`npm run test:reuse`, in `check`, `test` and CI).
+`src/ai/reuse.ts` decides whether a request continues the conversation LiteRT-LM holds. It compares a key per message instead of the exact text: every answer has the same key, a question's key leaves out the per-turn action instructions (`turnKey` in `chat()`'s options, set by `src/ai/conversation.ts`), and a conversation made with room for a longer answer serves a shorter one. Retries, edits, dropped turns and changed evidence still start afresh. 12 cases in `scripts/test-reuse.ts` (`npm run test:reuse`, in `check`, `test` and CI).
 
 ### Check on a real machine
 1. Start a Gemma download, turn Wi-Fi off part-way, turn it on, pick the tier again: it should continue, not restart (DevTools › Network shows a `Range` request and a 206). Hugging Face redirects to a signed CDN address; if `resolveModel` returns that signed address rather than the stable one, the comparison without the query string still matches, but confirm the 206.
@@ -587,3 +587,69 @@ Typing figures include Playwright's own 30 ms a key (510–540 ms is the floor).
 - Model ids and tiers. I can't confirm from here which builds exist or how fast they are.
 - Storing each doc under its own key, so a save writes only what changed. It's the real fix for very large workspaces, but it touches the passcode lock, backup and restore, and the migration of existing data. Worth doing with the user's real data backed up first.
 - The first question after launch still builds passages for every doc on the main thread (about a third of a second at 3,000 docs when System 1 hasn't already done it).
+
+## The assistant in the Ask bar, quick access, sidebar, Recently Deleted (Nov 15, side session)
+Verified on 5210 with screenshots. `npm run check` passes, and so does `npm run test:e2e` (29 of 29). Nothing is committed.
+
+### No more chat panel
+- **`AIPanel.tsx` is deleted.** The assistant lives in the Ask bar on every page, plus ⌘K. ⌘J now focuses the Ask bar.
+- **`src/ai/conversation.ts`:** the chat logic that was inside the panel, as a zustand store (`useConvo`): the messages, act cards, sources, retry, stop, "New conversation", and a `pending` question the app is waiting on. Home's starters call its `ask()`.
+- **`AskBar.tsx`:** a question opens the conversation just above the bar. It shows the model, Listen, Copy, Add to doc and Retry (only on model answers, not the app's own short replies). Esc clears the text first, then the pending question, then hides the conversation. ↑↓ picks between readings ("Add an event", "Ask", "New doc", matching docs), and ↵ runs the one picked.
+- `aiOpen`, `askDraft` and `--ai-w` are gone, and the dead panel CSS was pruned from all three CSS files.
+
+### Understanding a request (the "make an event for tomorrow" bug)
+- **`src/lib/request.ts` (pure, no model):** `readEvent`, `readTask` and `readDoc` take out the words that are only how the request was asked ("can you", "make an event for", "remind me to"), the date and the time, and keep what's left as the title. `ruleKind` guesses the kind and says whether it's sure. There are 38 cases in `scripts/test-requests.ts` (`npm run test:requests`, part of `check` and `test`).
+- **`src/ai/understand.ts`:**
+  - The rules go first, and a sure question stays a question.
+  - Otherwise EmbeddingGemma (System 1, `intent()` in `system1.ts`, now with event/task/doc/ask/find examples) decides once it's loaded. Before that, the rules decide on their own.
+  - The page you're on counts: on Tasks a dated request is a task, and on Calendar it's an event.
+  - If a title still looks messy and the general model is ready, `refineTitle` asks it for just the name, with a 6 s limit.
+- **I used the existing LiteRT System 1 rather than Transformers.js.** EmbeddingGemma was already downloaded and running in `embed.worker.ts`, so a second copy through Transformers.js would have meant a second ~200 MB download and a second runtime for the same model.
+- "make an event for tomorrow" now asks "What should I call it? It's Mon, Nov 16". The answer becomes the title, and the toast has Undo. "can you schedule a meeting with Sam on friday at 3" adds "Meeting with Sam" at once. An event with no date asks "When is …?".
+
+### Quick access (⌘K), rewritten
+- Scopes: All, Docs, Tasks, Events, Recordings and Commands. Tab and Shift-Tab move between them, `>` jumps to Commands, and Backspace in an empty box goes back to All.
+- Results are ranked by score. The groups are:
+  - **Do:** add the event, task or doc as typed, read with the same rules and model as the Ask bar. ⌘↵ asks the assistant instead.
+  - Docs, Related in meaning, Tasks (⌘↵ checks one off), Events, Recordings, and Commands.
+- With nothing typed it shows Recent, Open tasks, Coming up and Create. A footer lists the keys.
+
+### Sidebar
+- It's 264 px wide. Top to bottom: Search and commands ⌘K, then Home, Tasks (with a count) and Calendar.
+- Then foldable groups: **Docs**, **Folders** and **Recordings** (6 shown, then "Show more"). Each group has its own + (New doc, New folder, Start recording). Which groups are folded is kept in localStorage (`monolith-side-folded`).
+- Recently Deleted (with a count) and Settings are pinned at the bottom.
+- Hover buttons on rows are absolutely placed and fade in, so titles no longer reflow when the pointer passes over a row. Folder rows are a real button with `aria-expanded`.
+
+### Recently Deleted
+- **`src/views/TrashView.tsx`** is a full page with two sections:
+  - **Docs and recordings:** Restore, ··· › Delete forever (asks first), and Empty. Clicking a row previews it, and the preview has Back and Restore.
+  - **Completed:** checklist lines you checked off, wherever that happened. Restore unchecks the line, and ··· › Remove from doc asks first and can be undone.
+- **`src/lib/completed.ts`:** watches the docs and records when each line was checked off. It waits 0.5 s after typing stops, keeps entries for 30 days and holds at most 300. The record is stored as `completed` in the store, so the newest show first. A checked line stays in its doc, so nothing is lost if the record is cleared.
+
+### Layout shift and navigation
+- Every view's code is fetched when the app is idle, so switching pages no longer flashes a loading state.
+- Home's starter card is shown from the start instead of popping in once the model loads.
+- The Ask bar dock has a fixed width.
+- A sidebar group no longer opens or closes depending on which page you're on.
+
+### Bugs fixed on the way
+- **"Start recording" sometimes made an empty recording without starting.** The view can mount twice: React's strict mode always does this, and in production it sometimes did too. The first mount used up the one-time request. Now `willRecordWhenOpened` only peeks at the request, and the request is used up once the microphone is actually live. If the mic is blocked, the request is cleared too, so it doesn't fire later.
+- **a11y:**
+  - Search-button, ⌘K meta and footer text now pass contrast in both themes.
+  - The Home starters lost a `title` that didn't match their text.
+  - Sidebar hover buttons are 24 px.
+  - `a11y.spec.ts` now waits for motion's main-thread fades and for the Earlier versions empty state before measuring. Before, it measured mid-fade.
+
+### Tests
+- `app.spec.ts`:
+  - "make an event for tomorrow" asks for the name.
+  - Questions open the conversation (Escape, Ctrl+J, a follow-up, New conversation).
+  - Arrow keys pick a reading (a task on Tasks, a new doc).
+  - Quick access: groups, Do, Tab scopes and `>calendar`.
+  - Recently Deleted restores a doc and a completed line.
+- Playwright's Chromium (headless shell 1248) had to be installed on this machine (`npx playwright install chromium`).
+
+### Not verified
+- Light mode and phone width were checked only by the a11y run, not by eye.
+- `refineTitle` with a real general model loaded. The cases it covers are messy titles the rules leave behind, and with no model the rules' title is used.
+- iOS is untouched by this pass.

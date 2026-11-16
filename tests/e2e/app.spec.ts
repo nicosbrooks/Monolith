@@ -109,22 +109,132 @@ test('calendar quick add, with Undo', async ({ page }) => {
 
 test('Start recording records on the first press', async ({ page }) => {
   await start(page)
-  await page.getByText('Recordings', { exact: true }).first().click()
-  await page.click('.nav-row button[aria-label="Start recording"]')
+  await page.click('.side-group-add[aria-label="Start recording"]')
   await expect(page.locator('button[title="Stop"]')).toBeVisible()
   await page.waitForTimeout(1500)
   await page.click('button[title="Stop"]')
   await expect(page.locator('.side-tree .nav.sub.on')).toHaveCount(1)
 })
 
-test('deleting a doc can be undone and recovered', async ({ page }) => {
+test('Recently Deleted holds deleted docs and completed checklist lines, and restores each', async ({ page }) => {
   await start(page)
-  await page.getByText('Docs', { exact: true }).first().click()
-  await page.getByText('Study system').first().click({ button: 'right' })
+  // A deleted doc waits there, and Restore puts it back in the sidebar.
+  await page.locator('.sidebar .tree-title', { hasText: 'Study system' }).click({ button: 'right' })
   await page.getByText('Delete', { exact: true }).click()
   await expect(page.locator('.toast')).toContainText('Recently Deleted')
-  await page.getByText('Recently Deleted').first().click()
-  await expect(page.getByText('Study system')).toBeVisible()
+  await expect(page.locator('.sidebar .tree-title', { hasText: 'Study system' })).toHaveCount(0)
+  // A checklist line checked off on Home is listed under Completed.
+  const task = page.locator('.hm-task').first()
+  const words = (await task.locator('.hm-row-main span').textContent())!.trim()
+  await task.locator('input').click()
+  await expect(page.locator('.toast', { hasText: 'Task done' })).toBeVisible()
+  await page.locator('.sidebar .nav', { hasText: 'Recently Deleted' }).click()
+  await expect(page.locator('.hm-head h1')).toHaveText('Recently Deleted')
+  const doc = page.locator('.tr-row', { hasText: 'Study system' })
+  await expect(doc).toContainText('deleted')
+  const done = page.locator('.tr-row', { hasText: words })
+  await expect(done).toContainText('checked')
+  // Restore each: the doc is back, and the line is an open task again.
+  await doc.getByRole('button', { name: 'Restore' }).click()
+  await expect(page.locator('.sidebar .tree-title', { hasText: 'Study system' })).toHaveCount(1)
+  await expect(page.locator('.tr-row', { hasText: 'Study system' })).toHaveCount(0)
+  await done.getByRole('button', { name: 'Restore' }).click()
+  await expect(page.locator('.tr-row', { hasText: words })).toHaveCount(0)
+  await page.locator('.sidebar .nav', { hasText: 'Tasks' }).click()
+  await expect(page.locator('.hm-task', { hasText: words })).toHaveCount(1)
+})
+
+test('Ask bar: "make an event for tomorrow" asks for the name instead of using the prompt as the title', async ({ page }) => {
+  await start(page)
+  const bar = page.locator('.ask-field input')
+  await bar.fill('make an event for tomorrow')
+  // What Enter will do is shown first: an event tomorrow, named next.
+  await expect(page.locator('.ask-opt.on')).toContainText('New event')
+  await bar.press('Enter')
+  await expect(page.locator('.convo .cv-a').last()).toContainText('What should I call it?')
+  await bar.fill('Dentist')
+  await bar.press('Enter')
+  await expect(page.locator('.toast')).toContainText('Added “Dentist”')
+  // A request that names it is added at once, with the name alone.
+  await bar.fill('can you schedule a meeting with Sam on friday at 3')
+  await bar.press('Enter')
+  await expect(page.locator('.toast', { hasText: 'Meeting with Sam' })).toBeVisible()
+  await page.locator('.sidebar .nav', { hasText: 'Calendar' }).click()
+  await expect(page.locator('.calendar').getByText('Dentist').first()).toBeVisible()
+  await expect(page.locator('.calendar').getByText(/make an event/i)).toHaveCount(0)
+})
+
+test('Ask bar: questions open a conversation above the bar; there is no chat panel', async ({ page }) => {
+  await start(page)
+  await expect(page.locator('.ai-panel, .ai-wrap')).toHaveCount(0)
+  const bar = page.locator('.ask-field input')
+  await bar.fill('what’s on tomorrow?')
+  await expect(page.locator('.ask-opt.on')).toContainText('Ask')
+  await bar.press('Enter')
+  const convo = page.locator('.convo')
+  await expect(convo.locator('.cv-q')).toHaveText('what’s on tomorrow?')
+  await expect(convo.locator('.cv-a .md')).toContainText('Study group')
+  await expect(convo.locator('.msg-sources')).toContainText('Your calendar')
+  // Escape hides it; the bar offers to go back; ⌘J brings it back too.
+  await bar.press('Escape')
+  await expect(convo).toHaveCount(0)
+  await bar.focus()
+  await expect(page.locator('.ask-opt', { hasText: 'Back to the conversation' })).toBeVisible()
+  await bar.press('Escape')
+  await page.locator('.hm-head h1').click()
+  await page.keyboard.press('Control+j')
+  await expect(page.locator('.convo .cv-q')).toHaveCount(1)
+  await expect(bar).toBeFocused()
+  // A follow-up continues the same conversation; New conversation clears it.
+  await bar.fill('what’s on today?')
+  await bar.press('Enter')
+  await expect(page.locator('.convo .cv-q')).toHaveCount(2)
+  await page.getByRole('button', { name: 'New conversation' }).click()
+  await expect(page.locator('.convo .cv-q')).toHaveCount(0)
+})
+
+test('Ask bar: arrow keys pick another reading, like adding a task instead', async ({ page }) => {
+  await start(page)
+  await page.locator('.sidebar .nav', { hasText: 'Tasks' }).click()
+  const bar = page.locator('.ask-field input')
+  await bar.fill('add a task to email the professor')
+  await expect(page.locator('.ask-opt.on')).toContainText('Add task “Email the professor”')
+  await bar.press('Enter')
+  await expect(page.locator('.toast')).toContainText('Added “Email the professor”')
+  await expect(page.locator('.hm-task', { hasText: 'Email the professor' })).toHaveCount(1)
+  await page.locator('.sidebar .nav', { hasText: 'Home' }).click()
+  await bar.fill('new doc about the trip')
+  await expect(page.locator('.ask-opt.on')).toContainText('New doc “The trip”')
+  await bar.press('ArrowDown')
+  await expect(page.locator('.ask-opt.on')).toContainText('Ask')
+  await bar.press('ArrowUp')
+  await bar.press('Enter')
+  await expect(page.locator('.doc-title')).toHaveValue('The trip')
+})
+
+test('quick access: finds docs, tasks and events, adds what is asked, and filters with Tab', async ({ page }) => {
+  await start(page)
+  await page.keyboard.press('Control+k')
+  const input = page.locator('[cmdk-input]')
+  await expect(input).toBeFocused()
+  // With nothing typed: recent docs, open tasks, what's coming up, and ways to create.
+  for (const g of ['Recent', 'Open tasks', 'Coming up', 'Create']) await expect(page.locator('[cmdk-group-heading]', { hasText: g })).toBeVisible()
+  // A request is offered as one step, named as the thing itself.
+  await page.keyboard.type('dentist friday 3pm')
+  await expect(page.locator('[cmdk-item][data-selected="true"]')).toContainText('Add “Dentist”')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.toast')).toContainText('Added “Dentist”')
+  // Tab narrows the list; ">" means commands.
+  await page.keyboard.press('Control+k')
+  await page.keyboard.type('study')
+  await page.keyboard.press('Tab')
+  await expect(page.locator('.qa-scopes button.on')).toHaveText('Docs')
+  await expect(page.locator('[cmdk-item]').first()).toContainText('Study system')
+  await input.fill('>calendar')
+  await expect(page.locator('.qa-scopes button.on')).toHaveText('Commands')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('[cmdk-root]')).toHaveCount(0)
+  await expect(page.locator('.main')).toHaveClass(/sec-calendar/)
 })
 
 test('[[ links docs together: the link opens its doc, which shows what links to it, and follows a rename', async ({ page }) => {
@@ -165,8 +275,9 @@ test('Tasks gathers checklist lines from every doc, sorts them by date, and adds
   // Typing in the bar on this page adds a task, to a doc called Tasks.
   const before = await page.locator('.hm-task').count()
   await page.locator('.ask-field input').fill('renew library books tomorrow')
+  await expect(page.locator('.ask-opt.on')).toContainText('Add task “Renew library books”')
   await page.keyboard.press('Enter')
-  await expect(page.locator('.toast')).toContainText('Task added')
+  await expect(page.locator('.toast')).toContainText('Added “Renew library books” · due')
   await expect(page.locator('.hm-task')).toHaveCount(before + 1)
   await expect(page.locator('.hm-task', { hasText: 'Renew library books' }).locator('.hm-due')).toHaveText('Tomorrow')
   // Checking it here checks it in its doc, and Undo brings it back.
@@ -230,11 +341,10 @@ test('a task with a date shows on the calendar and can be checked off there', as
 
 test('earlier versions: a replaced doc can be read and restored, and restoring can be undone', async ({ page }) => {
   await start(page)
-  await page.getByText('Docs', { exact: true }).first().click()
-  await page.getByText('Study system').first().click()
+  await page.locator('.sidebar .tree-title', { hasText: 'Study system' }).click()
   await expect(page.locator('.ProseMirror')).toContainText('Weekly loop')
-  await page.locator('.ProseMirror').click()
-  await page.keyboard.press('Control+a')
+  await page.locator('.ProseMirror p').first().click()
+  await page.keyboard.press('ControlOrMeta+a')
   await page.keyboard.type('Everything replaced.')
   await expect(page.locator('.ProseMirror')).not.toContainText('Weekly loop')
   await page.waitForTimeout(500)
@@ -297,7 +407,6 @@ test('a workspace of 2,000 docs opens, lists and searches without stalling', asy
     await new Promise<void>((ok) => { const t = db.transaction('keyval', 'readwrite'); t.objectStore('keyval').put(JSON.stringify(saved), 'socratic-v1'); t.oncomplete = () => ok() })
   })
   await page.reload()
-  await page.locator('.sidebar .nav', { hasText: 'Docs' }).first().click()
   // The sidebar draws the first hundred and offers the rest.
   await expect(page.locator('.more-rows')).toContainText('Show 100 more of 2002')
   expect(await page.locator('.sidebar .tree-title').count()).toBeLessThan(110)

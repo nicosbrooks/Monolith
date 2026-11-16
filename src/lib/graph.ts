@@ -88,17 +88,20 @@ export interface Workspace {
   links: Map<string, string[]>
   /** What links to each doc. */
   mentions: Map<string, Mention[]>
+  /** Checked-off checklist lines, in every doc. */
+  done: Task[]
 }
 
 export function readWorkspace(items: Item[], now = new Date()): Workspace {
   const live = items.filter((i) => !i.deletedAt)
   const ids = new Set(live.map((i) => i.id))
   const tasks: Task[] = []
+  const done: Task[] = []
   const links = new Map<string, string[]>()
   const mentions = new Map<string, Mention[]>()
   for (const item of [...live].sort((a, b) => b.updatedAt - a.updatedAt)) {
     const r = read(item, now)
-    for (const t of r.tasks) if (!t.done) tasks.push(t)
+    for (const t of r.tasks) (t.done ? done : tasks).push(t)
     const seen = new Set<string>()
     for (const l of r.links) {
       if (!ids.has(l.to) || seen.has(l.to)) continue
@@ -109,7 +112,7 @@ export function readWorkspace(items: Item[], now = new Date()): Workspace {
   }
   // Stable: dated ones by date, the rest keep doc order.
   const dated = tasks.filter((t) => t.due !== undefined).sort((a, b) => a.due! - b.due!)
-  return { tasks: [...dated, ...tasks.filter((t) => t.due === undefined)], links, mentions }
+  return { tasks: [...dated, ...tasks.filter((t) => t.due === undefined)], links, mentions, done }
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

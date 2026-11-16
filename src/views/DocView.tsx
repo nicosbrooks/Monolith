@@ -54,9 +54,14 @@ export function DocView({ item }: { item: Item }) {
     setToc(out)
   }
 
+  // The title grows to fit its lines, again whenever the window's width (and so the wrapping, or the phone size) changes.
   useEffect(() => {
     const el = titleRef.current
-    if (el) (el.style.height = '0'), (el.style.height = el.scrollHeight + 'px')
+    if (!el) return
+    const fit = () => ((el.style.height = '0'), (el.style.height = el.scrollHeight + 'px'))
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
   }, [item.title])
 
   useEffect(() => {
@@ -129,7 +134,8 @@ export function DocView({ item }: { item: Item }) {
         <span className="grow" />
         {item.deletedAt ? (
           <>
-            <button className="btn sm" onClick={() => st.restoreItem(item.id)}><RotateCcw size={14} /> Recover</button>
+            <button className="btn sm" onClick={() => useStore.setState({ activeId: null })}>Back</button>
+            <button className="btn sm" onClick={() => (st.restoreItem(item.id), st.open(item.id))}><RotateCcw size={14} /> Restore</button>
             <button className="btn sm danger" onClick={async () => (await confirmDialog({ title: `Delete this ${kind} forever?`, body: 'This can’t be undone.', confirm: 'Delete forever', danger: true })) && st.purgeItem(item.id)}><Trash2 size={14} /> Delete forever</button>
           </>
         ) : (

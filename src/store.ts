@@ -67,6 +67,13 @@ const idbStorage: PersistStorage<unknown> = {
   removeItem: async (k) => del(k),
 }
 
+/** A checklist line someone checked off: which doc, its words, and when. */
+export interface Completion {
+  itemId: string
+  text: string
+  at: number
+}
+
 export interface Settings {
   llmModel: string
   /** The speech-to-text model (named for the first one the app used). */
@@ -112,9 +119,6 @@ interface State {
   calendarDate: number | null
   folderId: string | null
   tagFilter: string | null
-  aiOpen: boolean
-  /** A question typed into Ask or search, waiting for the assistant panel to pick it up. */
-  askDraft: string | null
   paletteOpen: boolean
   /** Setup shown again from Settings, opened at this step. */
   setupOpen: false | 0 | 1
@@ -123,6 +127,8 @@ interface State {
   drawerOpen: boolean
   sidebarCollapsed: boolean
   dismissed: string[]
+  /** Checklist lines as they were checked off, newest first, for Recently Deleted › Completed (lib/completed.ts). */
+  completed: Completion[]
   settings: Settings
   sources: Source[]
 
@@ -145,7 +151,7 @@ interface State {
   /** Turn one date of a repeating event into an event of its own (the series skips that date). */
   detachEvent: (id: string, patch?: Partial<CalEvent>) => CalEvent | null
   dismiss: (id: string) => void
-  setUI: (patch: Partial<Pick<State, 'aiOpen' | 'paletteOpen' | 'settingsOpen' | 'connectOpen' | 'drawerOpen' | 'sidebarCollapsed'>>) => void
+  setUI: (patch: Partial<Pick<State, 'paletteOpen' | 'settingsOpen' | 'connectOpen' | 'drawerOpen' | 'sidebarCollapsed'>>) => void
   setSettings: (patch: Partial<Settings>) => void
   addSource: (s: Source) => void
   updateSource: (id: string, patch: Partial<Source>) => void
@@ -224,14 +230,13 @@ export const useStore = create<State>()(
       calendarDate: null,
       folderId: null,
       tagFilter: null,
-      aiOpen: false,
-      askDraft: null,
       paletteOpen: false,
       settingsOpen: false,
       connectOpen: false,
       drawerOpen: false,
       sidebarCollapsed: false,
       dismissed: [],
+      completed: [],
       settings: {
         // 'default' means the Default tier, resolved per device (see modelForTier). Existing installs keep their pick.
         llmModel: 'default',
@@ -407,7 +412,6 @@ export const useStore = create<State>()(
       version: 10,
       migrate: (persisted: unknown, v: number) => {
         const p = persisted as Partial<State>
-        if (v < 2) p.aiOpen = false
         if (p.settings && p.settings.googleClientId === undefined) p.settings.googleClientId = ''
         if (p.settings && p.settings.glass === undefined) p.settings.glass = true
         // Models are now picked by tier; older picks were last generation, so move everyone to Default.
@@ -433,7 +437,7 @@ export const useStore = create<State>()(
         settings: s.settings,
         sources: s.sources,
         dismissed: s.dismissed,
-        aiOpen: s.aiOpen,
+        completed: s.completed,
         sidebarCollapsed: s.sidebarCollapsed,
       }),
     },

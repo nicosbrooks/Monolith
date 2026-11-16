@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { format } from 'date-fns'
-import { CalendarDays, ChevronRight, FileText, Folder, Mic, PanelLeft, Plus, Search, MessageCircle, Sun, ArrowUp, HardDriveUpload, GitCommitHorizontal, RefreshCw } from 'lucide-react'
+import { CalendarDays, ChevronRight, FileText, Folder, Mic, PanelLeft, Plus, Search, Sun, ArrowUp, HardDriveUpload, GitCommitHorizontal, RefreshCw } from 'lucide-react'
 import { create } from 'zustand'
 import { useStore } from '../store'
 import { AskBar } from './AskBar'
@@ -24,10 +24,13 @@ export function PhoneTitle({ title, sub, actions, scrolled, lead }: { title: str
         <span className="p-bar-title">{title}</span>
         <span className="p-bar-actions">{actions}</span>
       </header>
-      <div className="p-large">
-        <h1>{title}</h1>
-        {sub && <p>{sub}</p>}
-      </div>
+      {/* Home has no title of its own (its greeting is the heading), so no empty large title either. */}
+      {(title || sub) && (
+        <div className="p-large">
+          {title && <h1>{title}</h1>}
+          {sub && <p>{sub}</p>}
+        </div>
+      )}
     </>
   )
 }
@@ -117,7 +120,7 @@ function CreateSheet({ open, close }: { open: boolean; close: () => void }) {
   const opts: [string, string, typeof Sun, () => void][] = [
     ['Doc', 'Notes, checklists, long-form writing', FileText, () => st.createItem('doc')],
     ['Record', 'A class, a meeting, a thought', Mic, () => st.createItem('lecture', { title: `Recording · ${format(new Date(), 'MMM d')}` })],
-    ['Event', 'Add to your calendar', CalendarDays, () => (st.go('calendar'), setTimeout(() => document.querySelector<HTMLInputElement>('.quick-add input')?.focus(), 250))],
+    ['Event', 'Add to your calendar', CalendarDays, () => (st.go('calendar'), setTimeout(() => document.querySelector<HTMLInputElement>('.ask-field input')?.focus(), 250))],
   ]
   return (
     <AnimatePresence>
@@ -151,7 +154,6 @@ function CreateSheet({ open, close }: { open: boolean; close: () => void }) {
               ))}
             </div>
             <div className="p-opts row2">
-              <button onClick={run(() => st.setUI({ aiOpen: true }))}><MessageCircle size={16} /> Ask assistant</button>
               <button onClick={run(() => st.setUI({ paletteOpen: true }))}><Search size={16} /> Search</button>
             </div>
           </motion.div>

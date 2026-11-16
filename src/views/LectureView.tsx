@@ -13,7 +13,7 @@ import { liveTranscribe, transcribe, type Live } from '../ai/stt'
 import { chat, enqueue, ensureAI, isReady, SYSTEM } from '../ai/llm'
 import { formatDuration, mdToHtml } from '../lib/util'
 import { toast } from '../components/Toast'
-import { takeRecordWhenOpened } from '../lib/recordNext'
+import { takeRecordWhenOpened, willRecordWhenOpened } from '../lib/recordNext'
 
 export function LectureView({ item }: { item: Item }) {
   const st = useStore.getState()
@@ -53,9 +53,14 @@ export function LectureView({ item }: { item: Item }) {
     }
   }, [item.id]) // eslint-disable-line
 
-  // Opened from a "Start recording" button: start straight away.
+  // Opened from a "Start recording" button: start straight away. The request is only used up once recording has really
+  // begun, so a view that mounts twice (React's strict mode, a remount on the way in) still records on the first press.
   useEffect(() => {
-    if (takeRecordWhenOpened(item.id)) void start()
+    let live = true
+    if (willRecordWhenOpened(item.id)) void start(() => live)
+    return () => {
+      live = false
+    }
   }, [item.id]) // eslint-disable-line
 
   useEffect(() => {
@@ -71,9 +76,13 @@ export function LectureView({ item }: { item: Item }) {
     streamRef.current?.getTracks().forEach((t) => t.stop())
   }
 
-  async function start() {
+  async function start(still?: () => boolean) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      if (still) {
+        if (!still()) return stream.getTracks().forEach((t) => t.stop())
+        takeRecordWhenOpened(item.id)
+      }
       streamRef.current = stream
       chunks.current = []
       // Settings › Files › Recordings: voice quality (32 kbps Opus, about 14 MB an hour) unless high quality is chosen.
@@ -109,6 +118,8 @@ export function LectureView({ item }: { item: Item }) {
       })
       visualize(stream)
     } catch (e) {
+      if (still && !still()) return
+      takeRecordWhenOpened(item.id)
       toast('Microphone access was blocked: ' + (e as Error).message)
     }
   }
@@ -299,7 +310,10 @@ export function LectureView({ item }: { item: Item }) {
         <span className="grow" />
         <span className="muted small hide-sm">{format(item.createdAt, 'EEE, MMM d · h:mm a')}</span>
         {item.deletedAt ? (
-          <button className="btn sm" onClick={() => st.restoreItem(item.id)}><RotateCcw size={14} /> Recover</button>
+          <>
+            <button className="btn sm" onClick={() => useStore.setState({ activeId: null })}>Back</button>
+            <button className="btn sm" onClick={() => (st.restoreItem(item.id), st.open(item.id))}><RotateCcw size={14} /> Restore</button>
+          </>
         ) : (
           <button
             className="tb"
@@ -346,7 +360,7 @@ export function LectureView({ item }: { item: Item }) {
                 {/* One way to start. Importing is the quiet alternative; re-doing things lives in the ⋯ of a finished recording. */}
                 {!lec.hasAudio ? (
                   <>
-                    <motion.button whileTap={{ scale: 0.94 }} className="rec-btn" onClick={start} disabled={transcribing}>
+                    <motion.button whileTap={{ scale: 0.94 }} className="rec-btn" onClick={() => void start()} disabled={transcribing}>
                       <Mic size={20} /> Start recording
                     </motion.button>
                     <button className="text-btn muted" onClick={importAudio} disabled={transcribing}>or use an audio file</button>

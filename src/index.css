@@ -5,7 +5,6 @@
   --accent-text: color-mix(in oklab, var(--accent) 80%, var(--text));
   --side-w: 256px;
   --list-w: 300px;
-  --ai-w: 340px;
   --r: 10px;
   --r-lg: 16px;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
@@ -416,8 +415,7 @@ kbd {
     radial-gradient(1200px 600px at -10% -20%, color-mix(in oklab, var(--accent) 9%, transparent), transparent 60%),
     radial-gradient(900px 500px at 110% 120%, color-mix(in oklab, #06b6d4 7%, transparent), transparent 60%), var(--bg);
 }
-.side-wrap,
-.ai-wrap {
+.side-wrap{
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -435,9 +433,6 @@ kbd {
 }
 .app.collapsed .main {
   margin-left: 8px;
-}
-.app:not(.ai-open) .main {
-  margin-right: 8px;
 }
 .detail {
   flex: 1;
@@ -537,6 +532,8 @@ kbd {
   color: var(--accent);
 }
 .nav em {
+  min-width: 18px;
+  text-align: right;
   font-style: normal;
   font-size: 11.5px;
   color: var(--text-3);
@@ -555,13 +552,24 @@ kbd {
   width: 18px;
   text-align: center;
 }
-/* Out of the layout until the row is hovered or focused, so titles get the whole width. */
+/* Over the end of the row, shown on hover or focus. Never in the layout, so titles keep their width and rows
+   never change height when the pointer passes over them. */
 .nav .hover-only {
-  display: none;
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  translate: 0 -50%;
+  width: 24px;
+  height: 24px;
+  opacity: 0;
+  pointer-events: none;
+  background: var(--hover);
+  transition: opacity 0.12s;
 }
 .nav:hover .hover-only,
 .nav:focus-within .hover-only {
-  display: grid;
+  opacity: 1;
+  pointer-events: auto;
 }
 .twisty {
   display: grid;
@@ -2222,193 +2230,11 @@ kbd {
   margin-top: 6px;
 }
 /* ───────────────────────── AI panel ───────────────────────── */
-.ai-panel {
-  width: var(--ai-w);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  padding: 10px 10px 10px 8px;
-}
-.ai-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 0 10px 6px;
-}
-.ai-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  font-weight: 650;
-}
-.orb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: conic-gradient(from 0deg, var(--accent), #06b6d4, #ec4899, var(--accent));
-  box-shadow: 0 0 12px -2px color-mix(in oklab, var(--accent) 70%, transparent);
-}
-.orb[data-busy] {
-  animation: spin 1.6s linear infinite;
-}
-.ai-scroll {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 0 2px 10px;
-}
-.ai-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-3);
-  margin: 0 4px 8px;
-}
-.setup {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 8px;
-  padding: 20px 16px;
-  margin-bottom: 14px;
-  border-radius: 16px;
-  background:
-    radial-gradient(120% 80% at 50% 0%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 70%), var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-}
-.setup p {
-  margin: 0 0 6px;
-  font-size: 12.5px;
-  color: var(--text-2);
-}
-.setup .btn.primary {
-  width: 100%;
-  justify-content: center;
-}
-.sugg {
-  display: flex;
-  gap: 11px;
-  padding: 12px;
-  margin-bottom: 8px;
-  border-radius: 13px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-}
-.sugg b {
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
-}
-.sugg small {
-  font-size: 12px;
-  color: var(--text-3);
-  margin-top: 2px;
-}
-.sugg .row {
-  margin-top: 9px;
-  gap: 4px;
-}
-.sugg-ico {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.sugg-ico.i-calendar {
-  background: color-mix(in oklab, #3b82f6 14%, transparent);
-  color: #3b82f6;
-}
-.sugg-ico.i-check {
-  background: color-mix(in oklab, #22c55e 14%, transparent);
-  color: #22c55e;
-}
-.sugg-ico.i-clock {
-  background: color-mix(in oklab, #f59e0b 16%, transparent);
-  color: #f59e0b;
-}
-.sugg-ico.i-book {
-  background: color-mix(in oklab, #ec4899 14%, transparent);
-  color: #ec4899;
-}
-.insight {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 10px 10px 12px;
-  margin-bottom: 6px;
-  border-radius: 12px;
-  font-size: 13px;
-  line-height: 1.45;
-  background: linear-gradient(135deg, var(--accent-soft), transparent 80%);
-  border: 1px solid color-mix(in oklab, var(--accent) 20%, transparent);
-}
-.insight span {
-  flex: 1;
-}
-.shimmer-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.shimmer-list i {
-  height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.3s infinite;
-}
+
 @keyframes shimmer {
   to {
     background-position: -200% 0;
   }
-}
-.quick-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-.quick-grid button {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 11px;
-  border-radius: 10px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  font-size: 12.5px;
-  font-weight: 500;
-  transition: border-color 0.15s, background 0.15s;
-}
-.quick-grid button:hover:not(:disabled) {
-  border-color: color-mix(in oklab, var(--accent) 40%, transparent);
-}
-.quick-grid svg {
-  color: var(--accent);
-}
-.answer {
-  margin-top: 10px;
-  padding: 12px;
-  border-radius: 13px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-}
-.answer .ai-label {
-  margin: 0 0 6px;
 }
 .md {
   font-size: 13.5px;
@@ -2447,58 +2273,6 @@ kbd {
 .md ul[data-type='taskList'] {
   list-style: '☐  ';
 }
-.chat {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.chat-scroll {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 4px 2px 10px;
-}
-.chat-empty {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 4px;
-}
-.starter {
-  text-align: left;
-  padding: 9px 12px;
-  border-radius: 11px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  font-size: 13px;
-  transition: border-color 0.15s;
-}
-.starter:hover:not(:disabled) {
-  border-color: color-mix(in oklab, var(--accent) 40%, transparent);
-}
-.msg {
-  max-width: 92%;
-  font-size: 13.5px;
-  line-height: 1.5;
-}
-.msg.user {
-  align-self: flex-end;
-  background: var(--accent);
-  color: var(--on-accent);
-  padding: 8px 12px;
-  border-radius: 16px 16px 4px 16px;
-  white-space: pre-wrap;
-}
-.msg.assistant {
-  align-self: flex-start;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 10px 12px;
-  border-radius: 16px 16px 16px 4px;
-}
 .mini {
   display: inline-flex;
   align-items: center;
@@ -2509,19 +2283,6 @@ kbd {
 }
 .mini:hover {
   color: var(--accent);
-}
-.composer {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border-radius: 16px;
-  background: var(--surface);
-  border: 1px solid var(--border-2);
-  box-shadow: var(--shadow);
-}
-.composer:focus-within {
-  border-color: color-mix(in oklab, var(--accent) 50%, transparent);
 }
 .ctx {
   align-self: flex-start;
@@ -2537,22 +2298,6 @@ kbd {
 .ctx.on {
   background: var(--accent-soft);
   color: var(--accent-text);
-}
-.input-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-}
-.input-row textarea {
-  flex: 1;
-  border: 0;
-  outline: 0;
-  background: none;
-  resize: none;
-  font-size: 13.5px;
-  max-height: 120px;
-  padding: 5px 4px;
-  field-sizing: content;
 }
 .send {
   width: 30px;
@@ -2576,9 +2321,6 @@ kbd {
   align-items: flex-end;
   gap: 8px;
   pointer-events: none;
-}
-.app.ai-open:not(.mobile) .toaster {
-  right: calc(var(--ai-w) + 16px);
 }
 /* Notifications: small pills in the top right, on the raised surface (never the inverse of the page). */
 .toast {
@@ -2708,7 +2450,6 @@ kbd {
     display: none;
   }
   :root {
-    --ai-w: 310px;
   }
 }
 @media (max-width: 1100px) {
@@ -2724,18 +2465,6 @@ kbd {
   }
 }
 @media (max-width: 860px) {
-  .app.ai-open .ai-wrap {
-    position: fixed;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    z-index: 40;
-    background: var(--bg);
-    box-shadow: var(--shadow-lg);
-  }
-  .app.ai-open .main {
-    margin-right: 8px;
-  }
   .list-pane {
     --list-w: 220px;
   }

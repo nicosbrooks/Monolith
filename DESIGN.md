@@ -149,7 +149,7 @@ Seven equal day buttons: weekday, date, up to three event-colour dots. The selec
 
 ### Notifications (`.toaster`, `.toast` in `src/index.css`; `Toaster` / `ToastView` in `apple/iOS/Feedback.swift`)
 - A small pill in the **upper right**, on the raised surface with an edge and shadow. Never a white bar, never at the bottom (the Ask bar owns the bottom).
-- Web: 56px from the top so it sits under the page's own top-right buttons; moves left of the assistant panel when that is open. Phone width: top centre.
+- Web: 56px from the top so it sits under the page's own top-right buttons. Phone width: top centre.
 - iOS: 54pt below the top safe area, trailing edge, so the title bar and its buttons stay clear.
 - Text is a short past-tense statement: "Added to calendar", "Task done", "Doc moved to Recently Deleted".
 - At most one action, as a small pill inside: usually Undo.
@@ -158,11 +158,35 @@ Seven equal day buttons: weekday, date, up to three event-colour dots. The selec
 ### Empty state (`.blank`)
 One per screen: a 52px round icon, a title that names the state ("No recordings yet"), one sentence on what the place is for, and at most one primary button. When the empty state has the button, the same action is hidden from the header.
 
-### Ask bar (`.home-dock`, `.ask-field`)
-One 48px pill at the bottom of every page; its placeholder says what it will do here ("Ask about “Title”", "Add an event or ask about your schedule"). The page fades into the background beneath it (`.home-dock::before`) so rows never collide with it. Calendar has no fade because its grid runs to the edge.
+### Ask bar (`.home-dock`, `.ask-field`, `AskBar.tsx`)
+The **only** place the assistant lives: there is no chat panel or sidebar. One 48px pill at the bottom of every page; its placeholder says what it will do here ("Ask about “Title”", "Add an event or ask about your schedule"). The page fades into the background beneath it (`.home-dock::before`) so rows never collide with it. Calendar has no fade because its grid runs to the edge. The dock is one fixed width (680px max) whether or not the conversation is open, so the bar never moves.
+- **It understands, then shows what Enter will do.** EmbeddingGemma reads each request as an event, a task, a new doc, something to find, or a question (`src/ai/understand.ts`, rules in `src/lib/request.ts` until it has downloaded). The first row of the popup is what Enter does, marked with ↵ ("Add “Dentist” · Fri, Nov 20 · 3:00 PM", "Add task “Email the professor”", "New doc “The trip”"); below it, quieter, the other readings (Ask, add to the calendar, add as a task, matching docs). ↑↓ moves between them.
+- **The title is the thing itself, never the request.** "Make an event for tomorrow" has no name, so the bar asks "What should I call it?" in the conversation and the next thing typed is the name. "Can you schedule a meeting with Sam on Friday at 3" is "Meeting with Sam". With a name but no day, it asks "When is “…”?".
+- **Changes happen at once, with Undo** in the toast. Questions open the conversation.
+- With nothing typed, the popup offers starting points for this page (Summarize this, Find the to-dos, Quiz me on this…), plus "Back to the conversation" when one is hidden.
+- `/` or ⌘J focuses it from anywhere. Esc clears the text, then hides the conversation.
+
+### Conversation (`.convo`, `Thread` in `AskBar.tsx`, `src/ai/conversation.ts`)
+- Opens above the Ask bar, the same width, at most 62% of the window tall, on the raised surface (22px corners). The page stays visible around it. Follow-ups continue it; it scrolls to the newest answer unless you've scrolled up to read.
+- Header: "About “Title”" as a pill when a doc or recording is open (tap to ask about everything instead), the model's name in grey, then New conversation and Hide. Nothing else.
+- Your words in a soft bubble on the right; answers as plain rendered text (never raw Markdown) on the left.
+- The app's own short replies ("What should I call it?") have no Listen/Copy/Retry row.
 
 ### Sidebar
-Its own rounded surface (18px). Rows are icon + label, 38px tall (34px for sub-rows), with a soft fill for the current page. Add buttons appear on hover or while you are in that section.
+Its own rounded surface (18px), 264px wide. **Its shape never depends on where you are**: the same rows in the same places on every page, so nothing moves when you open something. Top to bottom:
+1. The mark and name, and Collapse.
+2. **Search and commands ⌘K**, one wide quiet button (opens quick access).
+3. Home, Tasks (open count), Calendar.
+4. Groups with a small heading that folds them (remembered per browser): **Docs** (your own docs not in a folder, as a tree), **Folders** (each folder folds open to its docs; a doc shows once, in the folder of its top-level doc), **Recordings** (newest six, then "Show more"), then connected storage.
+5. At the bottom, fixed: **Recently Deleted** (with its count) and **Settings**.
+- Rows are icon + label, 38px tall (34px for sub-rows), with a soft fill for the current page. Counts sit in a fixed-width column.
+- A group's add button (+ New doc, mic Start recording, New folder) appears on hover at the right of its heading. Row buttons (Add sub-doc) float over the end of the row on hover: they never take room, so titles never rewrap and rows never change height.
+
+### Quick access (⌘K, `.palette.qa`, `CommandPalette.tsx`)
+The fastest way to anything. One input, a row of scopes under it (All, Docs, Tasks, Events, Recordings, Commands; Tab and Shift-Tab move between them, `>` means Commands, Backspace on an empty input goes back to All), a list of fixed height (so it doesn't resize as you type), and a footer of key hints.
+- **Nothing typed:** Recent docs, Open tasks, Coming up, and Create (New doc, Start recording, New event).
+- **Something typed:** a **Do** group first, read the same way as the Ask bar ("Add “Dentist” · Fri…", "Add task …", "New doc …", and always "Ask the assistant", ⌘↵), then Docs (ranked: title starts with the words, then a word in the title starts with them, then contains, then the text), Related in meaning (EmbeddingGemma), Tasks, Events, Recordings, Commands.
+- Each row: icon, title, a grey second line (snippet, doc, place), and a grey detail on the right (date, due). ⌘↵ on a task checks it off.
 
 ### Switches
 On iOS a switch is tinted the status green (`Theme.local`). The app tint is the text colour, which makes an "on" switch white with a white knob. On/off is a status, so green is allowed (Principle 2).
@@ -191,13 +215,18 @@ Location and Weather, as switches with one line each saying what they give the a
 - Weeks run Sunday to Saturday: "Friday" is the next one coming, "Friday next week" is the one after.
 - Every preview and toast uses the same label (`whenLabel`). New phrasings go in `scripts/test-dates.ts` (`npm run test:dates`), and the iOS port is checked against the same cases.
 
-### Assistant chat (`Chat` in `AIPanel.tsx`)
+### Assistant answers (in the conversation above the Ask bar)
 - **Exact answers are instant.** "What's on tomorrow", "what's next", "what's left to do" are answered from the calendar and docs on the spot (`src/ai/instant.ts`), even before the model has loaded, and never with a wrong date. Anything that needs judgement ("am I free", "what should I focus on") goes to the model.
 - **While waiting, say what's happening**, in grey beside the dots: "Getting the assistant ready…", "Reading “Biology notes”…", "Thinking…". Never a bare spinner.
 - **Sources under the answer**: "From" and up to three pills, each a doc the answer read (click to open it), or "Your calendar" / "Your open tasks". Nothing is listed that wasn't actually given to the model.
 - **Actions are cards, with no sentence above them** (the card already says it; a sentence was the same thing twice). One card per change: an icon for what it does, the title, a second line with exactly what will happen ("Sun 2:00 PM → Tue, Nov 17 · 3:00 PM – 4:00 PM", "Add to “Week plan”", "Check off in …"), and one button (Add, Move, Remove, Check off, Create). Remove is the only non-primary button. After the tap the button becomes a green "Added"/"Moved"/…, and the toast says what happened, with **Undo**.
-- Under the last answer: Listen, Insert (when a doc is open), Retry. No copy of these anywhere else.
-- The composer is always usable; sending before the model is ready starts it and answers when it can.
+- Under each answer: Listen, Copy, Add to doc (when a doc is open), and Retry on the last one. No copy of these anywhere else.
+- The Ask bar is always usable; asking before the model is ready starts it ("Getting the assistant ready…") and answers when it can.
+
+### Recently Deleted (`TrashView.tsx`, `src/lib/completed.ts`)
+One page, like Tasks, with two sections:
+- **Docs and recordings**: newest first, "Doc · deleted 5 minutes ago", a **Restore** button on every row, Delete forever in the row's ··· menu (always confirmed). Clicking the title previews it, with Back and Restore in its header. "Empty" next to the heading deletes them all forever, after asking.
+- **Completed**: checklist lines you've checked off, anywhere (editor, Home, Tasks, ⌘K, the assistant), newest first with "checked 2 minutes ago". Restore unchecks it; Remove from doc (in ···, confirmed, with Undo) takes the line out. A checked line stays in its doc, so nothing is lost by checking it.
 
 ### First-time setup (`.su-*`, `src/components/Setup.tsx`; iOS `SetupView` in `Setup.swift`)
 Two short steps on one calm card (web) or full screen (iOS), with a step indicator of two short bars and a back button on step 2.
@@ -232,7 +261,7 @@ Under a doc's or recording's text, only when there is something to show, in this
 - A page in the Home column: the title "Tasks", one line saying how many and from how many docs, then a card per time group in this order: **Overdue, Today, Next 7 days, Later, No date**. Empty groups aren't shown.
 - A row is the Home task row: checkbox, the task, the doc it's in, and when it's due on the right in faint tabular text ("Today", "Tomorrow", "Fri", "Nov 28", with a time if the line gave one). The date turns `--danger` only once it's late.
 - The date comes from the line itself ("essay draft by Friday"), read by the same parser as quick add; the title shown is the line without its date words.
-- Adding is the Ask bar's job on this page ("Add a task or ask what to do first"): anything that isn't a question becomes a task in a doc called "Tasks", made the first time. The toast says "Task added" with Undo.
+- Adding is the Ask bar's job on this page ("Add a task or ask what to do first"): anything that isn't a question becomes a task in a doc called "Tasks", made the first time. The option and the toast show the task as it will be listed, its name without the date words and when it's due ("Added “Renew library books” · due Tomorrow"), with Undo. ⌘K's Do row does the same.
 - Home shows the first five of the same list, with "See all N" or "Open" as its one link.
 - Checkboxes in docs are the same 20px rounded square as Home and Tasks, inside a 24px target.
 
@@ -292,8 +321,13 @@ Three files load in order: `src/index.css` (base), `src/theme.css`, `src/soft.cs
 - On iOS an attachment shows its name and "Open it on your computer".
 
 ### Lists in the sidebar
-- Docs and Recordings both list their items in the sidebar while you're in that section; there's no second list column (only Recently Deleted keeps one). Each section row has its own + (New doc / Start recording).
-- Titles get two lines before they're cut, with the full title as the tooltip. Hover buttons take no room until they show.
+- Docs, Folders and Recordings are always listed in the sidebar (fold a group to hide it); there's no second list column anywhere.
+- Titles get two lines before they're cut, with the full title as the tooltip. Hover buttons take no room: they float over the end of the row.
+
+### Nothing jumps
+- Nothing that loads late is placed above what's already there. Home's assistant card shows from the first frame (it used to appear once the model loaded and push the page down).
+- Every screen's code is loaded in the background after start, so switching never shows a placeholder first.
+- Popups (Ask options, conversation, menus, toasts) float over the page; they never push it.
 
 ## Coverage
 
@@ -305,7 +339,8 @@ Three files load in order: `src/index.css` (base), `src/theme.css`, `src/soft.cs
 | Web assistant chat, Settings switches and Integrations | Reviewed Nov 15 (pass 5) |
 | Web Tasks, links and connections, Settings sections | Yes (Nov 15, 0.10): dark and light, axe-checked |
 | Web repeating events, event editor, earlier versions, reminders, export | Yes (Nov 16, 0.11): axe-checked; print checked in the print preview only |
-| Web Docs, doc editor, Recordings detail, Calendar, assistant For you tab, command palette | Not yet reviewed against this file |
+| Web Ask bar, conversation, quick access (⌘K), sidebar, Recently Deleted | Yes (Nov 15, 0.12): dark, desktop width, axe-checked in the e2e run. Light mode and phone width not re-checked |
+| Web Docs, doc editor, Recordings detail, Calendar | Not yet reviewed against this file |
 | iOS Tasks, links, connections | Not built: iOS shows a link as its text, and has no Tasks screen yet |
 | iOS Home, drawer, Docs and Recordings lists | Yes (Nov 15, pass 2): `Space` tokens, drawer icon column. Checked in the iPhone 17 simulator, dark only |
 | iOS Integrations | Yes (Nov 15): seen in the iPhone 17 simulator with every switch on. iPad and light mode not checked |
