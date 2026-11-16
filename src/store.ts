@@ -77,6 +77,8 @@ export interface Settings {
   pictureSize?: 'small' | 'medium' | 'large'
   /** Recording bitrate: voice (32 kbps Opus, ~14 MB an hour, the default) or high (96 kbps). */
   recordingQuality?: 'voice' | 'high'
+  /** Settings › General › Reminders: notify before events and when timed tasks come due. Unset means off. */
+  remind?: boolean
   /** Settings › Assistant › Understand meaning (System 1, EmbeddingGemma). Unset means on. */
   system1?: boolean
   /** How long the general model (System 2) stays in memory. Unset means auto: learned from use, loaded ahead when

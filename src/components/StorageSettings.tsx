@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { Cloud, FileArchive, FolderOpen, GitBranch, Laptop, Lock, Plus, RefreshCw, Unplug } from 'lucide-react'
+import { Cloud, FileArchive, FolderDown, FolderOpen, GitBranch, Laptop, Lock, Plus, RefreshCw, Unplug } from 'lucide-react'
 import { openBackup } from '../lib/backup'
 import { useSafekeeping } from '../lib/safekeeping'
 import { useVault } from '../lib/vault'
@@ -9,6 +10,7 @@ import { APP_NAME } from '../brand'
 import { disconnect, kindLabel, pendingChanges, pull, reconnect, useSync } from '../storage/sync'
 import { signOutGitHub, useAccounts } from '../storage/accounts'
 import { confirmDialog } from './Overlays'
+import { toast } from './Toast'
 
 export const SourceIcon = ({ kind, size = 16 }: { kind: Source['kind']; size?: number }) =>
   kind === 'folder' ? <FolderOpen size={size} /> : kind === 'github' ? <GitBranch size={size} /> : <Cloud size={size} />
@@ -24,6 +26,25 @@ export function StorageSettings() {
   const change = () => useStore.setState({ settingsOpen: false, setupOpen: 1 })
   const lastBackup = useStore((s) => s.settings.lastBackup)
   const persisted = useSafekeeping((s) => s.persisted)
+  const [exporting, setExporting] = useState(false)
+  const exportEverything = async () => {
+    setExporting(true)
+    try {
+      const { exportAll } = await import('../lib/exportAll')
+      const x = await exportAll()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(x.blob)
+      a.download = x.name
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
+      const n = (k: number, w: string) => (k ? [`${k} ${w}${k === 1 ? '' : 's'}`] : [])
+      toast(`Exported ${[...n(x.docs, 'doc'), ...n(x.recordings, 'recording'), ...n(x.files, 'file'), ...n(x.events, 'event')].join(', ') || 'an empty workspace'}`)
+    } catch (e) {
+      toast(`Couldn’t export: ${(e as Error).message}`)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <section>
@@ -91,6 +112,15 @@ export function StorageSettings() {
           </div>
           <button className="btn sm" onClick={() => (useStore.getState().setUI({ settingsOpen: false }), openBackup('export'))}>Back up</button>
           <button className="btn sm" onClick={() => (useStore.getState().setUI({ settingsOpen: false }), openBackup('import'))}>Restore</button>
+        </div>
+
+        <div className="model">
+          <FolderDown size={16} />
+          <div className="col">
+            <b>Export everything</b>
+            <small>A zip of Markdown files, your pictures, recordings and calendar, readable by any app</small>
+          </div>
+          <button className="btn sm" disabled={exporting} onClick={exportEverything}>{exporting ? 'Preparing…' : 'Export'}</button>
         </div>
 
         <button className="model add" onClick={change}>

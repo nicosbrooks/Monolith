@@ -10,6 +10,7 @@ import { toast } from './Toast'
 import { openLink } from './LinkDialog'
 import { useLink } from '../link/link'
 import { useSystem1 } from '../ai/system1'
+import { reminderStatus } from '../lib/reminders'
 import { deviceSummary, setIntegration, useDevice } from '../lib/integrations'
 
 const TABS = [
@@ -80,6 +81,8 @@ export function SettingsModal() {
                   ))}
                 </div>
               </section>
+
+              <Reminders />
 
                   </>
                 )}
@@ -178,6 +181,23 @@ export function SettingsModal() {
         </motion.div>
       )}
     </AnimatePresence>
+  )
+}
+
+/** Settings › General: reminders before events and for timed tasks. */
+function Reminders() {
+  const on = !!useStore((s) => s.settings.remind)
+  const [, redraw] = useState(0)
+  return (
+    <section>
+      <h3>Reminders</h3>
+      <label className="toggle">
+        <input type="checkbox" checked={on} onChange={(e) => { const want = e.target.checked; void import('../lib/reminders').then((m) => m.setReminders(want)).then(() => redraw((n) => n + 1)) }} />
+        <span />
+        Remind me before events and when tasks are due
+      </label>
+      {on && <p className="small muted">{reminderStatus(on)}</p>}
+    </section>
   )
 }
 

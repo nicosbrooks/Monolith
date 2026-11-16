@@ -416,8 +416,8 @@ function EventEditor({ id, onClose, onRetarget }: { id: string; onClose: () => v
     <motion.div className="sheet" initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 40, opacity: 0 }} transition={{ type: 'spring', duration: 0.3, bounce: 0.1 }}>
       <header>
         <span className="dot" style={{ background: COLORS[ev.color] }} />
-        <input autoFocus={!ev.title} className="ev-title" value={ev.title} placeholder="Event title" onChange={(e) => up({ title: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && close()} />
-        <button className="icon-btn" onClick={close}><X size={16} /></button>
+        <input autoFocus={!ev.title} className="ev-title" aria-label="Event title" value={ev.title} placeholder="Event title" onChange={(e) => up({ title: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && close()} />
+        <button className="icon-btn" onClick={close} aria-label="Close" title="Close"><X size={16} /></button>
       </header>
       <label className="toggle">
         <input type="checkbox" checked={!!ev.allDay} onChange={(e) => up(e.target.checked ? { allDay: true, start: startOfDay(ev.start).getTime(), end: addDays(startOfDay(ev.start), 1).getTime() } : { allDay: false, start: addMinutes(startOfDay(ev.start), 9 * 60).getTime(), end: addMinutes(startOfDay(ev.start), 10 * 60).getTime() })} />
@@ -425,11 +425,11 @@ function EventEditor({ id, onClose, onRetarget }: { id: string; onClose: () => v
       </label>
       <div className="field">
         <small>Starts</small>
-        <input type={ev.allDay ? 'date' : 'datetime-local'} value={toLocal(ev.start)} onChange={(e) => { const s = new Date(e.target.value).getTime(); if (!isNaN(s)) up({ start: s, end: s + (ev.end - ev.start) }) }} />
+        <input aria-label="Starts" type={ev.allDay ? 'date' : 'datetime-local'} value={toLocal(ev.start)} onChange={(e) => { const s = new Date(e.target.value).getTime(); if (!isNaN(s)) up({ start: s, end: s + (ev.end - ev.start) }) }} />
       </div>
       <div className="field">
         <small>Ends</small>
-        <input type={ev.allDay ? 'date' : 'datetime-local'} value={toLocal(ev.allDay ? ev.end - 864e5 : ev.end)} onChange={(e) => { const t = new Date(e.target.value).getTime(); if (!isNaN(t)) up({ end: ev.allDay ? t + 864e5 : t }) }} />
+        <input aria-label="Ends" type={ev.allDay ? 'date' : 'datetime-local'} value={toLocal(ev.allDay ? ev.end - 864e5 : ev.end)} onChange={(e) => { const t = new Date(e.target.value).getTime(); if (!isNaN(t)) up({ end: ev.allDay ? t + 864e5 : t }) }} />
       </div>
       <div className="field">
         <small><RepeatIcon size={11} /> Repeat</small>
@@ -447,12 +447,10 @@ function EventEditor({ id, onClose, onRetarget }: { id: string; onClose: () => v
       {ev.repeat && <p className="small muted ev-hint">Changes here apply to every date. Drag one in the calendar to move just that one.</p>}
       <div className="field">
         <small><MapPin size={11} /> Location</small>
-        <input value={ev.location || ''} placeholder="Add location" onChange={(e) => up({ location: e.target.value })} />
+        <input aria-label="Location" value={ev.location || ''} placeholder="Add location" onChange={(e) => up({ location: e.target.value })} />
       </div>
-      <div className="colors">
-        {Object.entries(COLORS).map(([k, c]) => <button key={k} className={ev.color === k ? 'on' : ''} style={{ background: c }} onClick={() => up({ color: k })} />)}
-      </div>
-      <textarea className="ev-notes" placeholder="Notes" value={ev.notes || ''} onChange={(e) => up({ notes: e.target.value })} />
+      <Swatches value={ev.color} onPick={(k) => up({ color: k })} />
+      <textarea className="ev-notes" aria-label="Notes" placeholder="Notes" value={ev.notes || ''} onChange={(e) => up({ notes: e.target.value })} />
       <div className="linked">
         <small className="muted">Linked</small>
         {linked ? (

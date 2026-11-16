@@ -59,3 +59,11 @@ self.addEventListener('fetch', (e) => {
     ),
   )
 })
+
+// A reminder that's clicked brings Monolith to the front (or opens it).
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close()
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => (list[0] ? list[0].focus() : self.clients.openWindow('/'))),
+  )
+})

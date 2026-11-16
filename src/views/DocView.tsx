@@ -2,7 +2,7 @@ import { Listen } from '../components/Listen'
 import { useEffect, useRef, useState } from 'react'
 import type { Editor as TEditor } from '@tiptap/react'
 import { formatDistanceToNow } from 'date-fns'
-import { ArrowDownWideNarrow, CheckSquare, ChevronRight, Download, FilePlus2, FolderInput, MoreHorizontal, Trash2, Upload, Copy, Star, RotateCcw, Folder, Check, CircleAlert, Loader2, GitCommitHorizontal, FileText, SmilePlus } from 'lucide-react'
+import { History, ArrowDownWideNarrow, CheckSquare, ChevronRight, Download, FilePlus2, FolderInput, MoreHorizontal, Trash2, Upload, Copy, Star, RotateCcw, Folder, Check, CircleAlert, Loader2, GitCommitHorizontal, FileText, SmilePlus } from 'lucide-react'
 import { useStore } from '../store'
 import { MobileBack } from '../components/MobileBack'
 import { confirmDialog } from '../components/Overlays'
@@ -13,6 +13,7 @@ import { htmlToText, itemEmoji } from '../lib/util'
 import { createFile, isDirty, kindLabel, resolve, useSync } from '../storage/sync'
 import { SourceIcon } from '../components/StorageSettings'
 import { Connections } from '../components/Connections'
+import { openHistory } from '../lib/history'
 
 // Docs kept as Markdown files elsewhere: no sketches (Markdown can't hold them). A folder also holds the doc's files
 // (assets/ beside it); GitHub and Drive hold text only, so no attachments there yet.
@@ -162,6 +163,7 @@ export function DocView({ item }: { item: Item }) {
                       </label>
                     </>
                   )}
+                  {!isDir && <button onClick={() => (openHistory(item.id), setMore(false))}><History size={14} /> Earlier versions</button>}
                   {!isDir && <button onClick={() => (importMd(), setMore(false))}><Upload size={14} /> Import Markdown…</button>}
                   {!isDir && <button onClick={() => (exportMd(), setMore(false))}><Download size={14} /> Export Markdown</button>}
                   {!isDir && <button onClick={async () => (setMore(false), await navigator.clipboard.writeText(await asMarkdown()), toast('Copied as Markdown'))}><Copy size={14} /> Copy as Markdown</button>}

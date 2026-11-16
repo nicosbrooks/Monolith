@@ -20,6 +20,7 @@ import { startRecording } from './lib/recordNext'
 import { FileViewer } from './components/FileViewer'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { checkVault, useVault } from './lib/vault'
+import { useHistory } from './lib/history'
 
 void checkVault()
 
@@ -38,6 +39,7 @@ const AIPanel = lazy(() => import('./components/AIPanel').then((m) => ({ default
 const CommandPalette = lazy(() => import('./components/CommandPalette').then((m) => ({ default: m.CommandPalette })))
 const SettingsModal = lazy(() => import('./components/SettingsModal').then((m) => ({ default: m.SettingsModal })))
 const LinkDialog = lazy(() => import('./components/LinkDialog').then((m) => ({ default: m.LinkDialog })))
+const HistoryDialog = lazy(() => import('./components/HistoryDialog').then((m) => ({ default: m.HistoryDialog })))
 const ConnectDialog = lazy(() => import('./components/ConnectDialog').then((m) => ({ default: m.ConnectDialog })))
 
 /** True from the first time `on` is true: lets a dialog's code load on first open and stay mounted after. */
@@ -59,6 +61,7 @@ export default function App() {
   const settingsSeen = useOpened(useStore((s) => s.settingsOpen))
   const connectSeen = useOpened(useStore((s) => s.connectOpen))
   const linkSeen = useOpened(useLink((s) => s.open))
+  const historySeen = useOpened(useHistory((s) => !!s.id))
   const [hydrated, setHydrated] = useState(useStore.persist.hasHydrated())
   const section = useStore((s) => s.section)
   const activeId = useStore((s) => s.activeId)
@@ -85,6 +88,8 @@ export default function App() {
     void startAI()
     void import('./lib/fileUpkeep').then((m) => m.startFileUpkeep())
     void import('./lib/safekeeping').then((m) => m.startSafekeeping())
+    void import('./lib/history').then((m) => m.startHistory())
+    void import('./lib/reminders').then((m) => m.startReminders())
     // System 1 (EmbeddingGemma): small, always on; quietly downloads once, then indexes when the browser is idle.
     void import('./ai/system1').then((m) => m.startSystem1())
     // Warm the editor and calendar in the background so the first open is instant.
@@ -200,6 +205,7 @@ export default function App() {
         {settingsSeen && <SettingsModal />}
         {connectSeen && <ConnectDialog />}
         {linkSeen && <LinkDialog />}
+        {historySeen && <HistoryDialog />}
       </Suspense>
       {(settings.setupAt === null || setupOpen !== false) && <Setup />}
       <BackupDialog />
