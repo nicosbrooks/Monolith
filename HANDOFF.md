@@ -653,3 +653,40 @@ Verified on 5210 with screenshots. `npm run check` passes, and so does `npm run 
 - Light mode and phone width were checked only by the a11y run, not by eye.
 - `refineTitle` with a real general model loaded. The cases it covers are messy titles the rules leave behind, and with no model the rules' title is used.
 - iOS is untouched by this pass.
+
+## Linked devices: security, files, the phone's model (Nov 16)
+
+### Security (`src/link/envelope.ts`, `apple/iOS/Link/Envelope.swift`, `relay/src/index.ts`)
+- **Replay and bounce-back.** Every sealed message now carries `f` (a random device id) and `q` (a number that only goes up). A frame with our own id or an old `q` is dropped. Devices from before this still work until their room has once sent stamped frames; after that, unstamped frames are refused.
+- **Keys at rest.** The web keeps each pairing key as a non-extractable `CryptoKey` in IndexedDB; raw keys saved before this are converted at the next start.
+- **Pairing codes expire** after 10 minutes. iOS refuses a `ws://` relay unless it's a local or private address.
+- **Sizes.** Messages under 64 KB are padded to 512-byte steps.
+- **Relay.** It now enforces per-connection limits (600 messages or 96 MB in any 10 s, then close 1008). Calendar fetches check every redirect.
+- What the relay still sees: who's online, roughly how much is sent; it can drop messages.
+
+### Files sync across (`src/link/link.ts`, `FileStore` in `Envelope.swift`)
+- Devices say what they can do in `hi` (`c: ['files', 'model']`). Between devices that both do `files`, pictures and attachments travel once by hash (`want` → `file` pieces of 256 KB, checked against the hash before they're kept) instead of being embedded in every record. Older peers still get embedded pictures.
+- The phone keeps every file it's given (Application Support/files), so a second computer can get it from the phone. iOS shows non-image files as a card with Open.
+
+### The phone's model, from the web (`src/ai/remote.ts`, `phoneModel()` in `llm.ts`, `Linker.answer`)
+- A phone with "Let computers use this phone’s model" on announces `model` and its name. The browser sends `ask` (the conversation, sealed); the phone answers with `tok` (at most every 150 ms) and `done`. Stopping on the web sends `stop`.
+- Settings › Assistant › **Use my phone’s model**: Auto / Always / Never. Auto uses the phone when this browser has no model ready or downloaded.
+- Timeouts: 90 s for the first words (the phone may be loading its model), 60 s between words.
+
+### Efficiency
+- A reconnect no longer sends the phone's whole library twice: a `hi` sent on arrival carries `p: 1`, and the phone only answers a `hi` with a snapshot when it lacks that (right after pairing).
+- Files travel once per device instead of inside every record that uses them.
+
+### Fixes
+- ⌘K: typing the start of a command's name ("add a dev", "settings") puts that command first; Ask is one arrow below.
+- Escape now closes the Your phone dialog.
+
+### Tests
+- `npm run test:link` (in `check`): pairing proof, a swapped key caught, both sides' keys equal, sealing, tampering, wrong key, fresh nonces, non-extractable keys, replay/self/unstamped rules, padding.
+- `tests/e2e/link.spec.ts`: plays the phone against the built app through the preview server's relay: pairs from ⌘K, syncs a note, refuses a replayed frame, fetches a picture by hash and shows it, answers a question with the "phone's model" (header reads "Test Model on Test iPhone"), and checks nothing readable crossed the relay.
+- `relay/test/smoke.mjs`: adds a sealed pairing through the relay and the flood cutoff. Passed against `wrangler dev`.
+- iOS: builds for the simulator. Not run on a device: pairing with a real phone, file transfer to iOS and answering with MLX/Apple models are untested end to end.
+
+### Follow-ups
+- Snapshots on reconnect still send every record. Sending only what changed needs a per-record change counter on both sides (updatedAt alone misses edits relayed from a third device).
+- Files the web holds but the phone asks for are served; files the phone holds from computer A are served to computer B only when B asks for them while the phone is connected.

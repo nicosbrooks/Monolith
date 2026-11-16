@@ -13,6 +13,13 @@ export const openLink = () => useLink.setState({ open: true })
 export function LinkDialog() {
   const open = useLink((s) => s.open)
   const close = () => (cancelPairing(), useLink.setState({ open: false }))
+  // Escape closes it, like every other dialog.
+  useEffect(() => {
+    if (!open) return
+    const k = (e: KeyboardEvent) => e.key === 'Escape' && !e.defaultPrevented && close()
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [open]) // eslint-disable-line
   return (
     <AnimatePresence>
       {open && (

@@ -10,6 +10,7 @@ struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var scanning = false
     @State private var syncMode = false
+    @AppStorage("shareModel") private var shareModel = true
 
     var body: some View {
         NavigationStack {
@@ -36,6 +37,12 @@ struct SettingsSheet: View {
                 }
 
                 if !link.pairings.isEmpty {
+                    Section {
+                        Toggle("Let computers use this phone’s model", isOn: $shareModel)
+                            .onChange(of: shareModel) { link.announce() }
+                    } footer: {
+                        Text("A linked computer can ask \(Assistant.isAvailable ? Assistant.modelName : "the assistant") here instead of downloading its own. Questions and answers stay encrypted between your devices. Works while Monolith is open on this phone.")
+                    }
                     Section {
                         Button { syncMode = true } label: { Label("Sync mode", systemImage: "moon") }
                     } footer: {
@@ -105,6 +112,8 @@ private struct AssistantModelSection: View {
         } footer: {
             Text("Models download the first time you use them, then work offline.")
         }
+        // Linked computers that use this phone's model are told which one it is now.
+        .onChange(of: choice) { Linker.shared.announce() }
     }
 
     private func prepare(_ id: String) { Task { _ = try? await models.container(for: id) } }

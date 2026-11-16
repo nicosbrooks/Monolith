@@ -10,6 +10,7 @@ import { toast } from './Toast'
 import { openLink } from './LinkDialog'
 import { useLink } from '../link/link'
 import { useSystem1 } from '../ai/system1'
+import { useRemote } from '../ai/remote'
 import { reminderStatus } from '../lib/reminders'
 import { deviceSummary, setIntegration, useDevice } from '../lib/integrations'
 
@@ -95,6 +96,7 @@ export function SettingsModal() {
                   Suggest events, tasks and ideas while I work
                 </label>
                 <System1Settings />
+                <PhoneModelSettings />
                 <div className="tiers">
                   {(['fast', 'default', 'enhanced'] as const).map((t) => {
                     const m = modelForTier(t)
@@ -205,6 +207,41 @@ function Reminders() {
       </label>
       {on && <p className="small muted">{reminderStatus(on)}</p>}
     </section>
+  )
+}
+
+/**
+ * Settings › Assistant › Use my phone's model. Only shown with a phone linked. A phone that runs a model can answer for
+ * this browser, sealed end to end like everything else that goes between them: on a slower computer, or before this
+ * browser has downloaded a model, that's quicker than waiting for a download.
+ */
+function PhoneModelSettings() {
+  const pairings = useLink((s) => s.pairings)
+  const remote = useRemote((s) => s.remote)
+  const pref = useStore((s) => s.settings.phoneModel ?? 'auto')
+  const set = useStore((s) => s.setSettings)
+  if (!pairings.length) return null
+  const status = remote ? `${remote.device} is reachable and runs ${remote.model}.` : 'Open Monolith on your phone to use its model. Phones that run a model show it here.'
+  return (
+    <>
+      <div className="set-row">
+        <span>Use my phone’s model</span>
+        <div className="seg">
+          {(
+            [
+              ['auto', 'Auto'],
+              ['always', 'Always'],
+              ['never', 'Never'],
+            ] as const
+          ).map(([k, label]) => (
+            <button key={k} title={k === 'auto' ? 'When this browser has no model ready without a download' : k === 'always' ? 'Whenever your phone is reachable' : 'Only this browser’s model'} className={pref === k ? 'on' : ''} onClick={() => set({ phoneModel: k })}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="small muted">{status} Questions and answers go between your devices encrypted end to end.</p>
+    </>
   )
 }
 

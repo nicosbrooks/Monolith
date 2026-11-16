@@ -233,6 +233,21 @@ export function CommandPalette() {
     </Command.Item>
   )
 
+  const cmdGroup = show('commands') && cmdShown.length > 0 && (
+                  <Command.Group heading={view === 'commands' || ql ? 'Commands' : 'Create'}>
+                    {cmdShown.map((a) => (
+                      <Command.Item key={a.l} value={`cmd:${a.l}`} onSelect={run(a.f)}>
+                        <a.i size={16} />
+                        <span>{a.l}</span>
+                        {view === 'commands' && <small className="qa-meta">{a.g}</small>}
+                        {a.k && <kbd>{a.k}</kbd>}
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+  )
+  // Typing a command's name ("settings", "add a dev…") puts it first, as editors do; Ask is one arrow away.
+  const named = view === 'all' && ql.length >= 3 && cmdShown.some((c) => c.l.toLowerCase().startsWith(ql))
+
   // What ⌘↵ does with the highlighted row, shown in the footer.
   const selTask = selected.startsWith('task:') ? ws.tasks.find((t) => `task:${t.itemId}:${t.n}` === selected) : undefined
   const alt = selTask ? 'check off' : query ? 'ask the assistant' : null
@@ -278,6 +293,7 @@ export function CommandPalette() {
                 ))}
               </div>
               <Command.List>
+                {named && cmdGroup}
                 {query && view === 'all' && (
                   <Command.Group heading="Do">
                     {kind === 'event' && ev?.when && (
@@ -320,18 +336,7 @@ export function CommandPalette() {
                   </Command.Group>
                 )}
                 {show('recordings') && recHits.length > 0 && <Command.Group heading="Recordings">{recHits.map((i) => docRow(i))}</Command.Group>}
-                {show('commands') && cmdShown.length > 0 && (
-                  <Command.Group heading={view === 'commands' || ql ? 'Commands' : 'Create'}>
-                    {cmdShown.map((a) => (
-                      <Command.Item key={a.l} value={`cmd:${a.l}`} onSelect={run(a.f)}>
-                        <a.i size={16} />
-                        <span>{a.l}</span>
-                        {view === 'commands' && <small className="qa-meta">{a.g}</small>}
-                        {a.k && <kbd>{a.k}</kbd>}
-                      </Command.Item>
-                    ))}
-                  </Command.Group>
-                )}
+                {!named && cmdGroup}
                 {nothing && !(query && view === 'all') && <div className="qa-empty">{query ? `Nothing matches “${query}”` : 'Nothing here yet'}</div>}
               </Command.List>
               <footer className="qa-foot" aria-hidden="true">

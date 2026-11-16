@@ -108,6 +108,8 @@ export interface Settings {
   /** How long the general model (System 2) stays in memory. Unset means auto: learned from use, loaded ahead when
    *  System 1 sees a question coming, released when the tab is hidden. */
   keepLoaded?: 'auto' | '2m' | '10m' | 'always'
+  /** Settings › Assistant › Use my phone's model, when a linked phone offers one. Unset means auto (llm.ts phoneModel). */
+  phoneModel?: 'auto' | 'always' | 'never'
 }
 
 interface State {

@@ -16,6 +16,7 @@ import { useConvo, ask, openThread, reset, retry, say, stop, doCard, type Pendin
 import { describe, perform, verbs, visible, type Act } from '../ai/act'
 import { getActiveEditor } from '../ai/actions'
 import { MODELS, ONNX_MODELS, useAI } from '../ai/llm'
+import { useRemote } from '../ai/remote'
 import type { Item } from '../types'
 import type { Understood } from '../ai/understand'
 
@@ -316,7 +317,8 @@ function Thread({ page }: { page?: Item }) {
     const el = scroll.current
     if (el && pinned.current) el.scrollTop = el.scrollHeight
   }, [msgs, meta])
-  const model = ai.status === 'ready' ? [...MODELS, ...ONNX_MODELS].find((m) => m.id === ai.loadedModel)?.name : ai.status === 'loading' ? `Getting ready · ${Math.round(Math.max(ai.progress, 0.02) * 100)}%` : null
+  const phone = useRemote((s) => (s.lastUsed ? s.remote : null))
+  const model = phone ? `${phone.model} on ${phone.device}` : ai.status === 'ready' ? [...MODELS, ...ONNX_MODELS].find((m) => m.id === ai.loadedModel)?.name : ai.status === 'loading' ? `Getting ready · ${Math.round(Math.max(ai.progress, 0.02) * 100)}%` : null
 
   return (
     <motion.section

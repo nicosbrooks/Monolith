@@ -1,7 +1,7 @@
 import { Image } from '@tiptap/extension-image'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import { Download, Eye, PenLine, Trash2 } from 'lucide-react'
-import { fileMeta, fileUrl, formatSize, hashOf, isImageType, refOf } from '../../lib/files'
+import { FILE_ARRIVED, fileMeta, fileUrl, formatSize, hashOf, isImageType, refOf } from '../../lib/files'
 import { openMenu, type MenuItem } from '../Overlays'
 import { openViewer, viewable } from '../FileViewer'
 
@@ -150,9 +150,15 @@ export const FileImage = Image.extend({
         else card(alt || meta.name, meta.type, meta.size)
       }
       void render(node)
+      // A file still on its way from a linked device: show it as soon as it's stored.
+      const arrived = (e: Event) => {
+        if ((e as CustomEvent<string>).detail === hashOf(String(current.attrs.src ?? '')) && !meta) void render(current)
+      }
+      window.addEventListener(FILE_ARRIVED, arrived)
 
       return {
         dom,
+        destroy: () => window.removeEventListener(FILE_ARRIVED, arrived),
         update: (n) => {
           if (n.type !== node.type) return false
           const changed = n.attrs.src !== current.attrs.src || n.attrs.alt !== current.attrs.alt

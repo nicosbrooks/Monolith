@@ -268,6 +268,15 @@ Under a doc's or recording's text, only when there is something to show, in this
 ### Settings (`.modal.settings`, `SettingsModal.tsx`)
 Sections on the left (General, Assistant, Storage and files, Devices, About), one shown at a time on the right, so nothing is found by scrolling. The dialog keeps one size as sections change. The title on the right is the section's name; a section never repeats its own name as a heading. On phones the sections become a row of pills across the top.
 
+### A linked phone's model (Settings › Assistant, `PhoneModelSettings`)
+- Shown only when a phone is linked. One row, "Use my phone’s model", with a segmented control **Auto / Always / Never**, and one line under it ("iPhone is reachable and runs Gemma 3n.", or how to make it reachable), then that questions and answers are encrypted end to end.
+- **Auto** uses the phone when this browser has no model ready, loading or downloaded, so a slow computer never has to download one. **Always** prefers the phone whenever it's reachable. **Never** keeps everything on this computer.
+- When the phone answered, the conversation header says so: "Gemma 3n on iPhone". No other badge or toast.
+- On the iPhone: the linked-computers settings have one switch, "Let computers use this phone’s model" (on by default). Its footer names the model, says answers stay encrypted between your devices, and that it works while Monolith is open.
+
+### Files from another device
+- A picture or file in a synced doc that hasn't arrived yet shows as a quiet placeholder ("Arrives when your computer is connected" on iOS), never a broken image. It fills in by itself when the file comes.
+
 ### Repeating events (`src/lib/repeat.ts`, `EventEditor` in `CalendarView.tsx`)
 - The editor has a **Repeat** choice: Never, Every day, Weekdays, Every week, Every 2 weeks, Every month, Every year, and when it repeats an optional **Until** date. One quiet line under it says how changes apply.
 - **The editor changes every date; the grid changes one.** Editing a field changes the whole series (a new time moves every date by the same amount). Dragging or resizing one in the grid moves only that date and says "Moved this one. The others stay." with Undo. No "this or all?" dialog.

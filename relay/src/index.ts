@@ -18,6 +18,10 @@ import { DurableObject } from 'cloudflare:workers'
 
 const MAX_PEERS = 8
 const MAX_FRAME = 8 * 1024 * 1024
+/** Per device, per 10 seconds: plenty for a large file going across (256 KB pieces), not enough to flood a room. */
+const WINDOW_MS = 10_000
+const MAX_FRAMES = 600
+const MAX_BYTES = 96 * 1024 * 1024
 const ROOM = /^[A-Za-z0-9_-]{16,64}$/
 
 interface Env {
@@ -67,7 +71,20 @@ async function calendar(req: Request, _url: URL, env: Env): Promise<Response> {
     return fail(400, 'Use an https:// or webcal:// calendar link.')
   }
   if (target.protocol !== 'https:' || PRIVATE.test(target.hostname)) return fail(400, 'Use an https:// or webcal:// calendar link.')
-  const res = await fetch(target, { headers: { accept: 'text/calendar, */*' } }).catch(() => null)
+  // Redirects are followed by hand, so every address on the way gets the same check as the first.
+  let res: Response | null = null
+  for (let hop = 0; hop < 4; hop++) {
+    res = await fetch(target, { headers: { accept: 'text/calendar, */*' }, redirect: 'manual' }).catch(() => null)
+    const next = res && res.status >= 300 && res.status < 400 ? res.headers.get('location') : null
+    if (!next) break
+    try {
+      target = new URL(next, target)
+    } catch {
+      return fail(502, 'That calendar couldn’t be reached.')
+    }
+    if (target.protocol !== 'https:' || PRIVATE.test(target.hostname)) return fail(400, 'That calendar link leads somewhere that isn’t allowed.')
+    res = null
+  }
   if (!res || !res.ok) return fail(502, 'That calendar couldn’t be reached.')
   const text = await res.text()
   if (text.length > 5 * 1024 * 1024) return fail(413, 'That calendar is too large.')
@@ -98,10 +115,20 @@ export class Room extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client })
   }
 
+  /** Frames and bytes each socket sent in the current window. Lost if the room hibernates, which only resets them. */
+  private use = new Map<WebSocket, { since: number; frames: number; bytes: number }>()
+
   webSocketMessage(ws: WebSocket, msg: string | ArrayBuffer) {
     if (msg === 'ping') return ws.send('pong')
     const size = typeof msg === 'string' ? msg.length : msg.byteLength
     if (size > MAX_FRAME) return ws.close(1009, 'too big')
+    const now = Date.now()
+    let u = this.use.get(ws)
+    if (!u || now - u.since > WINDOW_MS) this.use.set(ws, (u = { since: now, frames: 0, bytes: 0 }))
+    u.frames++
+    u.bytes += size
+    // A device far over the limit is cut off; it reconnects after a pause and carries on from there.
+    if (u.frames > MAX_FRAMES || u.bytes > MAX_BYTES) return ws.close(1008, 'too fast')
     for (const peer of this.ctx.getWebSockets()) {
       if (peer === ws) continue
       try {
@@ -113,6 +140,7 @@ export class Room extends DurableObject<Env> {
   }
 
   webSocketClose(ws: WebSocket, code: number) {
+    this.use.delete(ws)
     try {
       // 1005 and 1006 mean "no code was sent" and can't be sent back.
       ws.close(code === 1005 || code === 1006 ? 1000 : code)
@@ -123,6 +151,7 @@ export class Room extends DurableObject<Env> {
   }
 
   webSocketError(ws: WebSocket) {
+    this.use.delete(ws)
     this.presence(ws)
   }
 

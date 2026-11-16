@@ -77,6 +77,16 @@ Logs also show in the Cloudflare dashboard under Workers → monolith-relay → 
   everyone gets `{"relay":"peers","n":<count>}`. `ping` gets `pong`.
 - `https://<relay>/health` returns `{ "ok": true }` for uptime checks.
 - Each room is one Durable Object, so a pair's connections meet in one place wherever each device is. Limits: 8
-  devices per room, 8 MB per message.
+  devices per room, 8 MB per message, and per connection 600 messages or 96 MB in any 10 seconds. A device over that
+  is disconnected with close code 1008 ("too fast") and reconnects on its own; normal sync, file transfers and
+  streamed answers stay well under it.
+- `/ics` (calendar subscriptions) follows at most 4 redirects, and checks every hop is https and not a private address.
+
+What the relay can and can't see: every message between devices is sealed (AES-256-GCM, with a key agreed through the
+pairing QR code that never reaches the relay). Inside the seal each message carries the sender's random device id
+and a number that only goes up, so the relay can't replay old messages or bounce a device's own messages back, and
+small messages are padded to 512-byte steps so their size says little. The relay still sees when devices are online,
+roughly how much they send, and can drop messages. `npm run smoke` (see below) checks a pairing through a real relay
+and that nothing readable crosses it.
 
 The dev server has the same protocol built in (`../server/relay.ts`), used whenever `VITE_RELAY_URL` isn't set.

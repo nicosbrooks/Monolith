@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Combine
 
 /// Inline Markdown as formatted text, for places that only show it.
 enum MD {
@@ -226,20 +227,43 @@ struct MarkdownImage: View {
         return String(source[open.upperBound..<close.lowerBound])
     }
 
+    /// Bumped when a file arrives from a computer, so a missing one shows as soon as it's here.
+    @State private var arrivals = 0
+    private var hash: String? { src.hasPrefix("monolith-file:") ? String(src.dropFirst("monolith-file:".count)) : nil }
+
+    /// A stored picture, read once and kept in the cache.
+    private func stored(_ h: String) -> UIImage? {
+        let key = "file-\(h)" as NSString
+        if let hit = Self.cache.object(forKey: key) { return hit }
+        guard let m = FileStore.meta(h), m.type.hasPrefix("image/"), let d = FileStore.data(h), let img = UIImage(data: d) else { return nil }
+        Self.cache.setObject(img, forKey: key)
+        return img
+    }
+
+    @ViewBuilder private func fileCard(_ h: String) -> some View {
+        let meta = FileStore.meta(h)
+        HStack(spacing: 10) {
+            Image(systemName: "doc").foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(meta?.name ?? (alt.isEmpty ? "File" : alt)).lineLimit(1)
+                Text(meta.map { ByteCountFormatter.string(fromByteCount: Int64($0.size), countStyle: .file) } ?? "Arrives when your computer is connected")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            if let url = FileStore.url(h) {
+                ShareLink(item: url) { Text("Open") }.buttonStyle(.bordered).controlSize(.small)
+            }
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 12))
+    }
+
     var body: some View {
         Group {
-            if src.hasPrefix("monolith-file:") {
-                // An attachment kept on the computer (pictures arrive embedded): show what it is, not a broken image.
-                HStack(spacing: 10) {
-                    Image(systemName: "doc").foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(alt.isEmpty ? "File" : alt).lineLimit(1)
-                        Text("Open it on your computer").font(.footnote).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(12)
-                .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 12))
+            if let h = hash {
+                // Files are kept by hash, as on the computer. Pictures show; anything else is a card to open or share.
+                let _ = arrivals
+                if let img = stored(h) { Image(uiImage: img).resizable().scaledToFit() } else { fileCard(h) }
             } else if let img = embedded {
                 Image(uiImage: img).resizable().scaledToFit()
             } else {
@@ -251,5 +275,8 @@ struct MarkdownImage: View {
         }
         .clipShape(.rect(cornerRadius: 10))
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onReceive(NotificationCenter.default.publisher(for: FileStore.arrived)) { n in
+            if let h = n.object as? String, h == hash { arrivals += 1 }
+        }
     }
 }

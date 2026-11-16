@@ -33,6 +33,7 @@
 		B775A379EEB9FFBBCE0EB702 /* QuickAdd.swift in Sources */ = {isa = PBXBuildFile; fileRef = B16543669E4058D71BCD4002 /* QuickAdd.swift */; };
 		B7A94B4661AA4A01B1385986 /* PhoneLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCF2B2B96F84B50B4753D0E7 /* PhoneLink.swift */; };
 		BD0AFD541213651A5EB2B464 /* WatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688F4EBE0DC85A3F469DE168 /* WatchApp.swift */; };
+		C378D4D5BC7402B7C5115562 /* Envelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8053DC040E829DD335E2F85E /* Envelope.swift */; };
 		C4EAA01D97E024DA817D0624 /* MonolithApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 620001F6D2FC06E4372CB8F6 /* MonolithApp.swift */; };
 		C95FC5B5EEB4EF924F1C0303 /* Feedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7120C08120D7582975221B91 /* Feedback.swift */; };
 		CB554E3931446B6077351DD6 /* Link.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F47B2F02A3B9EE6D5B0E9A9 /* Link.swift */; };
@@ -84,6 +85,7 @@
 		690BBDFCBAFE3A94CEB88D90 /* Rich.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rich.swift; sourceTree = "<group>"; };
 		6DE43F2652211418925A613C /* DeviceCalendars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceCalendars.swift; sourceTree = "<group>"; };
 		7120C08120D7582975221B91 /* Feedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Feedback.swift; sourceTree = "<group>"; };
+		8053DC040E829DD335E2F85E /* Envelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Envelope.swift; sourceTree = "<group>"; };
 		867DCD6E3975781CD7E2027D /* LinkViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkViews.swift; sourceTree = "<group>"; };
 		8F47B2F02A3B9EE6D5B0E9A9 /* Link.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Link.swift; sourceTree = "<group>"; };
 		92A3845769F8470D37A2AD5C /* DocViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocViews.swift; sourceTree = "<group>"; };
@@ -147,6 +149,7 @@
 		5947050114747272CEBE62AC /* Link */ = {
 			isa = PBXGroup;
 			children = (
+				8053DC040E829DD335E2F85E /* Envelope.swift */,
 				EB9F91936797DDAC312193CC /* LinkCrypto.swift */,
 				F7503D1A5C6B07543D2A0136 /* Linker.swift */,
 				867DCD6E3975781CD7E2027D /* LinkViews.swift */,
@@ -331,6 +334,7 @@
 				1C16C914F08CB1E21E10B678 /* CalendarScreen.swift in Sources */,
 				FD3E69DE780103393FE6D95A /* DeviceCalendars.swift in Sources */,
 				755F6DABCB9537A377D7898B /* DocViews.swift in Sources */,
+				C378D4D5BC7402B7C5115562 /* Envelope.swift in Sources */,
 				C95FC5B5EEB4EF924F1C0303 /* Feedback.swift in Sources */,
 				1E64B88A3D7AFC9C61331E02 /* Integrations.swift in Sources */,
 				F1B9F572AF54F4F32752D22B /* Intelligence.swift in Sources */,

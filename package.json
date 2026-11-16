@@ -15,9 +15,10 @@
     "test:dates": "node scripts/test-dates.ts",
     "test:reuse": "node scripts/test-reuse.ts",
     "test:requests": "node scripts/test-requests.ts",
+    "test:link": "node scripts/test-link.ts",
     "test:e2e": "playwright test --trace off",
-    "test": "npm run test:dates && npm run test:requests && npm run test:reuse && npm run test:e2e",
-    "check": "tsc -b && oxlint && npm run test:dates && npm run test:requests && npm run test:reuse",
+    "test": "npm run test:dates && npm run test:requests && npm run test:reuse && npm run test:link && npm run test:e2e",
+    "check": "tsc -b && oxlint && npm run test:dates && npm run test:requests && npm run test:reuse && npm run test:link",
     "budget": "node scripts/bundle-budget.mjs"
   },
   "dependencies": {

@@ -6,6 +6,7 @@ import { cachedModel, modelFileName, removeModel } from './litert-cache'
 import { partial } from './resumable'
 import { fit, tokensOf, type Msg } from './prompt'
 import { turnKeys } from './reuse'
+import { useRemote, type RemoteModel } from './remote'
 
 export type Tier = 'fast' | 'default' | 'enhanced' | 'more'
 export interface ModelInfo {
@@ -260,7 +261,21 @@ export async function refreshCache() {
 }
 
 /** Whether the assistant can answer right now. */
-export const isReady = () => useAI.getState().status === 'ready'
+/**
+ * A linked phone answering for this browser (Settings › Assistant › Use my phone's model). Automatic: when this browser
+ * has no model it can start without a download, which is when the phone saves a long download on a slower computer.
+ * Always: whenever the phone is reachable. Never: this browser only.
+ */
+export function phoneModel(): RemoteModel | null {
+  const r = useRemote.getState().remote
+  const pref = useStore.getState().settings.phoneModel ?? 'auto'
+  if (!r || pref === 'never') return null
+  if (pref === 'always') return r
+  const ai = useAI.getState()
+  return ai.status === 'ready' || ai.status === 'loading' || ai.cached[resolvedModel()] ? null : r
+}
+
+export const isReady = () => useAI.getState().status === 'ready' || !!phoneModel()
 
 /** What someone picked in Settings. Picking is all it takes; this gets it running. */
 export async function chooseModel(id: string) {
@@ -308,6 +323,7 @@ export async function startAI() {
 /** Make sure something can answer, downloading the in-browser model once if nothing else is there. */
 export async function ensureAI() {
   if (isReady()) return true
+  if (phoneModel()) return true
   await loadModel()
   scheduleRelease()
   return isReady()
@@ -619,9 +635,13 @@ type ChatOptions = {
 
 /** Stream a chat completion from the model running in this browser. Returns the full text. */
 export async function chat(messages: Msg[] | ((window: number, reserve: number) => Msg[]), onToken?: (full: string) => void, opts: ChatOptions = {}): Promise<string> {
-  useAI.setState({ busy: true })
   const reserve = opts.maxTokens ?? 1024
   const prepare = (window: number) => fit(typeof messages === 'function' ? messages(window, reserve) : messages, window, reserve)
+  const phone = phoneModel()
+  useRemote.setState({ lastUsed: !!phone })
+  // The phone's models have small windows too; it trims what's left the same way it trims its own questions.
+  if (phone) return phone.ask(prepare(4096), (full) => onToken?.(clean(full)), opts).then(clean)
+  useAI.setState({ busy: true })
   try {
     try {
       return await generate(prepare(windowOf()), onToken, opts)

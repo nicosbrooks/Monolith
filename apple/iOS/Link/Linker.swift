@@ -33,7 +33,16 @@ struct PairRequest: Identifiable, Hashable {
         self.room = room
         self.webPub = pub
         self.secret = secret
-        self.relay = relay.replacingOccurrences(of: "^http", with: "ws", options: .regularExpression)
+        let ws = relay.replacingOccurrences(of: "^http", with: "ws", options: .regularExpression)
+        // Frames are sealed either way, but an unencrypted connection would show who talks to whom, and when, to
+        // anyone on the network. Only a relay on this network (a computer running the dev server) may use one.
+        if ws.hasPrefix("ws://") {
+            let host = URL(string: ws)?.host() ?? ""
+            let local = host == "localhost" || host.hasSuffix(".local") || host.hasPrefix("10.") || host.hasPrefix("192.168.") || host.hasPrefix("127.")
+                || (host.hasPrefix("172.") && (16...31).contains(Int(host.split(separator: ".").dropFirst().first ?? "") ?? 0))
+            guard local else { return nil }
+        }
+        self.relay = ws
         self.name = String((v("n") ?? "Computer").replacingOccurrences(of: "+", with: " ").prefix(60))
     }
 }
@@ -60,10 +69,42 @@ struct Rec: Codable {
     var color: String?
 }
 
+/// One turn of a conversation a computer asks this phone's model to answer.
+struct Turn: Codable { var role: String; var content: String }
+
+/// What devices say to each other, inside the sealed box. Same shape as `Msg` in src/link/link.ts.
+///   hi · n name, c what it can do ("files", "model"), m the model it runs
+///   snap / put · recs        bye
+///   want · hs file hashes    file · h hash, nm name, ty type, sz size, i piece, of pieces, d bytes (b64url)
+///   ask · id, msgs, max, temp    tok / done · id, full (the answer so far), err    stop · id
+/// Every message also carries f and q (Envelope.swift), and small ones `_` padding.
 private struct Msg: Codable {
-    var t: String // hi · snap · put · bye
+    var t: String
     var n: String?
+    var c: [String]?
+    var m: String?
     var recs: [Rec]?
+    var hs: [String]?
+    var h: String?
+    var nm: String?
+    var ty: String?
+    var sz: Int?
+    var i: Int?
+    var of: Int?
+    var d: String?
+    var id: String?
+    var msgs: [Turn]?
+    var max: Int?
+    var temp: Double?
+    var full: String?
+    var err: String?
+    var f: String?
+    var q: Double?
+    var pad: String?
+    /// On a hi: sent because the sender saw this device arrive, and it has already sent its snapshot.
+    var p: Int?
+
+    enum CodingKeys: String, CodingKey { case t, n, c, m, p, recs, hs, h, nm, ty, sz, i, of, d, id, msgs, max, temp, full, err, f, q, pad = "_" }
 }
 
 nonisolated extension Date {
@@ -104,6 +145,38 @@ final class Linker {
 
     private var conns: [String: Conn] = [:]
     private var ctx: ModelContext?
+
+    /// This phone's id in every frame it sends (Envelope.swift), and the last q it used.
+    private let me: String = {
+        if let id = UserDefaults.standard.string(forKey: "link.deviceID") { return id }
+        var bytes = [UInt8](repeating: 0, count: 12)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        let id = B64U.encode(Data(bytes))
+        UserDefaults.standard.set(id, forKey: "link.deviceID")
+        return id
+    }()
+    private var seq: Double = 0
+    /// Per room: the highest q taken from each sender, and whether that room's devices stamp their frames.
+    private struct Seen: Codable { var from: [String: Double] = [:]; var strict = false }
+    private var seen: [String: Seen] = [:]
+    private var seenDirty = false
+    /// What the computer in each room said it can do.
+    private var caps: [String: [String]] = [:]
+    /// Files arriving in pieces, and files already asked for (so they aren't asked for twice at once).
+    private var incoming: [String: (parts: [Int: Data], of: Int, name: String, type: String, size: Int, at: Date)] = [:]
+    private var asked: [String: Date] = [:]
+    /// Questions a computer asked this phone's model, still being answered.
+    private var answering: [String: Task<Void, Never>] = [:]
+
+    /// Settings › Linked computers › Let computers use this phone's model. On unless turned off.
+    static var sharesModel: Bool { UserDefaults.standard.object(forKey: "shareModel") as? Bool ?? true }
+    /// What this phone can do for a computer, sent in every hi.
+    private var hello: Msg {
+        var c = ["files"]
+        let model = Self.sharesModel && Assistant.isAvailable
+        if model { c.append("model") }
+        return Msg(t: "hi", n: Self.deviceName, c: c, m: model ? Assistant.modelName : nil)
+    }
     private var timer: Timer?
     private var ticks = 0
 
@@ -131,6 +204,7 @@ final class Linker {
         guard ctx == nil else { return }
         ctx = context
         if let d = LinkKeychain.load(), let ps = try? JSONDecoder().decode([Pairing].self, from: d) { pairings = ps }
+        if let d = UserDefaults.standard.data(forKey: "link.seen"), let s = try? JSONDecoder().decode([String: Seen].self, from: d) { seen = s }
         loadMemory()
         scan()
         pairings.forEach(connect)
@@ -143,6 +217,9 @@ final class Linker {
     private func tick() {
         ticks += 1
         scan()
+        if seenDirty, let d = try? JSONEncoder().encode(seen) { UserDefaults.standard.set(d, forKey: "link.seen"); seenDirty = false }
+        // Pieces of files that stopped coming are dropped.
+        incoming = incoming.filter { Date.now.timeIntervalSince($0.value.at) < 120 }
         // Relays and mobile networks drop sockets that stay quiet, and a dead one can look open for minutes.
         if ticks % 12 == 0 { ping() }
     }
@@ -211,25 +288,138 @@ final class Linker {
         guard let data = text.data(using: .utf8), let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         if obj["relay"] as? String == "peers", let n = obj["n"] as? Int {
             online[room] = max(0, n - 1)
-            if n > 1 { send(room, "snap", snapshot()) }
+            if n > 1 {
+                send(room, hello)
+                send(room, "snap", snapshot())
+            }
             return
         }
         guard let box = obj["c"] as? String, let key = conns[room]?.key,
               let plain = try? LinkCrypto.open(box, key: key),
               let msg = try? JSONDecoder().decode(Msg.self, from: plain) else { return } // not for us, or tampered with
+        var s = seen[room] ?? Seen()
+        guard Envelope.admit(&s.from, me: me, f: msg.f, q: msg.q, strict: s.strict) == .ok else { return }
+        if msg.f != nil { s.strict = true; seenDirty = true }
+        seen[room] = s
         switch msg.t {
         case "hi":
             if let n = msg.n { rename(room, n) }
+            caps[room] = msg.c ?? []
             if request?.room == room { pairState = .linked }
-            send(room, "snap", snapshot())
-        case "snap", "put": apply(msg.recs ?? [])
+            // A hi sent on arrival crossed ours, and both sides already sent their snapshots: don't send it twice.
+            // One sent right after pairing (no p) came before this phone could be read, so it gets one now.
+            if msg.p == nil {
+                send(room, hello)
+                send(room, "snap", snapshot())
+            }
+        case "snap", "put":
+            let recs = msg.recs ?? []
+            apply(recs)
+            fetchMissing(room, recs)
         case "bye": remove(room)
+        case "want": serve(room, msg.hs ?? [])
+        case "file": take(msg)
+        case "ask": answer(room, msg)
+        case "stop": if let id = msg.id { answering.removeValue(forKey: id)?.cancel() }
         default: break
         }
     }
 
+    /// Tell the computers again what this phone can do (after the model or the sharing setting changed).
+    func announce() { for p in pairings where (online[p.room] ?? 0) > 0 { send(p.room, hello) } }
+
+    // MARK: Files
+
+    private func fetchMissing(_ room: String, _ recs: [Rec]) {
+        guard caps[room]?.contains("files") == true else { return }
+        var want: [String] = []
+        for r in recs where r.deletedAt == nil {
+            for h in FileStore.refs(in: r.body ?? "") where !want.contains(h) && FileStore.meta(h) == nil {
+                if let t = asked[h], Date.now.timeIntervalSince(t) < 60 { continue }
+                asked[h] = .now
+                want.append(h)
+            }
+        }
+        stride(from: 0, to: want.count, by: 100).forEach { send(room, Msg(t: "want", hs: Array(want[$0..<min($0 + 100, want.count)]))) }
+    }
+
+    private func serve(_ room: String, _ hashes: [String]) {
+        let piece = 256 * 1024
+        Task { @MainActor in
+            for h in hashes.prefix(500) where FileStore.isHash(h) {
+                guard let m = FileStore.meta(h), let data = FileStore.data(h) else { continue }
+                let of = max(1, (data.count + piece - 1) / piece)
+                for i in 0..<of {
+                    guard conns[room] != nil else { return }
+                    let part = data.subdata(in: (i * piece)..<min((i + 1) * piece, data.count))
+                    send(room, Msg(t: "file", h: h, nm: m.name, ty: m.type, sz: data.count, i: i, of: of, d: B64U.encode(part)))
+                    // Let the socket drain between pieces rather than queueing a whole large file in memory.
+                    try? await Task.sleep(for: .milliseconds(15))
+                }
+            }
+        }
+    }
+
+    private func take(_ m: Msg) {
+        guard let h = m.h, FileStore.isHash(h), let of = m.of, let i = m.i, let size = m.sz, let d = m.d.flatMap(B64U.decode),
+              of >= 1, i >= 0, i < of, size <= FileStore.limit, of <= FileStore.limit / (256 * 1024) + 1, FileStore.meta(h) == nil else { return }
+        var x = incoming[h] ?? (parts: [:], of: of, name: m.nm ?? "File", type: m.ty ?? "application/octet-stream", size: size, at: .now)
+        guard x.of == of, x.parts[i] == nil else { return }
+        x.parts[i] = d
+        x.at = .now
+        guard x.parts.count == of else { incoming[h] = x; return }
+        incoming[h] = nil
+        var all = Data(capacity: size)
+        for k in 0..<of { guard let p = x.parts[k] else { return }; all.append(p) }
+        // Checked against its hash before it's kept: a file can't be swapped for another on the way.
+        guard all.count == size, FileStore.put(all, hash: h, name: x.name, type: x.type) else { return }
+        asked[h] = nil
+    }
+
+    // MARK: The model, for computers
+
+    /// A computer asked this phone's model a question. One at a time; the answer goes back as it's written.
+    private func answer(_ room: String, _ m: Msg) {
+        guard let id = m.id, let turns = m.msgs, !turns.isEmpty else { return }
+        guard Self.sharesModel, Assistant.isAvailable else {
+            return send(room, Msg(t: "done", id: id, full: "", err: "Your phone isn’t sharing its model. Turn it on in Monolith’s Settings on your phone."))
+        }
+        guard answering.isEmpty else {
+            return send(room, Msg(t: "done", id: id, full: "", err: "Your phone is answering another question. Try again in a moment."))
+        }
+        let system = turns.filter { $0.role == "system" }.map(\.content).joined(separator: "\n\n")
+        let talk = turns.filter { $0.role != "system" }
+        // One question goes as it is; a conversation is written out, newest last, for the model to continue.
+        let prompt = talk.count == 1 ? talk[0].content
+            : talk.map { ($0.role == "assistant" ? "Assistant: " : "User: ") + $0.content }.joined(separator: "\n\n") + "\n\nAssistant:"
+        answering[id] = Task { @MainActor [weak self] in
+            var sent = Date.distantPast
+            do {
+                let full = try await Assistant.respond(instructions: system, prompt: prompt) { text in
+                    guard let self, Date.now.timeIntervalSince(sent) > 0.15 else { return }
+                    sent = .now
+                    self.send(room, Msg(t: "tok", id: id, full: text))
+                }
+                if !Task.isCancelled { self?.send(room, Msg(t: "done", id: id, full: full)) }
+            } catch {
+                if !Task.isCancelled { self?.send(room, Msg(t: "done", id: id, full: "", err: error.localizedDescription)) }
+            }
+            self?.answering[id] = nil
+        }
+    }
+
     private func send(_ room: String, _ msg: Msg) {
-        guard let c = conns[room], let plain = try? JSONEncoder().encode(msg), let box = try? LinkCrypto.seal(plain, key: c.key),
+        guard let c = conns[room] else { return }
+        var msg = msg
+        seq = Envelope.next(after: seq)
+        msg.f = me
+        msg.q = seq
+        guard var plain = try? JSONEncoder().encode(msg) else { return }
+        if let fill = Envelope.padding(for: plain.count) {
+            msg.pad = fill
+            plain = (try? JSONEncoder().encode(msg)) ?? plain
+        }
+        guard let box = try? LinkCrypto.seal(plain, key: c.key),
               let frame = try? JSONSerialization.data(withJSONObject: ["c": box]) else { return }
         c.task.send(.string(String(decoding: frame, as: UTF8.self))) { _ in }
     }
@@ -298,6 +488,9 @@ final class Linker {
     private func remove(_ room: String) {
         conns.removeValue(forKey: room)?.task.cancel(with: .goingAway, reason: nil)
         online[room] = nil
+        caps[room] = nil
+        seen[room] = nil
+        seenDirty = true
         pairings.removeAll { $0.room == room }
         save()
         // Nothing linked: nothing to remember for.

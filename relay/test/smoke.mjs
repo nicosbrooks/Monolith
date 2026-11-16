@@ -5,6 +5,7 @@
 //
 // Needs Node 22 or newer (built-in WebSocket).
 import { randomBytes } from 'node:crypto'
+import { aesKey, b64u, deriveKey, equal, hmac, newKeyPair, open, random, seal } from '../../src/link/crypto.ts'
 
 const base = (process.argv[2] || 'http://localhost:8787').replace(/\/$/, '')
 const ws = base.replace(/^http/, 'ws')
@@ -119,5 +120,52 @@ await check('keeps other rooms separate', async () => {
 })
 
 a.sock.close()
+
+// Pairing the way the app does it, through this relay: a browser shows a code, a phone answers, both seal. The relay
+// sees only the hello (public key and proof) and sealed boxes.
+await check('pairs through the relay; what it passes on is sealed', async () => {
+  const pairRoom = randomBytes(16).toString('base64url')
+  const url = `${ws}/relay?room=${pairRoom}`
+  const browser = device(url)
+  await browser.opened
+  const web = await newKeyPair()
+  const secret = random(16)
+  const phone = device(url)
+  await phone.opened
+  // The phone, as LinkCrypto.answer does it.
+  const kp = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits'])
+  const pub = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey))
+  const phoneRaw = await deriveKey(kp.privateKey, web.pub, secret)
+  phone.sock.send(JSON.stringify({ p: 'hello', k: b64u.encode(pub), m: b64u.encode(await hmac(secret, pub)), n: 'iPhone' }))
+  const hello = JSON.parse(await browser.next((d) => d.includes('"hello"')))
+  if (!equal(await hmac(secret, b64u.decode(hello.k)), b64u.decode(hello.m))) return 'the proof did not check out'
+  const webRaw = await deriveKey(web.priv, b64u.decode(hello.k), secret)
+  if (!equal(webRaw, phoneRaw)) return 'the two sides got different keys'
+  const box = await seal(await aesKey(webRaw), { t: 'put', recs: [{ id: 'x', title: 'Private thoughts' }] })
+  browser.sock.send(JSON.stringify({ c: box }))
+  const got = await phone.next((d) => d.includes('"c"') && !d.includes('relay'))
+  if (got.includes('Private')) return 'plaintext crossed the relay'
+  const back = await open(await aesKey(phoneRaw), JSON.parse(got).c)
+  browser.sock.close()
+  phone.sock.close()
+  return back.recs[0].title === 'Private thoughts' ? '' : 'came back different'
+})
+
+// The hosted relay cuts off a device that floods a room (relay/src/index.ts). The dev relay doesn't, so this one only
+// says what it saw.
+await check('cuts off a device that floods a room', async () => {
+  const floodRoom = `${ws}/relay?room=${randomBytes(16).toString('base64url')}`
+  const loud = device(floodRoom)
+  const quiet = device(floodRoom)
+  await Promise.all([loud.opened, quiet.opened])
+  const closed = new Promise((resolve) => loud.sock.addEventListener('close', (e) => resolve(e.code)))
+  for (let i = 0; i < 700 && loud.sock.readyState === 1; i++) loud.sock.send(JSON.stringify({ c: String(i) }))
+  const code = await Promise.race([closed, new Promise((r) => setTimeout(() => r(null), 3000))])
+  quiet.sock.close()
+  loud.sock.close()
+  if (code === null && process.argv.includes('--dev')) return ''
+  return code === 1008 ? '' : `not cut off (close code ${code})`
+})
+
 console.log(failed ? `\n${failed} check${failed === 1 ? '' : 's'} failed.` : '\nAll checks passed. This relay is ready to use.')
 process.exit(failed ? 1 : 0)

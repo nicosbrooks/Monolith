@@ -11,6 +11,8 @@ import { useStore } from '../store'
  */
 
 export const FILE_SCHEME = 'monolith-file:'
+/** Window event, with the file's hash as detail, sent when a file is stored. */
+export const FILE_ARRIVED = 'monolith:file'
 /** Largest attachment accepted. */
 export const MAX_FILE = 250 * 1024 * 1024
 /** Longest side of a stored picture, by the Settings › Files choice. */
@@ -33,6 +35,10 @@ export const refOf = (hash: string) => FILE_SCHEME + hash
 export const hashOf = (src: string | null | undefined) => (src?.startsWith(FILE_SCHEME) ? src.slice(FILE_SCHEME.length) : null)
 export const isImageType = (type: string) => type.startsWith('image/')
 
+/** A file's id: the first 16 bytes of its SHA-256, in hex. Linked devices check what they receive against it. */
+export async function hashBlob(blob: Blob) {
+  return sha(blob)
+}
 async function sha(blob: Blob) {
   const d = new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()))
   return [...d.slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('')
@@ -57,6 +63,9 @@ export async function putFile(blob: Blob, name: string): Promise<string> {
     if (packed && packed.size <= blob.size * 0.9) (data = packed), (gz = true)
   }
   await set(key(hash), { data: await sealBlob(data), name, type, size: blob.size, at: Date.now(), ...(gz ? { gz } : {}) } satisfies Rec)
+  // Anything showing this file as missing (it may have just arrived from a linked device) can show it now.
+  urls.delete(hash)
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(FILE_ARRIVED, { detail: hash }))
   return refOf(hash)
 }
 

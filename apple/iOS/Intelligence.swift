@@ -93,6 +93,26 @@ enum Assistant {
         return text
     }
 
+    /// Answer for a linked computer (Linker): its own instructions and conversation, with the model chosen here.
+    /// Both are trimmed to what a small on-device window holds, keeping the end, where the question is.
+    static func respond(instructions given: String, prompt: String, onText: (@MainActor (String) -> Void)? = nil) async throws -> String {
+        let rules = given.isEmpty ? instructions : String(given.prefix(4000))
+        let text = prompt.count > 12000 ? String(prompt.suffix(12000)) : prompt
+        if let id = openModelID {
+            return try await OpenModels.shared.respond(model: id, instructions: rules, prompt: text, onText: onText)
+        }
+        guard isAvailable else { throw ModelError.unavailable }
+        let session = LanguageModelSession(instructions: rules)
+        guard let onText else { return try await session.respond(to: text).content }
+        var out = ""
+        for try await snapshot in session.streamResponse(to: text) {
+            try Task.checkCancellation()
+            out = snapshot.content
+            onText(out)
+        }
+        return out
+    }
+
     /// Get the chosen model ready while someone is still typing: loads an open model that's already downloaded,
     /// or asks Apple's model to load its weights.
     static func warm() {
