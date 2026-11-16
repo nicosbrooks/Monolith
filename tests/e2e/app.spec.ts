@@ -270,3 +270,16 @@ test('Export everything downloads a zip, and reminders can be turned on', async 
     await expect(page.locator('.toast', { hasText: /Standup · In \d+ min/ })).toBeVisible({ timeout: 40_000 })
   }
 })
+
+test('a doc named in plain words is offered under Mentioned in, and one press links it', async ({ page }) => {
+  await start(page)
+  await newDoc(page, 'Thesis')
+  await page.keyboard.type('I should follow my study system more closely.')
+  await page.locator('.sidebar .tree-title', { hasText: 'Study system' }).click()
+  const pair = page.locator('.cx-pair', { hasText: 'Thesis' })
+  await expect(pair.locator('q')).toHaveText('I should follow my study system more closely.')
+  await pair.locator('.btn').click()
+  await expect(page.locator('.cx-pair')).toHaveCount(0)
+  await page.locator('.cx-row', { hasText: 'Thesis' }).click()
+  await expect(page.locator('.ProseMirror a[href="#doc/doc-guide"]')).toHaveText('study system')
+})

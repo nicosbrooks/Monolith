@@ -2,7 +2,7 @@ import { Listen } from '../components/Listen'
 import { useEffect, useRef, useState } from 'react'
 import type { Editor as TEditor } from '@tiptap/react'
 import { formatDistanceToNow } from 'date-fns'
-import { History, ArrowDownWideNarrow, CheckSquare, ChevronRight, Download, FilePlus2, FolderInput, MoreHorizontal, Trash2, Upload, Copy, Star, RotateCcw, Folder, Check, CircleAlert, Loader2, GitCommitHorizontal, FileText, SmilePlus } from 'lucide-react'
+import { History, Printer, ArrowDownWideNarrow, CheckSquare, ChevronRight, Download, FilePlus2, FolderInput, MoreHorizontal, Trash2, Upload, Copy, Star, RotateCcw, Folder, Check, CircleAlert, Loader2, GitCommitHorizontal, FileText, SmilePlus } from 'lucide-react'
 import { useStore } from '../store'
 import { MobileBack } from '../components/MobileBack'
 import { confirmDialog } from '../components/Overlays'
@@ -165,6 +165,7 @@ export function DocView({ item }: { item: Item }) {
                   )}
                   {!isDir && <button onClick={() => (openHistory(item.id), setMore(false))}><History size={14} /> Earlier versions</button>}
                   {!isDir && <button onClick={() => (importMd(), setMore(false))}><Upload size={14} /> Import Markdown…</button>}
+                  {!isDir && <button onClick={() => (setMore(false), setTimeout(() => window.print(), 50))}><Printer size={14} /> Print or save as PDF</button>}
                   {!isDir && <button onClick={() => (exportMd(), setMore(false))}><Download size={14} /> Export Markdown</button>}
                   {!isDir && <button onClick={async () => (setMore(false), await navigator.clipboard.writeText(await asMarkdown()), toast('Copied as Markdown'))}><Copy size={14} /> Copy as Markdown</button>}
                   {!isDir && (

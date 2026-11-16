@@ -2374,3 +2374,97 @@ body {
     margin: 0 12px 12px;
   }
 }
+
+/* Connections › Mentioned in: the doc that names this one, and one button to make it a link. */
+.cx-pair {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cx-pair .cx-row {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  margin-right: 0;
+}
+.cx-pair .btn {
+  flex: none;
+}
+
+/* ── Print or save as PDF (doc ··· menu): the doc alone, dark on white, whatever the theme ── */
+@media print {
+  :root,
+  :root[data-theme='dark'] {
+    --bg: #fff;
+    --content: #fff;
+    --card: #fff;
+    --card-hover: #f1f1ef;
+    --text: #111;
+    --text-2: #444;
+    --text-3: #666;
+    --s3: #eee;
+    --border-2: #ccc;
+    color-scheme: light;
+  }
+  html,
+  body,
+  #root,
+  .app,
+  .main,
+  .detail,
+  .doc-pane,
+  .page-scroll {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+  .side-wrap,
+  .ai-wrap,
+  .toolbar,
+  .home-dock,
+  .p-dock,
+  .toc,
+  .toaster,
+  .overlay,
+  .float-open,
+  .cx,
+  .subdocs,
+  .bubble,
+  .slash-menu {
+    display: none !important;
+  }
+  .doc-layout,
+  .page.wide {
+    display: block;
+    max-width: none;
+    width: auto;
+    padding: 0;
+    margin: 0;
+  }
+  .prose h1,
+  .prose h2,
+  .prose h3 {
+    break-after: avoid;
+  }
+  .prose pre,
+  .prose table,
+  .prose img,
+  .prose li {
+    break-inside: avoid;
+  }
+  .prose th {
+    background: #f1f1ef !important;
+    color: #111 !important;
+  }
+  .prose a[href^='#doc/'] {
+    background: none;
+    padding: 0;
+    text-decoration: underline;
+  }
+  @page {
+    margin: 18mm 16mm;
+  }
+}

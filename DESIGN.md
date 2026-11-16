@@ -226,6 +226,8 @@ A lock icon in a soft circle, "Monolith is locked", one line, a password field (
 ### Connections (`.cx`, `Connections.tsx`)
 Under a doc's or recording's text, only when there is something to show, in this order: **Linked from** (each doc that links here, with the sentence it's mentioned in), **On your calendar** (its upcoming events), **Related** (up to three docs close in meaning, from System 1, never ones already linked). A group label is a section label (13.5px / 550, `--text-2`); rows are icon, title, one quiet line. 56px above the first group.
 
+**Mentioned in** sits between Linked from and On your calendar: docs that say this doc's name in plain words without linking to it (titles of four letters or more, whole phrase, any case; at most five). Each row has one small **Link** button, which turns the first mention into a link, with Undo.
+
 ### Tasks (`TasksView.tsx`, `.hm-due`)
 - A page in the Home column: the title "Tasks", one line saying how many and from how many docs, then a card per time group in this order: **Overdue, Today, Next 7 days, Later, No date**. Empty groups aren't shown.
 - A row is the Home task row: checkbox, the task, the doc it's in, and when it's due on the right in faint tabular text ("Today", "Tomorrow", "Fri", "Nov 28", with a time if the line gave one). The date turns `--danger` only once it's late.
@@ -236,6 +238,28 @@ Under a doc's or recording's text, only when there is something to show, in this
 
 ### Settings (`.modal.settings`, `SettingsModal.tsx`)
 Sections on the left (General, Assistant, Storage and files, Devices, About), one shown at a time on the right, so nothing is found by scrolling. The dialog keeps one size as sections change. The title on the right is the section's name; a section never repeats its own name as a heading. On phones the sections become a row of pills across the top.
+
+### Repeating events (`src/lib/repeat.ts`, `EventEditor` in `CalendarView.tsx`)
+- The editor has a **Repeat** choice: Never, Every day, Weekdays, Every week, Every 2 weeks, Every month, Every year, and when it repeats an optional **Until** date. One quiet line under it says how changes apply.
+- **The editor changes every date; the grid changes one.** Editing a field changes the whole series (a new time moves every date by the same amount). Dragging or resizing one in the grid moves only that date and says "Moved this one. The others stay." with Undo. No "this or all?" dialog.
+- A repeating event shows a small repeat arrow before its time. Deleting offers two buttons side by side, "Delete this one" and "Delete all" (red), each with Undo.
+- Quick add reads "every tuesday", "weekdays", "every other week", "every month", and "daily"/"weekly" only where they can't be part of a name ("gym daily 7am" repeats; "weekly review fri 3pm" is a name). The preview and toast end with the repeat ("· Every week").
+- The assistant moves or removes one date at a time.
+
+### Tasks on the calendar (`.chip.task`)
+A task with a date sits in the all-day row of its day (and at the top of its day in the month view): a small empty box and its words on the neutral soft fill, never an event colour. The box checks it off (with Undo); the words open its doc.
+
+### Earlier versions (`HistoryDialog.tsx`, `src/lib/history.ts`)
+Doc ··· › "Earlier versions". Versions on the left ("Today · 3:42 PM", word count), the page as it was on the right, read-only, and one primary button, "Restore this version", beside the line "Restoring keeps today’s version too." Restoring says "Restored the version from …" with Undo. With no versions yet it is an empty state, not an empty list.
+
+### Reminders (`src/lib/reminders.ts`)
+One switch in Settings › General, off by default; turning it on is when the browser asks for permission. The line under it says exactly when reminders arrive and that Monolith must be open or installed. If notifications are blocked, it says so and that reminders still appear inside the app. Inside the app a reminder is an ordinary notification pill: "Standup · In 10 min · 9:00 AM".
+
+### Export everything (`src/lib/exportAll.ts`)
+A row in Settings › Storage and files next to Backup file, with one button, "Export". Backup is encrypted and restores the app exactly; Export is plain files for any other app. The row says which is which in one line, and the toast says what was written ("Exported 12 docs, 3 recordings, 8 events").
+
+### Printing
+Doc ··· › "Print or save as PDF" prints the doc alone, dark text on white whatever the theme: no sidebar, toolbar, Ask bar, contents or connections.
 
 ### Menus and dialogs
 - Menu order for a doc: Add sub-doc, favourite, Move to, then Delete in red after a gap. iOS copies this order.
@@ -280,6 +304,7 @@ Three files load in order: `src/index.css` (base), `src/theme.css`, `src/soft.cs
 | Web empty states: Recordings, Recently Deleted, no doc open | Yes (Nov 15) |
 | Web assistant chat, Settings switches and Integrations | Reviewed Nov 15 (pass 5) |
 | Web Tasks, links and connections, Settings sections | Yes (Nov 15, 0.10): dark and light, axe-checked |
+| Web repeating events, event editor, earlier versions, reminders, export | Yes (Nov 16, 0.11): axe-checked; print checked in the print preview only |
 | Web Docs, doc editor, Recordings detail, Calendar, assistant For you tab, command palette | Not yet reviewed against this file |
 | iOS Tasks, links, connections | Not built: iOS shows a link as its text, and has no Tasks screen yet |
 | iOS Home, drawer, Docs and Recordings lists | Yes (Nov 15, pass 2): `Space` tokens, drawer icon column. Checked in the iPhone 17 simulator, dark only |

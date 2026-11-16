@@ -33,7 +33,8 @@ export function About() {
             <li><b>Storage you connect</b> (a GitHub repository or Google Drive): Monolith talks to it directly from this browser. Signing in to GitHub exchanges a one-time code through Monolith’s server, which keeps nothing.</li>
             <li><b>Calendars you subscribe to</b> are fetched from the address you give, through the relay when the calendar’s server doesn’t allow browsers.</li>
           </ul>
-          <p>With a passcode set, everything stored here is encrypted with it, files and backups included.</p>
+          <p>With a passcode set, everything stored here is encrypted with it, files, earlier versions and backups included. “Export everything” is the exception: it writes plain files any app can read, so keep that zip somewhere safe.</p>
+          <p>Reminders are worked out on this device and shown by your browser; nothing is sent anywhere to schedule them.</p>
         </div>
       </details>
       <details className="advanced">

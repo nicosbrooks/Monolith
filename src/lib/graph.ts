@@ -40,7 +40,7 @@ export interface Mention {
   line: string
 }
 
-interface Read { content: string; day: number; tasks: Task[]; links: { to: string; line: string }[] }
+interface Read { content: string; day: number; tasks: Task[]; links: { to: string; line: string }[]; plain?: string }
 const cache = new Map<string, Read>()
 
 const BLOCK = 'p,li,h1,h2,h3,h4,td,th,blockquote'
@@ -110,6 +110,63 @@ export function readWorkspace(items: Item[], now = new Date()): Workspace {
   // Stable: dated ones by date, the rest keep doc order.
   const dated = tasks.filter((t) => t.due !== undefined).sort((a, b) => a.due! - b.due!)
   return { tasks: [...dated, ...tasks.filter((t) => t.due === undefined)], links, mentions }
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** A title as a whole phrase, in any letter case. */
+const phrase = (title: string) => new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(title.trim())}(?![\\p{L}\\p{N}])`, 'iu')
+
+/**
+ * Docs that say this doc's name in plain words without linking to it. Offered under Connections as "Mentioned in",
+ * each with a Link button. Only for titles long enough to mean something (four letters or more).
+ */
+export function unlinkedMentions(item: Item, items: Item[], ws: Workspace): Mention[] {
+  const title = item.title.trim()
+  if (title.length < 4) return []
+  const re = phrase(title)
+  const low = title.toLowerCase()
+  const linked = new Set((ws.mentions.get(item.id) ?? []).map((m) => m.from.id))
+  const out: Mention[] = []
+  for (const other of items) {
+    if (other.id === item.id || other.deletedAt || other.file?.dir || linked.has(other.id)) continue
+    const r = cache.get(other.id)
+    if (!r || r.content !== other.content) continue // not read yet: it will be on the next pass
+    if (r.plain === undefined) {
+      const tpl = document.createElement('template')
+      tpl.innerHTML = other.content.replace(/<\/(p|h\d|li|div|blockquote|pre|tr|td|th)>/g, '</$1>\n')
+      r.plain = tpl.content.textContent || ''
+    }
+    if (!r.plain.toLowerCase().includes(low)) continue
+    const line = r.plain.split('\n').find((l) => re.test(l))
+    if (line) out.push({ from: other, line: line.trim().length > 180 ? `${line.trim().slice(0, 177)}…` : line.trim() })
+    if (out.length === 5) break
+  }
+  return out
+}
+
+/** Turn the first plain mention of `target`'s title in a doc into a link to it. Returns the doc's text from before, for Undo. */
+export function linkMention(fromId: string, target: Item): string | null {
+  const st = useStore.getState()
+  const from = st.items.find((i) => i.id === fromId)
+  if (!from) return null
+  const re = phrase(target.title)
+  const tpl = document.createElement('template')
+  tpl.innerHTML = from.content
+  const walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+    if (node.parentElement?.closest('a,code,pre')) continue
+    const m = node.data.match(re)
+    if (!m || m.index === undefined) continue
+    const rest = node.splitText(m.index)
+    rest.splitText(m[0].length)
+    const a = document.createElement('a')
+    a.setAttribute('href', linkHref(target.id))
+    a.textContent = rest.data
+    rest.replaceWith(a)
+    st.updateItem(from.id, { content: tpl.innerHTML })
+    return from.content
+  }
+  return null
 }
 
 /** The workspace, re-read when docs change. */

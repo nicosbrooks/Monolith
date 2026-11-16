@@ -3,7 +3,8 @@ import { format, isToday, isTomorrow } from 'date-fns'
 import { AudioWaveform, CalendarDays, FileText } from 'lucide-react'
 import { useStore } from '../store'
 import type { Item } from '../types'
-import { useWorkspace } from '../lib/graph'
+import { linkMention, unlinkedMentions, useWorkspace } from '../lib/graph'
+import { toast } from './Toast'
 import { useOwnEvents } from '../lib/events'
 import { htmlToText, itemEmoji } from '../lib/util'
 import { related, useSystem1 } from '../ai/system1'
@@ -38,7 +39,14 @@ export function Connections({ item }: { item: Item }) {
   const linked = new Set([...(ws.links.get(item.id) ?? []), ...mentions.map((m) => m.from.id)])
   const similar = near.map((id) => items.find((i) => i.id === id && !i.deletedAt && !i.file?.dir)).filter((i): i is Item => !!i && !linked.has(i.id)).slice(0, 3)
 
-  if (!mentions.length && !onCalendar.length && !similar.length) return null
+  // Docs that name this one without linking to it: one press makes the link.
+  const loose = unlinkedMentions(item, items, ws)
+  const link = (fromId: string) => {
+    const before = linkMention(fromId, item)
+    if (before !== null) toast('Linked', { ms: 6000, action: { label: 'Undo', run: () => useStore.getState().updateItem(fromId, { content: before }) } })
+  }
+
+  if (!mentions.length && !loose.length && !onCalendar.length && !similar.length) return null
   const row = (i: Item, line?: string) => {
     const Icon = KindIcon[i.kind]
     return (
@@ -57,6 +65,17 @@ export function Connections({ item }: { item: Item }) {
         <div className="cx-group">
           <h2>Linked from</h2>
           {mentions.map((m) => row(m.from, m.line === (m.from.title || '') ? undefined : m.line))}
+        </div>
+      )}
+      {loose.length > 0 && (
+        <div className="cx-group">
+          <h2>Mentioned in</h2>
+          {loose.map((m) => (
+            <div key={m.from.id} className="cx-pair">
+              {row(m.from, m.line)}
+              <button className="btn sm" onClick={() => link(m.from.id)} aria-label={`Link “${m.from.title || 'Untitled'}” to this doc`}>Link</button>
+            </div>
+          ))}
         </div>
       )}
       {onCalendar.length > 0 && (

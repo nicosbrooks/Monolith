@@ -524,3 +524,27 @@ The app was four lists side by side (docs, recordings, calendar, a task card on 
 3. **The three CSS layers** (`index.css`, `theme.css`, `soft.css`: 6,500 lines, many selectors defined three or four times) are the biggest structural debt left on web. This pass removed a few dead rules it touched and added nothing as an override. Flattening them into one resolved sheet needs screenshot comparison of every screen in both themes to be safe; worth its own session.
 4. Tasks: a due date can only be typed in the line. A date control on the row, and showing dated tasks on the calendar, are the natural next steps.
 5. Unlinked mentions (a doc's title appearing as plain text elsewhere) could be offered under Connections as "Mentioned in", with a one-press Link.
+
+## Competitive gaps closed: repeats, versions, export, reminders, mentions, print (Nov 16, cloud session, 0.11.0)
+Rules for each are in `DESIGN.md` (Repeating events, Tasks on the calendar, Earlier versions, Reminders, Export everything, Printing).
+
+- **Repeating events** (`src/lib/repeat.ts`). A stored event with `repeat: { every, until? }` is a series; `expandEvents(events, from, to)` hands out its dates as events with id `<series id>@<start>` and `seriesId`. `skip` holds the starts of removed dates. In the store, `updateEvent` on an occurrence id changes the series (a new time shifts every date and the skips), `deleteEvent` on an occurrence id skips that date, `detachEvent` turns one date into its own event. The calendar expands around the month on screen; everything else uses `src/lib/events.ts` (`useEvents`, `useOwnEvents`, `allEvents`, `ownEvents`: a year ahead, cached until an event or the day changes). Quick add: `parseRepeat` in `dates.ts`, with 8 new cases in `scripts/test-dates.ts` (94 total; "tutoring mondays at 4pm" now repeats weekly, on purpose).
+- **Tasks on the calendar:** dated tasks from `graph.ts` as `.chip.task` in the all-day row and month cells.
+- **Earlier versions** (`src/lib/history.ts`, `HistoryDialog.tsx`): a store subscription keeps a doc's previous content when its newest version is over 10 minutes old, or the change is large (over 400 characters or 30%). 30 per doc, in IndexedDB under `history:<id>`, sealed with the passcode, removed when the doc is deleted for good. The preview goes through `safeHtml` because a restored backup's HTML isn't guaranteed to have come from the editor.
+- **Export everything** (`src/lib/exportAll.ts`): own small zip writer (stored, UTF-8 names), `Docs/` laid out like the sidebar, `Files/`, `Recordings/` with audio and transcript, `Calendar.ics` with RRULE and EXDATE. Doc links become relative file links. Checked by unzipping the result and with Python's `zipfile.testzip()`.
+- **Reminders** (`src/lib/reminders.ts`): `settings.remind`; a 30-second check while the app is open; a toast in the app plus a system notification through the service worker when permitted. `sw.js` focuses the app on click.
+- **Mentioned in** (`unlinkedMentions`, `linkMention` in `graph.ts`) and **Print or save as PDF** (`@media print` at the end of `soft.css`).
+- **Fixed on the way:** the event editor had unlabelled buttons, colour swatches and date fields, and a red-on-grey delete label under 4.5:1 (axe had never been pointed at it).
+- Tests: 21 end-to-end (repeat, task chip, versions, export + reminder firing, mentions; axe now also covers the event editor and the versions dialog).
+
+### What I couldn't verify here
+- A real system notification (headless Chromium reports notifications as denied, so only the in-app reminder was seen firing).
+- Importing the exported `.ics` into Google or Apple Calendar. Timed events are written with `TZID=<IANA zone>` and no VTIMEZONE block, which both accept in my experience but which I did not test.
+- Real printing; the print layout was checked with print media emulation.
+
+### Known limits
+- **The phone doesn't know about repeats.** It receives a series as one event on its first date. `repeat` and `skip` are sent in the sync record and kept on the web when the phone edits other fields, but `apple/` needs `expandEvents` ported before repeats show there.
+- Earlier versions are not in the backup file and don't sync. Pictures in an old version show as their names.
+- A repeat can't be "every Monday and Wednesday" in one event (make two), and has no "N times" end, only a date.
+- Reminders can't fire while the app is closed: there is no server to send them. A push service would be the only way.
+- Still open from before: iOS Tasks/links, relative links inside connected folders (Export already writes them, so the same mapping can be reused in `storage/sync.ts`), and flattening the three CSS files.
