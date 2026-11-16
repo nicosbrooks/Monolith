@@ -95,7 +95,7 @@ struct PadRoot: View {
                     Label("Docs", systemImage: "doc.text").tag(PadSection.docs).sideRow(size)
                     Label("Recordings", systemImage: "mic").tag(PadSection.lectures).sideRow(size)
                     Label("Calendar", systemImage: "calendar").tag(PadSection.calendar).sideRow(size)
-                    Label("Integrations", systemImage: "puzzlepiece.extension").tag(PadSection.integrations).sideRow(size)
+                    Label("Integrations", systemImage: "link").tag(PadSection.integrations).sideRow(size)
                 }
                 if !folders.isEmpty {
                     Section {
@@ -112,9 +112,9 @@ struct PadRoot: View {
                 }
                 if size == .compact { ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button { create(.doc) } label: { Text("Doc"); Text("Notes, checklists, long-form writing"); Image(systemName: "doc.text") }
-                        Button { create(.lecture) } label: { Text("Record"); Text("A class, a meeting, a thought"); Image(systemName: "mic") }.disabled(recorder.isRecording)
-                        Button { newEvent = true } label: { Text("Event"); Text("Add to your calendar"); Image(systemName: "calendar.badge.plus") }
+                        Button { create(.doc) } label: { Text("Doc"); Image(systemName: "doc.text") }
+                        Button { create(.lecture) } label: { Text("Record"); Image(systemName: "mic") }.disabled(recorder.isRecording)
+                        Button { newEvent = true } label: { Text("Event"); Image(systemName: "calendar.badge.plus") }
                     } label: { Image(systemName: "plus") }
                     .accessibilityLabel("Create")
                 } }

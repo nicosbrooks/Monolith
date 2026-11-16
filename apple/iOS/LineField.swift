@@ -51,6 +51,7 @@ struct LineField: UIViewRepresentable {
         if LineText.key(text) != c.shown || kind != c.kind {
             c.show(text, in: v)
         }
+        c.enableIndents()
         if focus == id {
             if v.isFirstResponder {
                 c.placeCursor(v)
@@ -172,6 +173,13 @@ struct LineField: UIViewRepresentable {
 
         // MARK: Toolbar
 
+        /// Indent and Outdent, enabled only on list items (the only lines that nest).
+        private var indents: [UIBarButtonItem] = []
+        func enableIndents() {
+            let list: Bool = switch parent.kind { case .bullet, .numbered, .todo: true; default: false }
+            indents.forEach { $0.isEnabled = list }
+        }
+
         func toolbar() -> UIToolbar {
             let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
             func item(_ symbol: String, _ label: String, _ run: @escaping () -> Void) -> UIBarButtonItem {
@@ -183,13 +191,19 @@ struct LineField: UIViewRepresentable {
                 UIDeferredMenuElement.uncached { [weak self] done in done(self?.parent.events.menu() ?? []) },
             ]))
             format.accessibilityLabel = "Format"
+            let out = item("decrease.indent", "Outdent") { [weak self] in self?.parent.events.indent(-1) }
+            let into = item("increase.indent", "Indent") { [weak self] in self?.parent.events.indent(1) }
+            indents = [out, into]
             bar.items = [
                 item("checklist", "Checklist") { [weak self] in self?.parent.events.checklist() },
                 item("list.bullet", "Bulleted list") { [weak self] in self?.parent.events.bullets() },
                 format,
                 .flexibleSpace(),
+                out,
+                into,
                 item("keyboard.chevron.compact.down", "Hide keyboard") { [weak self] in self?.parent.events.hide() },
             ]
+            enableIndents()
             bar.sizeToFit()
             return bar
         }
@@ -209,6 +223,8 @@ struct LineEvents {
     var bullets: () -> Void
     var menu: () -> [UIMenuElement]
     var hide: () -> Void
+    var bold: () -> Void
+    var indent: (Int) -> Void
 }
 
 /// The text views on screen, so the toolbar can act on the one being edited, and where the cursor should go next.

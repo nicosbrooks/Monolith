@@ -690,3 +690,30 @@ Verified on 5210 with screenshots. `npm run check` passes, and so does `npm run 
 ### Follow-ups
 - Snapshots on reconnect still send every record. Sending only what changed needs a per-record change counter on both sides (updatedAt alone misses edits relayed from a third device).
 - Files the web holds but the phone asks for are served; files the phone holds from computer A are served to computer B only when B asks for them while the phone is connected.
+
+## Pairing that works from the dev server, private rooms, and a phone that feels like it's listening (Nov 16)
+
+**Why the phone couldn't connect.** On the dev server the pairing code said `u=ws://localhost:5199`. On the phone,
+localhost is the phone. Now `server/relay.ts` also serves the relay alone on the Mac's network address (server port
+− 1), `GET /relay/lan` returns it, and `beginPairing` puts it in the code when `localRelay`. Addresses in
+10/8, 172.16/12, 192.168/16 and 100.64/10 (some routers and Tailscale) count, on both sides. Hosted builds with
+`VITE_RELAY_URL` are unchanged.
+
+**One room per pairing, that only the two devices know.** Codes now carry `v=2`. After the handshake in the QR
+code's room, both sides move to `syncRoom(key)` (HKDF of the pairing key) and nothing more is said in the first room.
+`checkCode(key)` gives six digits both screens show. Same derivation in `src/link/crypto.ts` and
+`apple/iOS/Link/LinkCrypto.swift`, pinned by a fixed vector in `scripts/test-link.ts`. Pairings made before this keep
+their old room. A phone build older than this can't answer a v2 code (it would wait in the code's room).
+
+**iPhone feel.** `Haptics.swift` replaces ad-hoc feedback generators. Holds: doc previews (`.itemMenu`), task menus on
+Home, line menus on a line's marker (move, duplicate, delete). Keyboard bar gained Outdent/Indent. Swipe-to-unlink a
+computer asks first. Rules in DESIGN.md, "iPhone: touch, holds and feel".
+
+**From outside the app** (`apple/iOS/SystemActions.swift`): Home Screen quick actions (static Ask/Record/New Doc in
+`project.yml`, plus a dynamic "Continue" for the last doc, set on going to the background), App Intents with an
+`AppShortcutsProvider` (Ask, New Doc, Start Recording, Open Doc with a `DocEntity` query, New Event), and Spotlight
+via `CSSearchableIndex`, rebuilt on background. All route through `Router.shared.action`; `AppDelegate` sets a
+`SceneDelegate` only to receive quick actions. Lock on means nothing is indexed or offered.
+
+Not checked: Siri phrases and Spotlight results on a device (the simulator showed the quick actions and Continue
+opening the doc); pairing a real phone over Wi-Fi to the dev server (the phone was unplugged); haptics only on a device.

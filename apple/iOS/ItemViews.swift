@@ -67,7 +67,7 @@ struct ItemListView: View {
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) { item.trash() } label: { Image(systemName: "trash") }
                 }
-                .contextMenu { ItemMenu(item: item) }
+                .itemMenu(item)
         }
     }
 }
@@ -225,20 +225,19 @@ struct NoteEditor: View {
                 ctx.delete(item)
             }
         }
-        // The web app's header: Listen, favorite, and ··· for the rest.
+        // Two buttons: favorite, and ··· for the rest (Listen is in there). While it reads aloud, a stop button
+        // takes Listen's place up here, so it can be stopped in one tap.
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button { Speaker.shared.toggle(item) } label: {
-                    Image(systemName: Speaker.shared.speakingID == item.id ? "stop.fill" : "speaker.wave.2")
+                if Speaker.shared.speakingID == item.id {
+                    Button { Speaker.shared.toggle(item) } label: { Image(systemName: "stop.fill") }
+                        .accessibilityLabel("Stop reading")
                 }
-                .accessibilityLabel(Speaker.shared.speakingID == item.id ? "Stop reading" : "Listen")
                 Button { item.toggleFavorite() } label: { Image(systemName: item.pinned ? "star.fill" : "star") }
                     .accessibilityLabel(item.pinLabel)
-            }
-            ToolbarSpacer(.fixed, placement: .topBarTrailing)
-            ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     ItemMenu(item: item, onDelete: { dismiss() }, extra: AnyView(Group {
+                        Button("Listen", systemImage: "speaker.wave.2") { Speaker.shared.toggle(item) }
                         Button(item.displayEmoji == nil ? "Add emoji" : "Change emoji", systemImage: "face.smiling") { picking = true }
                         Button(sketching ? "Close sketch" : "Sketch", systemImage: "pencil.line") { withAnimation(.snappy) { sketching.toggle() } }
                         if item.body.contains("- [x] ") {
@@ -616,5 +615,47 @@ extension View {
     /// Search only appears once a list is long enough to need it.
     @ViewBuilder func searchable(if on: Bool, text: Binding<String>) -> some View {
         if on { searchable(text: text, placement: .navigationBarDrawer(displayMode: .automatic)) } else { self }
+    }
+}
+
+/// What a hold on a doc or recording shows above its menu: the first lines, so you can check it's the right one
+/// without opening it.
+struct ItemPeek: View {
+    var item: Item
+    var body: some View {
+        let words = Self.readable(item.body)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                if let e = item.displayEmoji { Text(e) } else { Image(systemName: item.kind.symbol).foregroundStyle(.secondary) }
+                Text(item.displayTitle).font(.headline).lineLimit(2)
+            }
+            Text(words.isEmpty ? "Empty" : String(words.prefix(600)))
+                .font(.subheadline).foregroundStyle(words.isEmpty ? .tertiary : .secondary)
+                .lineLimit(9)
+            Text("Edited \(item.updatedAt.shortRelative)").font(.caption).foregroundStyle(.tertiary)
+        }
+        .padding(18)
+        .frame(width: 320, alignment: .leading)
+        .background(Theme.raised)
+    }
+    /// The doc as words: no heading marks, quote marks or checkbox brackets, and no runs of blank lines.
+    static func readable(_ md: String) -> String {
+        MD.plain(md).components(separatedBy: "\n").map { line in
+            var l = line.trimmingCharacters(in: .whitespaces)
+            for (pattern, with) in [(#"^#{1,6}\s+"#, ""), (#"^>\s?"#, ""), (#"^[-*+]\s+\[[ xX]?\]\s*"#, "☐ "), (#"^\[[ xX]?\]\s*"#, "☐ "), (#"^[-*+]\s+"#, "• ")] {
+                l = l.replacingOccurrences(of: pattern, with: with, options: .regularExpression)
+            }
+            return l
+        }
+        .joined(separator: "\n")
+        .replacingOccurrences(of: #"\n{2,}"#, with: "\n", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+extension View {
+    /// Hold a doc or recording: a preview of it and its menu.
+    func itemMenu(_ item: Item, folders: [String] = []) -> some View {
+        contextMenu { ItemMenu(item: item, folders: folders) } preview: { ItemPeek(item: item) }
     }
 }

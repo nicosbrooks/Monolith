@@ -285,9 +285,9 @@ struct BlockEditor: View {
         let block = b.wrappedValue
         switch block.kind {
         case .divider:
-            Divider().padding(.vertical, 12).contentShape(.rect).contextMenu { removeButton(block) }
+            Divider().padding(.vertical, 12).contentShape(.rect).contextMenu { lineMenu(block) }
         case .image:
-            MarkdownImage(source: block.text).padding(.vertical, 6).contextMenu { removeButton(block) }
+            MarkdownImage(source: block.text).padding(.vertical, 6).contextMenu { lineMenu(block) }
         case .code:
             LineField(id: block.id, text: code(b), kind: block.kind, mode: .code, focus: $focus, lines: lines, events: events)
                 .padding(.horizontal, 12).padding(.vertical, 10)
@@ -331,6 +331,9 @@ struct BlockEditor: View {
                 }
             }
             .frame(minHeight: height)
+            // Hold a bullet, number or checkbox to move, copy or remove its line.
+            .contentShape(.rect)
+            .contextMenu { if block.isListItem || block.kind == .quote { lineMenu(block) } }
             LineField(id: block.id, text: content(b), kind: block.kind, focus: $focus, lines: lines, events: events)
                 .overlay(alignment: .topLeading) {
                     if block.isEmpty && blocks.count == 1 {
@@ -341,10 +344,6 @@ struct BlockEditor: View {
         .padding(.leading, CGFloat(block.level) * 22)
         .padding(.top, topPad(block.kind))
         .padding(.vertical, 3)
-    }
-
-    private func removeButton(_ block: Block) -> some View {
-        Button("Delete", systemImage: "trash", role: .destructive) { blocks.removeAll { $0.id == block.id } }
     }
 
     private func topPad(_ k: Block.Kind) -> CGFloat {
@@ -397,7 +396,9 @@ struct BlockEditor: View {
             checklist: { setKind(.todo(false)) },
             bullets: { setKind(.bullet) },
             menu: menu,
-            hide: hideKeyboard
+            hide: hideKeyboard,
+            bold: { if let id = focus { lines.views[id]?.toggle(.bold); Haptics.tap() } },
+            indent: indent
         )
     }
 
@@ -425,11 +426,13 @@ struct BlockEditor: View {
             }
             guard let (p, k) = Self.shortcuts.first(where: { plain.hasPrefix($0.0) }) else { return .none }
             blocks[i].kind = k
+            Haptics.tap() // "- " became a bullet: you feel it take
             return .strip(p.count)
         case .bullet:
             // "- [ ] " arrives as "- " (a bullet) and then "[ ] ".
             guard let p = ["[ ] ", "[] "].first(where: { plain.hasPrefix($0) }) else { return .none }
             blocks[i].kind = .todo(false)
+            Haptics.tap()
             return .strip(p.count)
         default:
             return .none
@@ -587,12 +590,10 @@ struct BlockEditor: View {
             action("Quote", "text.quote", on: b.kind == .quote) { setKind(.quote) },
             action("Code", "curlybraces") { setKind(.code(""), toggles: false) },
         ]))
-        if b.isListItem {
-            out.append(UIMenu(options: .displayInline, preferredElementSize: .small, children: [
-                action("Outdent", "decrease.indent") { indent(-1) },
-                action("Indent", "increase.indent") { indent(1) },
-            ]))
-        }
+        out.append(UIMenu(options: .displayInline, preferredElementSize: .small, children: [
+            action("Move up", "arrow.up") { move(b.id, -1) },
+            action("Move down", "arrow.down") { move(b.id, 1) },
+        ]))
         out.append(UIMenu(title: "Insert", image: UIImage(systemName: "plus"), children: [
             action("Table", "tablecells") { insert(Block(kind: .table, text: "|  |  |\n| --- | --- |\n|  |  |")) },
             action("Divider", "minus") { insert(Block(kind: .divider)) },
@@ -608,6 +609,7 @@ struct BlockEditor: View {
             return blocks[i].kind == k
         }()
         let kind = same && toggles ? Block.Kind.text : k
+        Haptics.tap()
         if case .code = kind {
             // Code is a different kind of field, so the words move over as plain text.
             guard blocks[i].isLine else { return }
@@ -626,6 +628,32 @@ struct BlockEditor: View {
         blocks[i].kind = kind
         blocks[i].deep = ""
         if !blocks[i].isListItem { blocks[i].lead = "" }
+    }
+
+    /// Moves a line up or down past its neighbour, keeping the cursor in it.
+    private func move(_ id: UUID, _ by: Int) {
+        guard let i = index(id), blocks.indices.contains(i + by) else { return Haptics.warning() }
+        withAnimation(.snappy) { blocks.swapAt(i, i + by) }
+        Haptics.tap()
+        if blocks[i + by].isLine, focus != nil { focus = id }
+    }
+
+    private func duplicate(_ id: UUID) {
+        guard let i = index(id) else { return }
+        let b = blocks[i]
+        let copy = Block(kind: b.kind, rich: b.content, text: b.text, lead: b.lead, deep: b.deep)
+        withAnimation(.snappy) { blocks.insert(copy, at: i + 1) }
+        Haptics.tap()
+    }
+
+    /// What a hold on a line's bullet, number or checkbox offers.
+    @ViewBuilder private func lineMenu(_ block: Block) -> some View {
+        let i = index(block.id) ?? 0
+        Button("Move up", systemImage: "arrow.up") { move(block.id, -1) }.disabled(i == 0)
+        Button("Move down", systemImage: "arrow.down") { move(block.id, 1) }.disabled(i >= blocks.count - 1)
+        Button("Duplicate", systemImage: "plus.square.on.square") { duplicate(block.id) }
+        Divider()
+        Button(block.isLine ? "Delete line" : "Delete", systemImage: "trash", role: .destructive) { Haptics.thud(); withAnimation(.snappy) { remove(block.id) } }
     }
 
     /// Adds a divider or table under the line the cursor is on, and a fresh line after it.
@@ -652,9 +680,14 @@ struct BlockEditor: View {
     /// Nest a list item under the one above it, or move it back out.
     private func indent(_ by: Int) {
         guard let i = focused, blocks[i].isListItem else { return }
-        if by < 0 { blocks[i].lead = outdented(i); return }
+        if by < 0 {
+            guard !blocks[i].lead.isEmpty else { return Haptics.warning() }
+            blocks[i].lead = outdented(i)
+            return Haptics.tap()
+        }
         // Only under an item above it, and one level at a time.
-        guard i > 0, blocks[i - 1].isListItem, blocks[i - 1].lead.count >= blocks[i].lead.count else { return }
+        guard i > 0, blocks[i - 1].isListItem, blocks[i - 1].lead.count >= blocks[i].lead.count else { return Haptics.warning() }
+        Haptics.tap()
         var j = i - 1
         while j > 0, blocks[j].lead.count > blocks[i].lead.count, blocks[j - 1].isListItem { j -= 1 }
         // Markdown nests under "1. " with three spaces and under "- " with two.

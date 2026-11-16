@@ -1,7 +1,7 @@
 // The link's security rules, checked without a relay: pairing, sealing, and the envelope that stops replays.
 // The phone's side is played here with WebCrypto, step for step as apple/iOS/Link/LinkCrypto.swift does it.
 //   npm run test:link
-import { aesKey, b64u, deriveKey, equal, hmac, newKeyPair, open, random, seal } from '../src/link/crypto.ts'
+import { aesKey, b64u, checkCode, deriveKey, equal, hmac, newKeyPair, open, random, seal, syncRoom } from '../src/link/crypto.ts'
 import { admit, nextSeq, pad } from '../src/link/envelope.ts'
 
 let failed = 0
@@ -72,6 +72,17 @@ await check('the same message seals differently each time', async () => ((await 
 await check('the key kept by the page can’t be read back out', async () => {
   const exported = await crypto.subtle.exportKey('raw', key).then(() => true, () => false)
   return exported ? 'the key was extractable' : ''
+})
+
+// ─── The pairing's own room, and the check code ─────────────────────────────
+// Fixed vector, also produced by LinkCrypto.syncRoom / checkCode in Swift (key = bytes 0…31).
+const fixed = Uint8Array.from({ length: 32 }, (_, i) => i)
+await check('the sync room matches the phone’s', async () => ((await syncRoom(fixed)) === 'VQtIJWBlnQiFHh8Pyb5uxQ' ? '' : await syncRoom(fixed)))
+await check('the check code matches the phone’s', async () => ((await checkCode(fixed)) === '824 793' ? '' : await checkCode(fixed)))
+await check('each pairing gets its own room', async () => ((await syncRoom(phone.raw)) !== (await syncRoom(random(32))) ? '' : 'two keys, one room'))
+await check('the sync room is a name the relay accepts', async () => {
+  const room = await syncRoom(phone.raw)
+  return /^[A-Za-z0-9_-]{22}$/.test(room) ? '' : `bad room ${room}`
 })
 
 // ─── Envelope ───────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import { useStore } from '../store'
 import type { CalEvent, Item } from '../types'
 import { fileBlob, fileMeta, hashBlob, inlineFiles, MAX_FILE, putFile, refsIn } from '../lib/files'
 import { setRemote, type RemoteModel } from '../ai/remote'
-import { aesKey, b64u, deriveKey, equal, hmac, newKeyPair, open, random, seal } from './crypto'
+import { aesKey, b64u, checkCode, deriveKey, equal, hmac, newKeyPair, open, random, seal, syncRoom } from './crypto'
 import { admit, nextSeq, pad, type Stamp } from './envelope'
 
 /**
@@ -18,8 +18,8 @@ import { admit, nextSeq, pad, type Stamp } from './envelope'
  */
 
 /** `ck` is the pairing's key, kept so this page can use it but never read it back out. `key` is its raw form, from
- *  before that, and is moved into `ck` at the next start. */
-export interface Pairing { room: string; key?: string; ck?: CryptoKey; name: string; linkedAt: number; relay?: string }
+ *  before that, and is moved into `ck` at the next start. `check` is the six digits both screens showed. */
+export interface Pairing { room: string; key?: string; ck?: CryptoKey; name: string; linkedAt: number; relay?: string; check?: string }
 
 /**
  * Where devices meet. In production this is the hosted relay (relay/, a Cloudflare Worker), so a phone and a computer
@@ -74,7 +74,7 @@ const CAPS = ['files']
 /** How long a pairing code shown on screen can be answered. */
 const CODE_MS = 10 * 60_000
 
-interface PairingSession { url: string; state: 'waiting' | 'linked' | 'error'; phone?: string; error?: string }
+interface PairingSession { url: string; state: 'waiting' | 'linked' | 'error'; phone?: string; error?: string; check?: string; lan?: boolean }
 /** What the device at the other end of a pairing said it can do. */
 export interface PeerInfo { caps: string[]; model?: string }
 
@@ -268,9 +268,12 @@ export async function beginPairing() {
   const room = b64u.encode(random(16))
   const secret = random(16)
   const kp = await newKeyPair()
-  const q = new URLSearchParams({ r: room, k: b64u.encode(kp.pub), s: b64u.encode(secret), u: RELAY, n: deviceName() })
+  // On the dev server the phone can't use "localhost" (that's the phone): give it this computer's address on the network.
+  const lan = localRelay ? await lanRelay() : ''
+  // v2: once paired, both devices move to a room only they can work out (syncRoom).
+  const q = new URLSearchParams({ r: room, k: b64u.encode(kp.pub), s: b64u.encode(secret), u: lan || RELAY, n: deviceName(), v: '2' })
   const url = `monolith://pair?${q}`
-  useLink.setState({ session: { url, state: 'waiting' } })
+  useLink.setState({ session: { url, state: 'waiting', lan: !!lan } })
   const ws = new WebSocket(roomURL(room))
   pairingWs = ws
   codeTimer = window.setTimeout(() => {
@@ -287,20 +290,31 @@ export async function beginPairing() {
       if (!equal(await hmac(secret, phonePub), b64u.decode(String(data.m)))) throw new Error('This code was answered by something other than your phone.')
       const raw = await deriveKey(kp.priv, phonePub, secret)
       const ck = await aesKey(raw)
+      const p: Pairing = { room: await syncRoom(raw), ck, name: String(data.n || 'iPhone').slice(0, 60), linkedAt: Date.now(), relay: RELAY, check: await checkCode(raw) }
       raw.fill(0)
-      const p: Pairing = { room, ck, name: String(data.n || 'iPhone').slice(0, 60), linkedAt: Date.now(), relay: RELAY }
       await savePairings([...useLink.getState().pairings, p])
       clearTimeout(codeTimer)
-      pairingWs = null // hand the socket over to sync
-      attach(room, ws, ck)
-      useLink.setState((s) => ({ session: { url, state: 'linked', phone: p.name }, peers: { ...s.peers, [room]: 1 } }))
-      await send(room, { t: 'hi', n: deviceName(), c: CAPS })
-      await sendRecs(room, 'snap', await snapshot(room))
+      // The code's room has done its job. Sync happens in the pairing's own room; the phone is already on its way there.
+      pairingWs = null
+      ws.close()
+      useLink.setState({ session: { url, state: 'linked', phone: p.name, check: p.check } })
+      connect(p)
     } catch (err) {
       useLink.setState({ session: { url, state: 'error', error: (err as Error).message } })
     }
   }
   ws.onerror = () => useLink.setState({ session: { url, state: 'error', error: 'Can’t reach the sync relay.' } })
+}
+
+/** The dev server's relay as the phone can reach it: this computer's address on the local network. */
+async function lanRelay() {
+  try {
+    const r = await fetch('/relay/lan')
+    const { url } = (await r.json()) as { url?: string }
+    return url || ''
+  } catch {
+    return ''
+  }
 }
 
 export function cancelPairing() {

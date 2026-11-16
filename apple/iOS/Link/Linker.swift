@@ -19,6 +19,8 @@ struct Pairing: Codable, Identifiable, Hashable {
 /// What a pairing QR code (monolith://pair?…, or socratic:// from before the rename) asks for.
 struct PairRequest: Identifiable, Hashable {
     let room: String, webPub: Data, secret: Data, relay: String, name: String
+    /// v2 codes: once paired, both devices sync in a room worked out from the key, not the one in the code.
+    let privateRoom: Bool
     var id: String { room }
 
     init?(url: URL) {
@@ -40,11 +42,15 @@ struct PairRequest: Identifiable, Hashable {
             let host = URL(string: ws)?.host() ?? ""
             let local = host == "localhost" || host.hasSuffix(".local") || host.hasPrefix("10.") || host.hasPrefix("192.168.") || host.hasPrefix("127.")
                 || (host.hasPrefix("172.") && (16...31).contains(Int(host.split(separator: ".").dropFirst().first ?? "") ?? 0))
+                || (host.hasPrefix("100.") && (64...127).contains(Int(host.split(separator: ".").dropFirst().first ?? "") ?? 0))
             guard local else { return nil }
         }
         self.relay = ws
         self.name = String((v("n") ?? "Computer").replacingOccurrences(of: "+", with: " ").prefix(60))
+        self.privateRoom = (Int(v("v") ?? "") ?? 1) >= 2
     }
+    /// A relay on this network (the dev server on a computer), which needs the Local Network permission.
+    var onLocalNetwork: Bool { relay.hasPrefix("ws://") }
 }
 
 /// One note, doc, lecture or event as it travels between devices. Same shape as `Rec` in src/link/link.ts.
@@ -131,6 +137,9 @@ final class Linker {
     /// A scanned code waiting for the person to say yes, and how that's going.
     var request: PairRequest? { didSet { log.debug("request \(self.request?.room ?? "nil", privacy: .public)") } }
     var pairState: PairState = .confirm
+    /// The room the pairing being made will sync in, and the six digits both screens show once it's made.
+    private var pendingRoom: String?
+    private(set) var pendingCheck: String?
 
     var anyOnline: Bool { online.values.contains { $0 > 0 } }
 
@@ -305,7 +314,7 @@ final class Linker {
         case "hi":
             if let n = msg.n { rename(room, n) }
             caps[room] = msg.c ?? []
-            if request?.room == room { pairState = .linked }
+            if pendingRoom == room, pairState == .linking { pairState = .linked; Haptics.success() }
             // A hi sent on arrival crossed ours, and both sides already sent their snapshots: don't send it twice.
             // One sent right after pairing (no p) came before this phone could be read, so it gets one now.
             if msg.p == nil {
@@ -452,21 +461,45 @@ final class Linker {
         log.debug("pairing \(r.relay, privacy: .public)")
         do {
             let (hello, raw) = try LinkCrypto.answer(webPub: r.webPub, secret: r.secret, name: Self.deviceName)
-            let p = Pairing(room: r.room, key: B64U.encode(raw), name: r.name, relay: r.relay, linkedAt: .now)
+            // The code's room is only for the handshake. Anyone who saw the code knows it; only we two can work out this one.
+            let room = r.privateRoom ? LinkCrypto.syncRoom(raw) : r.room
+            let p = Pairing(room: room, key: B64U.encode(raw), name: r.name, relay: r.relay, linkedAt: .now)
+            pendingRoom = room
+            pendingCheck = r.privateRoom ? LinkCrypto.checkCode(raw) : nil
             pairings.removeAll { $0.room == p.room }
             pairings.append(p)
             save()
             scan()
-            connect(p)
-            let frame = try JSONSerialization.data(withJSONObject: hello)
-            conns[p.room]?.task.send(.string(String(decoding: frame, as: UTF8.self))) { [weak self] error in
-                guard error != nil else { return }
-                Task { @MainActor [weak self] in self?.failPairing(r.room, "Couldn’t reach the sync relay. Check your connection and try again.") }
+            let unreachable = r.onLocalNetwork
+                ? "Couldn’t reach your computer. Check both are on the same Wi-Fi, and that Monolith may use the local network (Settings › Privacy › Local Network)."
+                : "Couldn’t reach the sync relay. Check your connection and try again."
+            let frame = String(decoding: try JSONSerialization.data(withJSONObject: hello), as: UTF8.self)
+            if r.privateRoom {
+                // Say hello in the code's room, then leave it.
+                guard let url = URL(string: "\(r.relay)/relay?room=\(r.room)") else { throw CocoaError(.coderInvalidValue) }
+                let code = URLSession.shared.webSocketTask(with: url)
+                code.resume()
+                code.send(.string(frame)) { [weak self] error in
+                    Task { @MainActor [weak self] in
+                        if error != nil { self?.failPairing(room, unreachable); code.cancel(); return }
+                        try? await Task.sleep(for: .seconds(2))
+                        code.cancel(with: .normalClosure, reason: nil)
+                    }
+                }
+                connect(p)
+            } else {
+                connect(p)
+                conns[p.room]?.task.send(.string(frame)) { [weak self] error in
+                    guard error != nil else { return }
+                    Task { @MainActor [weak self] in self?.failPairing(room, unreachable) }
+                }
             }
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(15))
-                if self.request?.room == r.room, self.pairState == .linking {
-                    self.failPairing(r.room, "The computer didn’t answer. Make sure the code is still showing, then scan it again.")
+                if self.pendingRoom == room, self.pairState == .linking {
+                    self.failPairing(room, r.onLocalNetwork
+                        ? "Your computer didn’t answer. Make sure the code is still showing and both are on the same Wi-Fi, then scan again."
+                        : "The computer didn’t answer. Make sure the code is still showing, then scan it again.")
                 }
             }
         } catch {
@@ -477,6 +510,7 @@ final class Linker {
     private func failPairing(_ room: String, _ message: String) {
         guard pairState != .linked else { return }
         pairState = .failed(message)
+        Haptics.error()
         remove(room)
     }
 

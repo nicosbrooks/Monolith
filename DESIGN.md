@@ -92,9 +92,37 @@ iPhone screens felt cramped at web sizes, so iOS runs a little roomier. Use the 
 | `Space.page` | 20pt | side padding of a screen |
 | `Space.section` | 32pt | gap between sections |
 | `Space.card` | 18pt | inner padding of a card |
-| `Space.row` | 54pt | minimum row height in cards and lists |
+| `Space.row` | 48pt | minimum row height in cards and lists |
 
-The drawer is min(310pt, 80% of the width), with 50pt rows, a 24pt icon column so every label starts at the same x, and 30pt above each heading.
+The drawer is min(310pt, 80% of the width), with 44pt rows (40pt for Recents), a 24pt icon column so every label starts at the same x, and 24pt above each heading.
+
+### iPhone: calm, not boxed (Nov 16)
+The iPhone read as clunky when every group sat in its own card. The rules now:
+- **One card per screen at most.** On Home that's the assistant card. Calendar, Tasks and Recent are plain rows under a small grey label. Never a box inside a box: inside the card, starting points are rows, and a suggestion's source is one quiet line (doc name, then the words it found).
+- **No doubled header.** Home's title bar is empty; the greeting is the title, with the date in small grey text under it.
+- **Empty is one quiet line** ("Nothing coming up", tertiary), not a box.
+- **Two buttons at most in a title bar.** In a doc: the star and ···. Listen lives in ···; while it reads aloud, a stop button appears up top.
+- **Menus are one line per option.** The + menu reads Event, Record, Doc, with no descriptions.
+- **No flashes.** The launch screen is black, like the app's default, and the assistant card appears only once Home has read the docs, so nothing jumps in.
+- **Dates read as words.** "Nov 13", with the year only when it's another year.
+
+### iPhone: touch, holds and feel (Nov 16)
+- **Haptics through `Haptics` only** (`apple/iOS/Haptics.swift`), never a generator made on the spot. `tap` for a choice (a star, a checkbox, a Markdown shortcut taking effect, a toolbar format), `thud` for something removed (trash, delete a line, unlink), `success` when something new works (linked a computer, finished a task from a hold menu), `warning` when a gesture can't do anything (indenting the first item). Never on scroll or on every keystroke.
+- **Hold shows what you're holding.** Docs and recordings (Home, lists, sidebar) open a preview of their first lines above the menu (`.itemMenu`), as words, never Markdown. Tasks on Home show the doc they live in, with Mark complete and Copy.
+- **Hold a line's marker** (bullet, number, checkbox, quote bar, divider, picture) for Move up, Move down, Duplicate and Delete line. The same moves sit in the keyboard's Aa menu.
+- **Keyboard bar, one line:** Checklist, Bullets, Aa | Outdent, Indent, Hide keyboard. Outdent and Indent are greyed out off a list item rather than hidden, so the bar doesn't shift.
+- **Removing asks or offers Undo, never neither.** Trashing a doc or event shows the Undo pill; swiping to unlink a computer asks first, because there's nothing to undo.
+
+### iPhone from outside the app (`SystemActions.swift`)
+Monolith should be one gesture away wherever you are on the phone, and never leak anything to get there.
+- **Hold the app icon:** Ask (puts the cursor in the Ask bar), Record (starts at once), New Doc, then the doc you were last in, labelled "Continue".
+- **Siri, Shortcuts, the Action button:** Ask Monolith (with the question), New Doc, Start Recording, Open Doc (by name), New Event. Each opens the app and does the one thing; no confirmation screens in between.
+- **Spotlight** finds docs and recordings by title and first lines, and opens them directly. The index lives on this iPhone.
+- **With the app lock on**, none of this shows content: Spotlight is cleared, Siri finds no docs, and the Continue action is dropped.
+- All of these go through `Router.shared.action`, so there is one place that knows how to start a doc or a recording.
+
+### Linking a device: the check code
+After pairing, both screens show the same six digits (`checkCode`, "824 793"). The phone shows them large under "Linked to …", the browser in the success note; both keep them in the device's ··· menu. Copy: "Your computer shows the same code." Never call it a key, fingerprint or hash.
 
 ### Fills inside a card
 `Theme.wash` (iOS) and `--card-hover` (web) are for the page. Anything filled *inside* a card (an icon tile, a status row, a secondary pill) uses `Theme.tile`: white 7% in dark, black 4.5% in light. A wash on a card is too close to read.

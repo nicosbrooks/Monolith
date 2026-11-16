@@ -4,7 +4,8 @@ import SwiftData
 @main
 struct MonolithApp: App {
     @State private var recorder = LectureRecorder()
-    @State private var router = Router()
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var router = Router.shared
     @State private var link = Linker.shared
     @Environment(\.scenePhase) private var phase
 
@@ -20,6 +21,7 @@ struct MonolithApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .handlesSystemActions()
                 .environment(recorder)
                 .environment(router)
                 .environment(link)
@@ -119,6 +121,11 @@ private struct BottomBar: ViewModifier {
             .sheet(item: $chat) { ChatView(first: $0.text, about: $0.about) }
             // Tapping into the Ask field loads the model while the question is typed.
             .onChange(of: focused) { if focused { Assistant.warm() } }
+            .onChange(of: router.focusAsk) {
+                guard router.focusAsk else { return }
+                router.focusAsk = false
+                focused = true
+            }
             .onChange(of: router.ask) {
                 guard let q = router.ask else { return }
                 router.ask = nil
@@ -129,11 +136,11 @@ private struct BottomBar: ViewModifier {
     /// One place to start something new, like ChatGPT's +.
     private var newMenu: some View {
         Menu {
-            // The web's create sheet: Doc, Record, Event, each with its one-line hint.
-            Button { create(.doc) } label: { Text("Doc"); Text("Notes, checklists, long-form writing"); Image(systemName: "doc.text") }
-            Button { record() } label: { Text("Record"); Text("A class, a meeting, a thought"); Image(systemName: "mic") }
+            // Doc, Record, Event: one line each, so the menu reads at a glance.
+            Button { create(.doc) } label: { Text("Doc"); Image(systemName: "doc.text") }
+            Button { record() } label: { Text("Record"); Image(systemName: "mic") }
                 .disabled(recorder.isRecording)
-            Button { router.createEvent() } label: { Text("Event"); Text("Add to your calendar"); Image(systemName: "calendar.badge.plus") }
+            Button { router.createEvent() } label: { Text("Event"); Image(systemName: "calendar.badge.plus") }
         } label: {
             Image(systemName: "plus").font(.title3.weight(.medium)).foregroundStyle(.primary)
                 .frame(width: 48, height: 48)
@@ -168,7 +175,7 @@ private struct BottomBar: ViewModifier {
             ctx.insert(e)
             PhoneLink.shared.sendAgenda()
             router.openCalendar(p.start)
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            Haptics.success()
             let when = p.allDay ? e.start.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
                 : e.start.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
             Toaster.shared.show("Added \(e.title)", detail: (p.due ? "Due " : "") + when + (p.location.map { " · \($0)" } ?? ""),
@@ -202,6 +209,12 @@ private struct ChatStart: Identifiable {
 /// What to open next, from anywhere: a new item, or a day in the calendar.
 @Observable
 final class Router {
+    /// One per app, so Siri, quick actions and Spotlight can reach it from outside the views.
+    static let shared = Router()
+    /// Waiting to be done once the app is on screen (SystemActions.swift).
+    var action: SystemAction?
+    /// Put the cursor in the Ask bar (the "Ask" quick action).
+    var focusAsk = false
     var pending: Item?
     var calendarDay: Date?
     /// True while the calendar is on screen: the bottom bar then adds events as well as answering.
@@ -389,7 +402,7 @@ struct PhoneRoot: View {
                 row("Docs", "doc.text", .docs)
                 row("Recordings", "mic", .lectures)
                 row("Calendar", "calendar", .calendar)
-                row("Integrations", "puzzlepiece.extension", .integrations)
+                row("Integrations", "link", .integrations)
                 if !folders.isEmpty {
                     heading("Folders")
                     ForEach(folders, id: \.self) { f in row(f, "folder", .folder(f)).folderActions(f) { router.open($0); close() } }
@@ -399,12 +412,12 @@ struct PhoneRoot: View {
                     ForEach(recents.prefix(5)) { item in
                         Button { router.open(item); close() } label: {
                             Text(item.displayTitle).lineLimit(1)
-                                .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+                                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                                 .padding(.horizontal, 12)
                                 .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { ItemMenu(item: item) }
+                        .itemMenu(item)
                     }
                     if recents.count > 5 {
                         Button { allRecents = true } label: {
@@ -434,7 +447,7 @@ struct PhoneRoot: View {
     }
 
     private func heading(_ t: String) -> some View {
-        Text(t).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 12).padding(.top, 30).padding(.bottom, 8)
+        Text(t).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 12).padding(.top, 24).padding(.bottom, 4)
     }
 
     private func row(_ title: String, _ symbol: String, _ s: PadSection) -> some View {
@@ -444,9 +457,9 @@ struct PhoneRoot: View {
                 Image(systemName: symbol).frame(width: 24)
                 Text(title)
             }
-                .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .padding(.horizontal, 14)
-                .background(section == s ? Theme.wash : .clear, in: .rect(cornerRadius: 14))
+                .background(section == s ? Theme.wash : .clear, in: .rect(cornerRadius: 12))
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)

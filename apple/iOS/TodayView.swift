@@ -141,7 +141,7 @@ struct TodayView: View {
                 .padding(.bottom, compact ? 120 : 28)
             }
             .paper()
-            .navigationTitle(compact ? Date.now.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) : "")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .drawerButton()
             .toolbar {
@@ -170,17 +170,22 @@ struct TodayView: View {
     }
 
     @ViewBuilder private var phoneHome: some View {
-        Text(Greeting.text(name: userName, away: away))
-            .font(.title.bold()).accessibilityAddTraits(.isHeader)
-            .padding(.bottom, -Space.section + 12)
-        if showsAssistant { assistantCard }
+        VStack(alignment: .leading, spacing: 4) {
+            Text(Greeting.text(name: userName, away: away))
+                .font(.title.bold()).accessibilityAddTraits(.isHeader)
+            Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+                .font(.subheadline).foregroundStyle(.secondary)
+        }
+        .padding(.bottom, -Space.section + 16)
+        // Only once the docs have been read for dates, so the card appears once, in its final form, without a jump.
+        if derivedOnce && showsAssistant { assistantCard.transition(.opacity) }
 
         // Weather sits beside the label, quietly, when that integration is on.
         let weather = integrations.isOn(.weather) ? integrations.weather : nil
         section("Calendar", trailing: weather?.line, symbol: weather?.symbol) {
             if comingUp.isEmpty {
-                Text("Nothing coming up").font(.subheadline).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
+                Text("Nothing coming up").font(.subheadline).foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
             }
             ForEach(comingUp) { e in
                 Button { router.openCalendar(e.start) } label: { eventRow(e) }
@@ -229,7 +234,7 @@ struct TodayView: View {
                         }
                     }
                     .buttonStyle(.row)
-                    .contextMenu { ItemMenu(item: item) }
+                    .itemMenu(item)
                 }
                 if items.count > 5 {
                     NavigationLink { AllRecentsView() } label: {
@@ -255,12 +260,12 @@ struct TodayView: View {
     }
 
     @ViewBuilder private var assistantCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             if let s = nudge {
                 suggestionCard(s)
             } else {
                 header(startersTitle)
-                VStack(spacing: 8) {
+                VStack(spacing: 0) {
                     ForEach(starters, id: \.text) { s in
                         Button { router.ask = s.text } label: {
                             HStack(spacing: 12) {
@@ -269,20 +274,19 @@ struct TodayView: View {
                                 Spacer(minLength: 6)
                                 Image(systemName: "arrow.up.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
                             }
-                            .padding(.horizontal, 14).padding(.vertical, 12)
-                            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                            .background(Theme.tile, in: .rect(cornerRadius: 16, style: .continuous))
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             .contentShape(.rect)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.row)
                         .accessibilityHint("Asks the assistant")
                     }
                 }
             }
         }
-        .padding(Space.card + 2)
+        .padding(Space.card)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.card, in: .rect(cornerRadius: 26, style: .continuous))
+        .background(Theme.card, in: .rect(cornerRadius: 24, style: .continuous))
         .animation(.snappy, value: nudge?.id)
     }
 
@@ -293,7 +297,7 @@ struct TodayView: View {
 
     /// A date the assistant found in a doc: what, when, exactly where it came from, and two clear choices.
     private func suggestionCard(_ s: Suggestion) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             header("Add to your calendar?")
             VStack(alignment: .leading, spacing: 4) {
                 Text(s.title).font(.title3.weight(.semibold))
@@ -302,21 +306,20 @@ struct TodayView: View {
             }
             if let doc = items.first(where: { $0.id == s.itemID }) {
                 ItemLink(item: doc) {
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "doc.text").font(.footnote).foregroundStyle(.secondary).padding(.top, 2)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(doc.displayTitle).font(.footnote.weight(.medium)).lineLimit(1)
-                            Text("\u{201C}\(s.line)\u{201D}").font(.footnote).foregroundStyle(.secondary).lineLimit(2)
-                        }
+                    // Where it came from, in one quiet line: the doc's name, then the words it found.
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "doc.text").imageScale(.small)
+                        (Text(doc.displayTitle).foregroundStyle(.primary) + Text("  \u{201C}\(s.line)\u{201D}"))
+                            .lineLimit(2).multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
                     }
-                    .padding(14)
-                    .background(Theme.wash, in: .rect(cornerRadius: 16, style: .continuous))
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("Opens the doc")
             }
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 pill("Add to calendar", primary: true) { add(s) }
                 pill("Not now", primary: false) { dismiss(s.id); Toaster.shared.show("Suggestion hidden", action: ("Undo", { undismiss(s.id) })) }
             }
@@ -326,7 +329,7 @@ struct TodayView: View {
     private func pill(_ title: String, primary: Bool, _ run: @escaping () -> Void) -> some View {
         Button(action: run) {
             Text(title).font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 18).frame(height: 40)
+                .padding(.horizontal, 16).frame(height: 36)
                 .foregroundStyle(primary ? Theme.paper : .primary)
                 .background(primary ? Color.primary : Theme.wash, in: .capsule)
                 .contentShape(.capsule)
@@ -382,7 +385,7 @@ struct TodayView: View {
     }
 
     private func section<Content: View>(_ title: String, trailing: String? = nil, symbol: String? = nil, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
                     .accessibilityAddTraits(.isHeader)
@@ -393,11 +396,9 @@ struct TodayView: View {
                 }
             }
             .font(.subheadline)
-            .padding(.horizontal, 6)
-            VStack(alignment: .leading, spacing: 2) { content() }
-                .padding(.horizontal, 16).padding(.vertical, 8)
+            // Plain rows under a small label: only the assistant gets a card, so Home reads as one calm list.
+            VStack(alignment: .leading, spacing: 0) { content() }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.card, in: .rect(cornerRadius: 22, style: .continuous))
         }
     }
 
@@ -408,7 +409,7 @@ struct TodayView: View {
         let done = checking.contains(key)
         return HStack(spacing: 14) {
             Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                Haptics.tap()
                 if done { withAnimation(.snappy) { _ = checking.remove(key) }; return }
                 withAnimation(.snappy) { _ = checking.insert(key) }
                 Task {
@@ -435,6 +436,14 @@ struct TodayView: View {
             }
             .buttonStyle(.row)
         }
+        // Hold: finish it now, or copy it, with where it lives shown above.
+        .contextMenu {
+            Button("Mark complete", systemImage: "checkmark.square") {
+                Haptics.success()
+                withAnimation(.snappy) { task.item.body = Tasks.check(task.line, in: task.item.body); task.item.touch(); rederive() }
+            }
+            Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = MD.plain(task.line); Toaster.shared.show("Copied") }
+        } preview: { ItemPeek(item: task.item) }
     }
 
     private func quiet(_ t: String) -> some View {
@@ -472,7 +481,7 @@ struct TodayView: View {
         ForEach(Array(tasks.prefix(compact && !allTasksShown ? 3 : 6).enumerated()), id: \.offset) { _, task in
             Button {
                 withAnimation(.snappy) { task.item.body = Tasks.check(task.line, in: task.item.body); task.item.touch(); rederive() }
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                Haptics.tap()
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "square").foregroundStyle(.secondary)
@@ -515,7 +524,7 @@ struct TodayView: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .contextMenu { ItemMenu(item: item) }
+            .itemMenu(item)
         }
     }
 
@@ -614,7 +623,7 @@ struct AllRecentsView: View {
                 else { ItemLink(item: item) { ItemRow(item: item, showKind: true) } }
             }
             .listRowSeparator(.hidden).listRowBackground(Color.clear)
-            .contextMenu { ItemMenu(item: item) }
+            .itemMenu(item)
         }
         .compactList()
         .navigationTitle("Recent")

@@ -73,7 +73,9 @@ function LinkBody() {
           ) : (
             <p className="muted small"><span className="pulse-dot" /> Waiting for your phone…</p>
           )}
-          {localRelay && <p className="muted small">Dev mode: pairing goes through this computer’s dev server, so only a simulator can join. Set <code>VITE_RELAY_URL</code> to the hosted relay to pair a real phone from anywhere.</p>}
+          {localRelay && (session.lan
+            ? <p className="muted small">Your phone needs to be on the same Wi-Fi as this computer. If it asks, allow Monolith to find devices on your network.</p>
+            : <p className="muted small">Dev mode: this computer isn’t on a network a phone can reach, so only a simulator can join. Set <code>VITE_RELAY_URL</code> to the hosted relay to pair from anywhere.</p>)}
           <div className="row">
             <button className="btn sm" onClick={() => (navigator.clipboard.writeText(session.url), toast('Pairing link copied'))}><Copy size={14} /> Copy link</button>
             {pairings.length > 0 && <button className="btn sm" onClick={cancelPairing}>Cancel</button>}
@@ -90,7 +92,8 @@ function LinkBody() {
           <span className="tick"><Check size={18} /></span>
           <div>
             <b>Linked to {session.phone}</b>
-            <p className="muted small">Your phone and this browser now stay in step whenever Monolith is open on the phone.</p>
+            {session.check && <p className="link-check">Your phone shows <b>{session.check}</b> too. If it doesn’t, unlink it.</p>}
+            <p className="muted small">Only these two devices hold the key. The relay passes sealed boxes it can’t open.</p>
           </div>
         </motion.div>
       )}
@@ -107,6 +110,7 @@ function LinkBody() {
                   <small className="muted">
                     <i className={`status-dot ${on ? 'on' : ''}`} /> {on ? 'Connected' : 'Offline'}
                     {on && lastSync ? ` · synced ${formatDistanceToNowStrict(lastSync, { addSuffix: true })}` : ''}
+                    {p.check ? ` · code ${p.check}` : ''}
                   </small>
                 </span>
                 <button

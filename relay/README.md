@@ -71,8 +71,10 @@ Logs also show in the Cloudflare dashboard under Workers → monolith-relay → 
 
 ## How it works
 
-- `wss://<relay>/relay?room=<id>`: devices that share a room id see each other. The id is a random 128-bit value
-  chosen at pairing time.
+- `wss://<relay>/relay?room=<id>`: devices that share a room id see each other. Two kinds of room: the one in the
+  pairing QR code (random, used once for the handshake, then left), and the pairing's own room, which each device
+  works out from the key they agreed (HKDF, `socratic/link/room/v1`). The relay sees nothing that ties the two
+  together except timing, and someone who saw or photographed the QR code can't find the second one.
 - Every frame a device sends goes to the other devices in the room, untouched. When a device joins or leaves,
   everyone gets `{"relay":"peers","n":<count>}`. `ping` gets `pong`.
 - `https://<relay>/health` returns `{ "ok": true }` for uptime checks.
@@ -90,3 +92,6 @@ roughly how much they send, and can drop messages. `npm run smoke` (see below) c
 and that nothing readable crosses it.
 
 The dev server has the same protocol built in (`../server/relay.ts`), used whenever `VITE_RELAY_URL` isn't set.
+A phone can't reach the dev server at `localhost`, so the dev relay (only the relay, not the app) also listens on
+this computer's network address one port below the server (5199 → 5198), and the pairing code carries that address.
+The phone needs to be on the same Wi-Fi, and macOS may ask once whether Node may accept incoming connections.

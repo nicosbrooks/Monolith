@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 import { expect, test, type Page } from '@playwright/test'
-import { aesKey, b64u, deriveKey, hmac, open, seal } from '../../src/link/crypto.ts'
+import { aesKey, b64u, checkCode, deriveKey, hmac, open, seal, syncRoom } from '../../src/link/crypto.ts'
 
 // Linking a phone, end to end: the browser shows a pairing code, and this test plays the phone (as
 // apple/iOS/Link/Linker.swift does) through the relay the preview server runs. It checks what crosses the relay
@@ -20,22 +20,28 @@ async function phone(pairURL: string) {
   const q = new URL(pairURL).searchParams
   const room = q.get('r')!
   const secret = b64u.decode(q.get('s')!)
-  const ws = new WebSocket(`ws://localhost:5220/relay?room=${room}`)
-  await new Promise((r, j) => ((ws.onopen = r), (ws.onerror = j)))
+  expect(q.get('v')).toBe('2')
   const raw: string[] = []
   const inbox: Record<string, unknown>[] = []
-  let key: CryptoKey | null = null
+  // Answer the code in its room: our key, and proof we read the secret.
+  const kp = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits'])
+  const pub = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey))
+  const bytes = await deriveKey(kp.privateKey, b64u.decode(q.get('k')!), secret)
+  const key = await aesKey(bytes)
+  const code = new WebSocket(`ws://localhost:5220/relay?room=${room}`)
+  await new Promise((r, j) => ((code.onopen = r), (code.onerror = j)))
+  const inCode: string[] = []
+  code.onmessage = (e) => (raw.push(String(e.data)), inCode.push(String(e.data)))
+  code.send(JSON.stringify({ p: 'hello', k: b64u.encode(pub), m: b64u.encode(await hmac(secret, pub)), n: 'Test iPhone' }))
+  // Then sync in the pairing's own room, which only the two key holders can work out.
+  const ws = new WebSocket(`ws://localhost:5220/relay?room=${await syncRoom(bytes)}`)
+  await new Promise((r, j) => ((ws.onopen = r), (ws.onerror = j)))
   ws.onmessage = async (e) => {
     const d = String(e.data)
     raw.push(d)
     const f = JSON.parse(d)
-    if (key && typeof f.c === 'string') inbox.push(await open(key, f.c))
+    if (typeof f.c === 'string') inbox.push(await open(key, f.c))
   }
-  // Answer the code: our key, and proof we read the secret.
-  const kp = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits'])
-  const pub = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey))
-  key = await aesKey(await deriveKey(kp.privateKey, b64u.decode(q.get('k')!), secret))
-  ws.send(JSON.stringify({ p: 'hello', k: b64u.encode(pub), m: b64u.encode(await hmac(secret, pub)), n: 'Test iPhone' }))
   let q_ = Date.now() * 1000
   const send = async (msg: object) => {
     const frame = JSON.stringify({ c: await seal(key!, { ...msg, f: 'test-phone', q: ++q_ }) })
@@ -46,7 +52,7 @@ async function phone(pairURL: string) {
     await expect.poll(() => inbox.slice(after).some((m) => m.t === t), { timeout: 15_000 }).toBe(true)
     return inbox.slice(after).find((m) => m.t === t)!
   }
-  return { ws, raw, inbox, send, next }
+  return { ws, code, inCode, raw, inbox, send, next, check: await checkCode(bytes) }
 }
 
 test('a linked phone syncs sealed records and lends the browser its model', async ({ page, context }) => {
@@ -62,8 +68,14 @@ test('a linked phone syncs sealed records and lends the browser its model', asyn
   expect(url).toMatch(/^monolith:\/\/pair\?/)
 
   const p = await phone(url)
-  // The browser checks the proof, says hello and sends what it has, all sealed.
+  // The browser checks the proof, then says hello and sends what it has in the private room, all sealed.
   await expect(page.getByText('Test iPhone').first()).toBeVisible()
+  // Both screens show the same six digits.
+  await expect(page.locator('.link-check')).toContainText(p.check)
+  // Nothing is said in the code's room after the handshake: anyone who saw the code learns nothing more.
+  await page.waitForTimeout(300)
+  expect(p.inCode.filter((d) => d.includes('"c"'))).toEqual([])
+  p.code.close()
   const hi = await p.next('hi')
   expect(hi.c).toContain('files')
   await p.next('snap')

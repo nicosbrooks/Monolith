@@ -67,3 +67,23 @@ export async function open<T>(key: CryptoKey, box: string): Promise<T> {
   const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: B(b.slice(0, 12)) }, key, B(b.slice(12)))
   return JSON.parse(dec.decode(pt))
 }
+
+/** HKDF-SHA256 of the pairing key under a label, so each use of the key gets bytes of its own. */
+async function expand(raw: Uint8Array, label: string, n: number) {
+  const hk = await crypto.subtle.importKey('raw', B(raw), 'HKDF', false, ['deriveBits'])
+  return new Uint8Array(await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: B(new Uint8Array(0)), info: enc.encode(label) }, hk, n * 8))
+}
+
+/**
+ * The room a pairing syncs in, from its key. The QR code's room is only for the handshake: anyone who saw the code
+ * (or a photo of it) knows that room, but only the two devices hold the key, so only they can find this one.
+ */
+export const syncRoom = async (raw: Uint8Array) => b64u.encode(await expand(raw, 'socratic/link/room/v1', 16))
+
+/** Six digits both screens show after pairing. If they match, nothing sat in the middle. */
+export async function checkCode(raw: Uint8Array) {
+  const b = await expand(raw, 'socratic/link/check/v1', 4)
+  const n = ((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]) >>> 0
+  const s = String(n % 1_000_000).padStart(6, '0')
+  return `${s.slice(0, 3)} ${s.slice(3)}`
+}

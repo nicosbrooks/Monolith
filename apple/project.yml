@@ -42,7 +42,9 @@ targets:
       path: iOS/Info.plist
       properties:
         CFBundleDisplayName: Monolith
-        UILaunchScreen: {}
+        # Black, like the app (dark unless changed in Settings), so launching never flashes white.
+        UILaunchScreen:
+          UIColorName: LaunchBackground
         UIApplicationSceneManifest: { UIApplicationSupportsMultipleScenes: true }
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
@@ -56,6 +58,11 @@ targets:
         NSLocationAlwaysAndWhenInUseUsageDescription: With Location history on, Monolith notes the places you spend time so the assistant can refer to them. They stay on this iPhone, and you can clear them at any time.
         NSLocalNetworkUsageDescription: Sync with Monolith running on a computer on your network during development.
         NSAppTransportSecurity: { NSAllowsLocalNetworking: true }
+        # Hold the app icon. The last doc you were in is added after these when the app goes to the background.
+        UIApplicationShortcutItems:
+          - { UIApplicationShortcutItemType: ask, UIApplicationShortcutItemTitle: Ask, UIApplicationShortcutItemIconSymbolName: bubble.left }
+          - { UIApplicationShortcutItemType: record, UIApplicationShortcutItemTitle: Record, UIApplicationShortcutItemIconSymbolName: mic }
+          - { UIApplicationShortcutItemType: doc, UIApplicationShortcutItemTitle: New Doc, UIApplicationShortcutItemIconSymbolName: doc.text }
         CFBundleURLTypes:
           - CFBundleURLName: com.socratic.app
             CFBundleURLSchemes: [monolith, socratic] # socratic: codes shown before the rename

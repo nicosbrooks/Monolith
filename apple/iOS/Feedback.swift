@@ -36,7 +36,7 @@ struct ToastView: View {
                 if let d = toast.detail { Text(d).font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
             }
             if let a = toast.action {
-                Button(a.label) { a.run(); Toaster.shared.dismiss() }
+                Button(a.label) { Haptics.tap(); a.run(); Toaster.shared.dismiss() }
                     .font(.footnote.weight(.semibold)).buttonStyle(.plain)
                     .padding(.horizontal, 12).frame(height: 30)
                     .background(Color.primary.opacity(0.12), in: .capsule)
@@ -53,16 +53,16 @@ struct ToastView: View {
 
 extension Item {
     /// Moves it to Recently Deleted and offers Undo, like the web app.
-    func trash() {
+    @MainActor func trash() {
         deletedAt = .now
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.thud()
         let what = kind == .lecture ? "Recording" : "Doc"
         Toaster.shared.show("\(what) moved to Recently Deleted", action: ("Undo", { [weak self] in self?.deletedAt = nil }))
     }
 
-    func toggleFavorite() {
+    @MainActor func toggleFavorite() {
         pinned.toggle()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.tap()
     }
 }
 
@@ -89,11 +89,11 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
 
 extension Event {
     /// Deletes it and offers Undo, which puts back a copy.
-    func trash(_ ctx: ModelContext) {
+    @MainActor func trash(_ ctx: ModelContext) {
         let copy = (title, start, end, allDay, location, notes, linkedItemID, color)
         ctx.delete(self)
         PhoneLink.shared.sendAgenda()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.thud()
         Toaster.shared.show("Event deleted", action: ("Undo", {
             let e = Event(title: copy.0, start: copy.1, end: copy.2)
             e.allDay = copy.3; e.location = copy.4; e.notes = copy.5; e.linkedItemID = copy.6; e.color = copy.7

@@ -38,7 +38,7 @@ enum Space {
     /// Inside a card.
     static let card: CGFloat = 18
     /// A tappable row.
-    static let row: CGFloat = 54
+    static let row: CGFloat = 48
 }
 
 extension Font {
@@ -95,7 +95,9 @@ extension Date {
     var shortRelative: String {
         if Calendar.current.isDateInToday(self) { return formatted(date: .omitted, time: .shortened) }
         if Calendar.current.isDateInYesterday(self) { return "Yesterday" }
-        return formatted(.dateTime.month(.defaultDigits).day().year(.twoDigits))
+        // "Nov 13", with the year only when it isn't this one.
+        if Calendar.current.isDate(self, equalTo: .now, toGranularity: .year) { return formatted(.dateTime.month(.abbreviated).day()) }
+        return formatted(.dateTime.month(.abbreviated).day().year())
     }
 }
 

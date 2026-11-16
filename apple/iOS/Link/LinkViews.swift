@@ -27,8 +27,8 @@ struct SettingsSheet: View {
                         }
                         .padding(.vertical, 6)
                     }
+                    // Swiping asks first (ComputerRow): unlinking shouldn't happen by accident.
                     ForEach(link.pairings) { p in ComputerRow(pairing: p) }
-                        .onDelete { $0.map { link.pairings[$0] }.forEach(link.unlink) }
                     Button { scanning = true } label: { Label("Link a computer", systemImage: "laptopcomputer") }
                 } header: {
                     Text("Linked computers").sectionTitle()
@@ -133,6 +133,8 @@ private struct ComputerRow: View {
     @Environment(Linker.self) private var link
     var pairing: Pairing
     @State private var confirming = false
+    /// The six digits shown when this computer was linked; it shows the same ones.
+    private var check: String? { B64U.decode(pairing.key).map(LinkCrypto.checkCode) }
 
     var body: some View {
         let on = (link.online[pairing.room] ?? 0) > 0
@@ -148,11 +150,13 @@ private struct ComputerRow: View {
             }
             Spacer()
             Menu {
+                if let check { Section("Check code \(check)") {} }
                 Button("Unlink", systemImage: "link.badge.minus", role: .destructive) { confirming = true }
             } label: { Image(systemName: "ellipsis").foregroundStyle(.secondary).frame(width: 30, height: 30) }
         }
+        .swipeActions { Button("Unlink", systemImage: "link.badge.minus") { Haptics.tap(); confirming = true }.tint(.red) }
         .confirmationDialog("Unlink \(pairing.name)?", isPresented: $confirming, titleVisibility: .visible) {
-            Button("Unlink", role: .destructive) { link.unlink(pairing) }
+            Button("Unlink", role: .destructive) { Haptics.thud(); link.unlink(pairing) }
         } message: { Text("It stops syncing with this phone. Nothing is deleted on either device.") }
     }
 }
@@ -203,7 +207,7 @@ struct ScanSheet: View {
             withAnimation { invalid = true }
             return
         }
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        Haptics.success()
         dismiss()
         link.pairState = .confirm
         link.request = r
@@ -265,6 +269,12 @@ struct PairSheet: View {
             VStack(spacing: 8) {
                 Text(title).font(.sub).multilineTextAlignment(.center)
                 Text(message).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                if link.pairState == .linked, let check = link.pendingCheck {
+                    // The same six digits show on the computer. If they match, no one sat in the middle.
+                    Text(check).font(.title2.weight(.semibold).monospacedDigit()).tracking(2).padding(.top, 6)
+                        .accessibilityLabel("Check code \(check)")
+                    Text("Your computer shows the same code.").font(.footnote).foregroundStyle(.secondary)
+                }
             }
             .padding(.horizontal, 28)
 
@@ -273,7 +283,7 @@ struct PairSheet: View {
             VStack(spacing: 10) {
                 switch link.pairState {
                 case .confirm:
-                    Button { link.pair(request) } label: { Text("Link").frame(maxWidth: .infinity) }
+                    Button { Haptics.tap(); link.pair(request) } label: { Text("Link").frame(maxWidth: .infinity) }
                         .buttonStyle(.glassProminent).controlSize(.large)
                     Button("Cancel") { close() }.foregroundStyle(.secondary)
                 case .linking:
@@ -287,7 +297,7 @@ struct PairSheet: View {
         }
         .tint(.primary)
         .animation(.snappy, value: link.pairState)
-        .presentationDetents([.height(360)])
+        .presentationDetents([.height(link.pendingCheck != nil && link.pairState == .linked ? 430 : 360)])
         .interactiveDismissDisabled(link.pairState == .linking)
     }
 
@@ -303,8 +313,8 @@ struct PairSheet: View {
     private var message: String {
         switch link.pairState {
         case .confirm: "It gets a copy of your notes, docs, lectures and calendar, and stays in sync. Only link computers you trust."
-        case .linking: "Waiting for your computer to answer."
-        case .linked: "Changes now sync both ways whenever Monolith is open on both. Use Sync mode to keep them in step overnight."
+        case .linking: request.onLocalNetwork ? "Waiting for your computer. Both need to be on the same Wi-Fi." : "Waiting for your computer to answer."
+        case .linked: "Only your two devices hold the key. Changes sync both ways whenever Monolith is open on both."
         case .failed(let why): why
         }
     }

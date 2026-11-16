@@ -75,7 +75,7 @@ struct DocsView: View {
         ItemLink(item: d) { ItemRow(item: d) }
             .swipeActions(edge: .leading) { Button { d.toggleFavorite() } label: { Image(systemName: d.pinSymbol) }.tint(.orange) }
             .swipeActions(edge: .trailing) { Button(role: .destructive) { d.trash() } label: { Image(systemName: "trash") } }
-            .contextMenu { ItemMenu(item: d, folders: folders) }
+            .itemMenu(d, folders: folders)
     }
 
     private func open(_ d: Item) {
@@ -104,7 +104,7 @@ private struct DocNode: View {
 
     private var row: some View {
         ItemLink(item: doc) { ItemRow(item: doc) }
-        .contextMenu { ItemMenu(item: doc, folders: folders) }
+        .itemMenu(doc, folders: folders)
         .swipeActions(edge: .leading) { Button { doc.toggleFavorite() } label: { Image(systemName: doc.pinSymbol) }.tint(.orange) }
         .swipeActions(edge: .trailing) { Button(role: .destructive) { doc.trash() } label: { Image(systemName: "trash") } }
         .listRowBackground(Color.clear)

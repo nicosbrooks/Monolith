@@ -1521,6 +1521,8 @@ a,
 .pulse-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--text-3); animation: skel 1.2s ease-in-out infinite; }
 .link-done { display: flex; gap: 12px; align-items: flex-start; padding: 14px; margin-bottom: 18px; border-radius: 12px; background: color-mix(in oklab, var(--ok) 10%, transparent); }
 .link-done .tick { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--ok); color: #fff; flex: none; }
+.link-check { margin: 4px 0 2px; font-size: 13px; }
+.link-check b { font-variant-numeric: tabular-nums; letter-spacing: 0.06em; }
 .link-done p { margin: 3px 0 0; }
 .link-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
 .link-row + .link-row { border-top: 1px solid var(--border); }

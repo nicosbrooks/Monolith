@@ -32,6 +32,23 @@ nonisolated enum LinkCrypto {
         return (["p": "hello", "k": B64U.encode(pub), "m": B64U.encode(Data(mac)), "n": name], key.withUnsafeBytes { Data($0) })
     }
 
+    /// HKDF-SHA256 of the pairing key under a label, so each use of the key gets bytes of its own.
+    private static func expand(_ key: Data, _ label: String, _ n: Int) -> Data {
+        HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: key), salt: Data(), info: Data(label.utf8), outputByteCount: n)
+            .withUnsafeBytes { Data($0) }
+    }
+
+    /// The room a pairing syncs in. The QR code's room is only for the handshake; only the two devices can find this one.
+    static func syncRoom(_ key: Data) -> String { B64U.encode(expand(key, "socratic/link/room/v1", 16)) }
+
+    /// Six digits both screens show after pairing. If they match, nothing sat in the middle.
+    static func checkCode(_ key: Data) -> String {
+        let b = [UInt8](expand(key, "socratic/link/check/v1", 4))
+        let n = (UInt32(b[0]) << 24) | (UInt32(b[1]) << 16) | (UInt32(b[2]) << 8) | UInt32(b[3])
+        let s = String(format: "%06u", n % 1_000_000)
+        return "\(s.prefix(3)) \(s.suffix(3))"
+    }
+
     static func seal(_ plain: Data, key: SymmetricKey) throws -> String {
         guard let box = try AES.GCM.seal(plain, using: key).combined else { throw CocoaError(.coderInvalidValue) }
         return B64U.encode(box)
