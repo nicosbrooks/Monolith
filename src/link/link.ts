@@ -39,6 +39,9 @@ export interface Rec {
   allDay?: boolean
   location?: string
   color?: string
+  /** Repeating events (web only for now; the phone keeps what it's given). */
+  repeat?: CalEvent['repeat'] | null
+  skip?: number[]
 }
 
 type Msg = { t: 'hi'; n: string } | { t: 'snap'; recs: Rec[] } | { t: 'put'; recs: Rec[] } | { t: 'bye' }
@@ -278,7 +281,7 @@ async function toRec(i: Item): Promise<Rec> {
 }
 
 const evRec = (e: CalEvent, updatedAt: number): Rec => ({
-  id: e.id, kind: 'event', updatedAt, title: e.title, start: e.start, end: e.end, allDay: e.allDay, location: e.location, color: e.color,
+  id: e.id, kind: 'event', updatedAt, title: e.title, start: e.start, end: e.end, allDay: e.allDay, location: e.location, color: e.color, repeat: e.repeat, skip: e.skip,
 })
 
 async function snapshot(): Promise<Rec[]> {
@@ -332,7 +335,7 @@ async function apply(recs: Rec[]) {
       }
       if (i >= 0 && (eventTimes.get(r.id) || 0) >= r.updatedAt) continue
       if (r.start == null || r.end == null) continue
-      const ev: CalEvent = { ...(i >= 0 ? events[i] : { color: 'blue' }), id: r.id, title: r.title || '', start: r.start, end: r.end, allDay: r.allDay, location: r.location, ...(r.color ? { color: r.color } : {}) } as CalEvent
+      const ev: CalEvent = { ...(i >= 0 ? events[i] : { color: 'blue' }), id: r.id, title: r.title || '', start: r.start, end: r.end, allDay: r.allDay, location: r.location, ...(r.color ? { color: r.color } : {}), ...(r.repeat !== undefined ? { repeat: r.repeat ?? undefined, skip: r.skip } : {}) } as CalEvent
       if (i >= 0) events[i] = ev
       else events.push(ev)
       eventTimes.set(r.id, r.updatedAt)

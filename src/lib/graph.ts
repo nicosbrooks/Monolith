@@ -63,7 +63,7 @@ function read(item: Item, now: Date): Read {
       if (!text) return
       const task: Task = { itemId: item.id, n, text, title: text, done: li.getAttribute('data-checked') === 'true' }
       const when = task.done ? null : parseQuickEvent(text, now)
-      if (when) {
+      if (when && !when.repeat) {
         task.due = when.start.getTime()
         task.allDay = when.allDay
         if (when.title) task.title = when.title

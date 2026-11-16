@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   addDays, addMonths, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, isToday, startOfDay, startOfMonth, startOfWeek, differenceInMinutes, addMinutes,
 } from 'date-fns'
-import { ChevronLeft, ChevronRight, MapPin, Plus, Trash2, X, StickyNote, Mic, Layers, Eye, EyeOff, Loader2, Link2, CircleAlert, AudioWaveform } from 'lucide-react'
+import { ChevronLeft, ChevronRight, MapPin, Plus, Trash2, X, StickyNote, Mic, Layers, Eye, EyeOff, Loader2, Link2, CircleAlert, AudioWaveform, Repeat as RepeatIcon } from 'lucide-react'
 import { importFile, refreshStale, subscribe, unsubscribe, updateSub, useCalendars, useSubEvents } from '../lib/calendars'
 import { openMenu } from '../components/Overlays'
 import { toast } from '../components/Toast'
@@ -12,6 +12,9 @@ import { listenForSwipes, swipeEdge, type SwipeDirection } from '../lib/swipe'
 import { useStore } from '../store'
 import type { CalEvent } from '../types'
 import { COLORS } from '../lib/colors'
+import { REPEATS, expandEvents, occurrenceId, occurrenceOf } from '../lib/repeat'
+import { useWorkspace, type Task } from '../lib/graph'
+import { completeTask } from './TasksView'
 
 const HOUR = 52 // px per hour
 const SNAP = 15
@@ -20,7 +23,6 @@ type CalendarPosition = { start: number | null; cursor: number; mode: 'week' | '
 export function CalendarView({ initialDate }: { initialDate: number | null }) {
   const own = useStore((s) => s.events)
   const subEvents = useSubEvents()
-  const events = useMemo(() => [...own, ...subEvents], [own, subEvents])
   const [showCals, setShowCals] = useState(false)
   const [dir, setDir] = useState(0)
   useEffect(() => {
@@ -32,6 +34,12 @@ export function CalendarView({ initialDate }: { initialDate: number | null }) {
   const [mode, setMode] = useState<CalendarPosition['mode']>(position?.mode ?? 'week')
   const [cursor, setCursor] = useState(() => new Date(position?.cursor ?? initialDate ?? Date.now()))
   const [editing, setEditing] = useState<string | null>(null)
+  // Repeating events are laid out for the months around what's on screen.
+  const month = startOfMonth(cursor).getTime()
+  const events = useMemo(() => [...expandEvents(own, month - 45 * 864e5, month + 80 * 864e5), ...subEvents], [own, subEvents, month])
+  // Tasks with a date sit on their day, above the events.
+  const ws = useWorkspace()
+  const tasks = useMemo(() => ws.tasks.filter((t) => t.due !== undefined), [ws])
   const body = useRef<HTMLDivElement>(null)
   const offset = useMotionValue(0)
   const settle = useRef<ReturnType<typeof animate> | null>(null)
@@ -106,19 +114,19 @@ export function CalendarView({ initialDate }: { initialDate: number | null }) {
         <motion.div className="cal-track" style={{ x: offset }}>
           <AnimatePresence initial={false} custom={dir}>
             <motion.div key={`${mode}-${cursor.toDateString()}`} className="cal-slide" custom={dir} variants={{ enter: (d: number) => ({ x: reducedMotion ? 0 : d * 86, opacity: reducedMotion ? 1 : 0 }), center: { x: 0, opacity: 1 }, leave: (d: number) => ({ x: reducedMotion ? 0 : -d * 72, opacity: 0 }) }} initial="enter" animate="center" exit="leave" transition={{ duration: reducedMotion ? 0 : 0.26, ease: [0.2, 0.7, 0.3, 1] }}>
-              {mode === 'week' ? <Week cursor={cursor} events={events} onEdit={edit} span={narrow ? 3 : 7} /> : <Month cursor={cursor} events={events} onEdit={edit} onPickDay={(d) => (setDir(0), setCursor(d), setMode('week'))} />}
+              {mode === 'week' ? <Week cursor={cursor} events={events} tasks={tasks} onEdit={edit} span={narrow ? 3 : 7} /> : <Month cursor={cursor} events={events} tasks={tasks} onEdit={edit} onPickDay={(d) => (setDir(0), setCursor(d), setMode('week'))} />}
             </motion.div>
           </AnimatePresence>
         </motion.div>
       </div>
       <AnimatePresence>
-        {editing && (subEvents.some((e) => e.id === editing) ? <SubEventSheet ev={subEvents.find((e) => e.id === editing)!} onClose={() => setEditing(null)} /> : <EventEditor id={editing} onClose={() => setEditing(null)} />)}
+        {editing && (subEvents.some((e) => e.id === editing) ? <SubEventSheet ev={subEvents.find((e) => e.id === editing)!} onClose={() => setEditing(null)} /> : <EventEditor id={editing} onRetarget={setEditing} onClose={() => setEditing(null)} />)}
       </AnimatePresence>
     </div>
   )
 }
 
-function Week({ cursor, events, onEdit, span }: { cursor: Date; events: CalEvent[]; onEdit: (id: string) => void; span: number }) {
+function Week({ cursor, events, tasks, onEdit, span }: { cursor: Date; events: CalEvent[]; tasks: Task[]; onEdit: (id: string) => void; span: number }) {
   const st = useStore.getState()
   const days = span === 7 ? eachDayOfInterval({ start: startOfWeek(cursor), end: endOfWeek(cursor) }) : eachDayOfInterval({ start: startOfDay(cursor), end: addDays(startOfDay(cursor), span - 1) })
   const scroller = useRef<HTMLDivElement>(null)
@@ -181,7 +189,13 @@ function Week({ cursor, events, onEdit, span }: { cursor: Date; events: CalEvent
         if (d.mode === 'new') {
           createEvent(d.day, a, b)
         } else if (d.id && d.moved) {
-          st.updateEvent(d.id, { start: addMinutes(base, a).getTime(), end: addMinutes(base, b).getTime() })
+          const to = { start: addMinutes(base, a).getTime(), end: addMinutes(base, b).getTime() }
+          if (occurrenceOf(d.id)) {
+            // Dragging one date of a repeating event moves that date only; the editor changes them all.
+            const before = useStore.getState().events
+            st.detachEvent(d.id, to)
+            toast('Moved this one. The others stay.', { ms: 6000, action: { label: 'Undo', run: () => useStore.setState({ events: before }) } })
+          } else st.updateEvent(d.id, to)
         } else if (d.id) onEdit(d.id)
       }
     }
@@ -240,6 +254,7 @@ function Week({ cursor, events, onEdit, span }: { cursor: Date; events: CalEvent
             {allDay(d).map((e) => (
               <button key={e.id} className="chip" style={{ '--c': COLORS[e.color] } as React.CSSProperties} onClick={() => onEdit(e.id)} onContextMenu={(ce) => colorMenu(ce, e)}>{e.title || 'Untitled'}</button>
             ))}
+            {tasks.filter((t) => isSameDay(t.due!, d)).map((t) => <TaskChip key={`${t.itemId}:${t.n}`} task={t} />)}
           </div>
         ))}
       </div>
@@ -290,7 +305,7 @@ function Week({ cursor, events, onEdit, span }: { cursor: Date; events: CalEvent
                       }}
                     >
                       <b>{e.title || 'New event'}</b>
-                      <small>{format(e.start, 'h:mm')} – {format(e.end, 'h:mm a')}{e.location ? ` · ${e.location}` : ''}</small>
+                      <small>{e.repeat && <RepeatIcon size={10} aria-label="Repeats" />}{format(e.start, 'h:mm')} – {format(e.end, 'h:mm a')}{e.location ? ` · ${e.location}` : ''}</small>
                       <i className="rz" />
                     </div>
                   )
@@ -318,7 +333,7 @@ function Week({ cursor, events, onEdit, span }: { cursor: Date; events: CalEvent
   )
 }
 
-function Month({ cursor, events, onEdit, onPickDay }: { cursor: Date; events: CalEvent[]; onEdit: (id: string) => void; onPickDay: (d: Date) => void }) {
+function Month({ cursor, events, tasks, onEdit, onPickDay }: { cursor: Date; events: CalEvent[]; tasks: Task[]; onEdit: (id: string) => void; onPickDay: (d: Date) => void }) {
   const days = eachDayOfInterval({ start: startOfWeek(startOfMonth(cursor)), end: endOfWeek(endOfMonth(cursor)) })
   const st = useStore.getState()
   return (
@@ -336,6 +351,7 @@ function Month({ cursor, events, onEdit, onPickDay }: { cursor: Date; events: Ca
             }}
           >
             <button className="num" onClick={() => onPickDay(d)}>{format(d, 'd')}</button>
+            {tasks.filter((t) => isSameDay(t.due!, d)).slice(0, 2).map((t) => <TaskChip key={`${t.itemId}:${t.n}`} task={t} month />)}
             {evs.slice(0, 4).map((e) => (
               <button key={e.id} className={`mev ${e.allDay ? 'all' : ''}`} style={{ '--c': COLORS[e.color] } as React.CSSProperties} onClick={() => onEdit(e.id)} onContextMenu={(ce) => colorMenu(ce, e)}>
                 {!e.allDay && <i />}
@@ -351,17 +367,46 @@ function Month({ cursor, events, onEdit, onPickDay }: { cursor: Date; events: Ca
   )
 }
 
-function EventEditor({ id, onClose }: { id: string; onClose: () => void }) {
-  const ev = useStore((s) => s.events.find((e) => e.id === id))
+/** A task with a date, on its day: the box checks it off, the words open its doc. */
+function TaskChip({ task, month }: { task: Task; month?: boolean }) {
+  return (
+    <span className={`chip task ${month ? 'in-month' : ''}`}>
+      <button className="box" aria-label={`Mark done: ${task.title}`} title="Mark done" onClick={(e) => (e.stopPropagation(), completeTask(task))} />
+      <button className="txt" title="Open the doc" onClick={(e) => (e.stopPropagation(), useStore.getState().open(task.itemId))}>{task.title}</button>
+    </span>
+  )
+}
+
+function EventEditor({ id, onClose, onRetarget }: { id: string; onClose: () => void; onRetarget: (id: string) => void }) {
+  const occ = occurrenceOf(id)
+  const stored = useStore((s) => s.events.find((e) => e.id === (occ ? occ.seriesId : id)))
+  // One date of a repeating event: the series' details, at this date's time.
+  const ev = stored && occ ? { ...stored, start: occ.start, end: occ.start + (stored.end - stored.start) } : stored
   const items = useStore((s) => s.items)
   const st = useStore.getState()
   const linked = useMemo(() => items.find((i) => i.id === ev?.linkedItemId && !i.deletedAt), [items, ev?.linkedItemId])
   if (!ev) return null
-  const up = (p: Partial<CalEvent>) => st.updateEvent(id, p)
+  const up = (p: Partial<CalEvent>) => {
+    st.updateEvent(id, p)
+    // A new time moves the whole series, so this date has a new id.
+    if (occ && p.start !== undefined && p.start !== occ.start) onRetarget(occurrenceId(occ.seriesId, p.start))
+  }
+  const setRepeat = (every: string) => {
+    if (every) return up({ repeat: { every: every as NonNullable<CalEvent['repeat']>['every'], until: ev.repeat?.until } })
+    // No longer repeating: what's left is the date being looked at.
+    st.updateEvent(ev.id, { repeat: undefined, skip: undefined, start: ev.start, end: ev.end })
+    onRetarget(ev.id)
+  }
   const toLocal = (t: number) => format(t, ev.allDay ? 'yyyy-MM-dd' : "yyyy-MM-dd'T'HH:mm")
   const close = () => {
     if (!ev.title.trim()) up({ title: 'New event' })
     onClose()
+  }
+  const del = (which: string, said: string) => {
+    const before = st.events
+    st.deleteEvent(which)
+    onClose()
+    toast(said, { ms: 6000, action: { label: 'Undo', run: () => useStore.setState({ events: before }) } })
   }
   const link = (kind: 'doc' | 'lecture') => {
     const it = st.createItem(kind, kind === 'doc' ? { title: ev.title, content: `<p>${format(ev.start, 'EEEE, MMMM d')}</p><p></p>`, eventId: ev.id } : { title: ev.title, eventId: ev.id })
@@ -387,6 +432,20 @@ function EventEditor({ id, onClose }: { id: string; onClose: () => void }) {
         <input type={ev.allDay ? 'date' : 'datetime-local'} value={toLocal(ev.allDay ? ev.end - 864e5 : ev.end)} onChange={(e) => { const t = new Date(e.target.value).getTime(); if (!isNaN(t)) up({ end: ev.allDay ? t + 864e5 : t }) }} />
       </div>
       <div className="field">
+        <small><RepeatIcon size={11} /> Repeat</small>
+        <select aria-label="Repeat" value={ev.repeat?.every ?? ''} onChange={(e) => setRepeat(e.target.value)}>
+          <option value="">Never</option>
+          {REPEATS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+        </select>
+      </div>
+      {ev.repeat && (
+        <div className="field">
+          <small>Until</small>
+          <input type="date" aria-label="Repeat until" value={ev.repeat.until ? format(ev.repeat.until, 'yyyy-MM-dd') : ''} onChange={(e) => { const t = e.target.value ? new Date(`${e.target.value}T23:59:59`).getTime() : undefined; up({ repeat: { every: ev.repeat!.every, until: t && !isNaN(t) ? t : undefined } }) }} />
+        </div>
+      )}
+      {ev.repeat && <p className="small muted ev-hint">Changes here apply to every date. Drag one in the calendar to move just that one.</p>}
+      <div className="field">
         <small><MapPin size={11} /> Location</small>
         <input value={ev.location || ''} placeholder="Add location" onChange={(e) => up({ location: e.target.value })} />
       </div>
@@ -406,7 +465,14 @@ function EventEditor({ id, onClose }: { id: string; onClose: () => void }) {
         )}
       </div>
       <span className="grow" />
-      <button className="btn danger" onClick={() => (st.deleteEvent(id), onClose())}><Trash2 size={14} /> Delete event</button>
+      {ev.repeat ? (
+        <div className="row ev-del">
+          <button className="btn" onClick={() => del(occurrenceId(ev.id, ev.start), 'Removed this one')}>Delete this one</button>
+          <button className="btn danger" onClick={() => del(ev.id, 'Removed every date')}><Trash2 size={14} /> Delete all</button>
+        </div>
+      ) : (
+        <button className="btn danger" onClick={() => del(id, 'Event deleted')}><Trash2 size={14} /> Delete event</button>
+      )}
     </motion.div>
   )
 }

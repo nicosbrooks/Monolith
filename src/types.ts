@@ -85,6 +85,18 @@ export interface CalEvent {
   linkedItemId?: string
   /** Set on events from a subscribed calendar (read-only). */
   calId?: string
+  /** A series: this event happens again and again (lib/repeat.ts). `start` and `end` are its first time. */
+  repeat?: Repeat
+  /** Starts of the dates a series doesn't happen on (deleted or moved one at a time). */
+  skip?: number[]
+  /** On an occurrence handed out by `expandEvents`: the stored series it came from. Never stored. */
+  seriesId?: string
+}
+
+export interface Repeat {
+  every: 'day' | 'weekday' | 'week' | '2weeks' | 'month' | 'year'
+  /** The last time it can start; unset repeats forever. */
+  until?: number
 }
 
 export type Section = 'home' | 'tasks' | 'docs' | 'lectures' | 'calendar' | 'trash'

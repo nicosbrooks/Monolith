@@ -2014,6 +2014,7 @@ kbd {
   gap: 4px;
 }
 .field input,
+.field select,
 .ev-notes,
 .modal select {
   height: 34px;

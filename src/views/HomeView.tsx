@@ -9,7 +9,7 @@ import { useWorkspace } from '../lib/graph'
 import { TaskRow } from './TasksView'
 import { isReady, useAI } from '../ai/llm'
 import { useRuleSuggestions } from '../ai/suggestions'
-import { useSubEvents } from '../lib/calendars'
+import { useEvents } from '../lib/events'
 import { COLORS } from '../lib/colors'
 import type { CalEvent } from '../types'
 import { toast } from '../components/Toast'
@@ -24,9 +24,7 @@ const SHOWN = 5
 
 export function HomeView() {
   const items = useStore((s) => s.items)
-  const own = useStore((s) => s.events)
-  const subs = useSubEvents()
-  const events = [...own, ...subs]
+  const events = useEvents()
   const proactive = useStore((s) => s.settings.proactive)
   const st = useStore.getState()
   useAI((s) => s.status)

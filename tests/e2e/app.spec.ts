@@ -188,3 +188,42 @@ test('Settings shows one section at a time', async ({ page }) => {
   await page.locator('.set-nav button', { hasText: 'About' }).click()
   await expect(page.locator('.about-version')).toContainText('Monolith')
 })
+
+test('a repeating event shows on every date; one date can be removed, or all of them', async ({ page }) => {
+  await start(page)
+  await page.locator('.sidebar .nav', { hasText: 'Calendar' }).click()
+  const bar = page.locator('input[placeholder*="Add an event"]').first()
+  await bar.fill('seminar every day 1pm')
+  await bar.press('Enter')
+  await expect(page.locator('.toast')).toContainText('Every day')
+  await bar.press('Escape')
+  await page.locator('.cal-head h2').click()
+  await page.keyboard.press('ArrowRight') // next week: all seven days
+  const seminars = page.locator('.ev', { hasText: 'Seminar' })
+  await expect(seminars).toHaveCount(7)
+  // The editor says it repeats; deleting this one leaves the others.
+  await seminars.first().click()
+  await expect(page.locator('.sheet select[aria-label="Repeat"]')).toHaveValue('day')
+  await page.getByRole('button', { name: 'Delete this one' }).click()
+  await expect(seminars).toHaveCount(6)
+  await page.locator('.toast', { hasText: 'Removed this one' }).getByText('Undo').click()
+  await expect(seminars).toHaveCount(7)
+  // Turning repeat off keeps the date being looked at.
+  await seminars.nth(2).click()
+  await page.locator('.sheet select[aria-label="Repeat"]').selectOption('')
+  await expect(seminars).toHaveCount(1)
+  await page.reload()
+  await expect(page.locator('.cal-head')).toBeVisible()
+})
+
+test('a task with a date shows on the calendar and can be checked off there', async ({ page }) => {
+  await start(page)
+  await newDoc(page, 'Plan')
+  await page.keyboard.type('[] essay draft today')
+  await page.locator('.sidebar .nav', { hasText: 'Calendar' }).click()
+  const chip = page.locator('.chip.task', { hasText: 'Essay draft' })
+  await expect(chip).toBeVisible()
+  await chip.locator('.box').click()
+  await expect(chip).toHaveCount(0)
+  await expect(page.locator('.toast')).toContainText('Task done')
+})

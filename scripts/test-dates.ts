@@ -7,7 +7,7 @@ const NOW = new Date(2026, 10, 15, 10, 0)
 const p2 = (n: number) => String(n).padStart(2, '0')
 const fmt = (d: Date) => `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]} ${d.getMonth() + 1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())}`
 
-// [input, title, start, end | 'all', flags]  flags: due, @location
+// [input, title, start, end | 'all', flags]  flags: due, @location, ~repeat (day, weekday, week, 2weeks, month, year)
 const cases: [string, string, string, string, string?][] = [
   ['math 19a homework due tomorrow 9pm', 'Math 19a homework', 'Mon 11/16 21:00', 'Mon 11/16 21:30', 'due'],
   ['Math 19A homework is due tomorrow at 9 pm', 'Math 19A homework', 'Mon 11/16 21:00', 'Mon 11/16 21:30', 'due'],
@@ -84,14 +84,23 @@ const cases: [string, string, string, string, string?][] = [
   ['essay due the 31st', 'Essay', 'Thu 12/31 00:00', 'all', 'due'],
   ['brunch Sun 11/22', 'Brunch', 'Sun 11/22 00:00', 'all'],
   ['brunch on sun', 'Brunch', 'Sun 11/22 00:00', 'all'],
-  ['tutoring mondays at 4pm', 'Tutoring', 'Mon 11/16 16:00', 'Mon 11/16 17:00'],
+  ['tutoring mondays at 4pm', 'Tutoring', 'Mon 11/16 16:00', 'Mon 11/16 17:00', '~week'],
+  // Repeating: "every …", "weekdays", and "daily"/"weekly" where they can't be part of a name.
+  ['study group every tuesday 3pm', 'Study group', 'Tue 11/17 15:00', 'Tue 11/17 16:00', '~week'],
+  ['gym daily 7am', 'Gym', 'Mon 11/16 07:00', 'Mon 11/16 08:00', '~day'],
+  ['standup weekdays 9am', 'Standup', 'Mon 11/16 09:00', 'Mon 11/16 10:00', '~weekday'],
+  ['lab every other week thursday 2pm', 'Lab', 'Thu 11/19 14:00', 'Thu 11/19 15:00', '~2weeks'],
+  ['rent due every month on the 1st', 'Rent', 'Tue 12/1 00:00', 'all', 'due ~month'],
+  ['office hours fridays 1-2pm', 'Office hours', 'Fri 11/20 13:00', 'Fri 11/20 14:00', '~week'],
+  ['weekly review fri 3pm', 'Weekly review', 'Fri 11/20 15:00', 'Fri 11/20 16:00'],
+  ['daily standup 9:30am tomorrow', 'Daily standup', 'Mon 11/16 09:30', 'Mon 11/16 10:30'],
 ]
 const nulls = ['math 19a homework', 'buy milk', 'chapter 3 notes', 'room 4 key', 'read pages 3-5', 'CS 61B notes', 'v2.0 release', 'call mom', 'the exam was moved, thus we meet later', 'bring sunscreen']
 
 let fail = 0
 for (const [input, title, start, end, flag] of cases) {
   const p = parseQuickEvent(input, NOW)
-  const got = p ? [p.title, fmt(p.start), p.allDay ? 'all' : fmt(p.end), [p.due ? 'due' : '', p.location ? '@' + p.location : ''].filter(Boolean).join(' ')] : null
+  const got = p ? [p.title, fmt(p.start), p.allDay ? 'all' : fmt(p.end), [p.due ? 'due' : '', p.location ? '@' + p.location : '', p.repeat ? '~' + p.repeat.every : ''].filter(Boolean).join(' ')] : null
   const want = [title, start, end, flag ?? '']
   if (!got || got.join(' | ') !== want.join(' | ')) {
     fail++

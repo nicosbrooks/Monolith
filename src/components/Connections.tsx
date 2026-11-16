@@ -4,6 +4,7 @@ import { AudioWaveform, CalendarDays, FileText } from 'lucide-react'
 import { useStore } from '../store'
 import type { Item } from '../types'
 import { useWorkspace } from '../lib/graph'
+import { useOwnEvents } from '../lib/events'
 import { htmlToText, itemEmoji } from '../lib/util'
 import { related, useSystem1 } from '../ai/system1'
 
@@ -16,11 +17,11 @@ const KindIcon = { note: FileText, doc: FileText, lecture: AudioWaveform }
 export function Connections({ item }: { item: Item }) {
   const ws = useWorkspace()
   const items = useStore((s) => s.items)
-  const events = useStore((s) => s.events)
+  const events = useOwnEvents()
   const st = useStore.getState()
   const mentions = ws.mentions.get(item.id) ?? []
   const now = Date.now()
-  const onCalendar = events.filter((e) => e.linkedItemId === item.id && e.end > now).sort((a, b) => a.start - b.start).slice(0, 3)
+  const onCalendar = events.filter((e) => e.linkedItemId === item.id && e.end > now).sort((a, b) => a.start - b.start).filter((e, i, all) => !e.seriesId || all.findIndex((x) => x.seriesId === e.seriesId) === i).slice(0, 3)
 
   // Close in meaning (System 1), leaving out what's already linked either way.
   const ready = useSystem1((s) => s.status === 'ready')

@@ -1,4 +1,5 @@
 import { format, set } from 'date-fns'
+import { occurrenceOf, repeatLabel } from '../lib/repeat'
 import { useStore } from '../store'
 import type { CalEvent, Item } from '../types'
 import { htmlToText, mdToHtml } from '../lib/util'
@@ -10,7 +11,7 @@ import { getActiveEditor } from './actions'
  * as a card you confirm with one tap, and every one can be undone.
  */
 export type Act =
-  | { kind: 'event'; title: string; start: number; end: number; allDay: boolean; location?: string; due?: boolean }
+  | { kind: 'event'; title: string; start: number; end: number; allDay: boolean; location?: string; due?: boolean; repeat?: CalEvent['repeat'] }
   | { kind: 'move'; eventId: string; title: string; start: number; end: number; allDay: boolean; was: { start: number; end: number; allDay?: boolean } }
   | { kind: 'cancel'; eventId: string; title: string; start: number }
   | { kind: 'task'; title: string; docId: string | null; docTitle: string }
@@ -166,7 +167,7 @@ export function quickAct(text: string): Act | null {
   if (!/^\s*(add|schedule|book|put|create|new|remind me)\b/i.test(text)) return null
   const p = parseQuickEvent(text.replace(/^\s*(add|schedule|book|put|create( an?)?( event)?|new( event)?|remind me( to| about)?)\s+/i, ''))
   if (!p) return null
-  return { kind: 'event', title: p.title.replace(/\s+(to|on) (my )?calendar$/i, '') || 'New event', start: p.start.getTime(), end: p.end.getTime(), allDay: p.allDay, location: p.location, due: p.due }
+  return { kind: 'event', title: p.title.replace(/\s+(to|on) (my )?calendar$/i, '') || 'New event', start: p.start.getTime(), end: p.end.getTime(), allDay: p.allDay, location: p.location, due: p.due, repeat: p.repeat }
 }
 
 /** Notes, docs or recordings the question names ("summarize the biology lecture"). */
@@ -188,7 +189,7 @@ const span = (start: number, end: number, allDay: boolean) => (allDay ? format(s
 export function describe(a: Act) {
   const past = (t: number) => (t < Date.now() - 3600e3 ? ' · in the past' : '')
   switch (a.kind) {
-    case 'event': return (a.due ? 'Due ' : '') + (a.due && !a.allDay ? format(a.start, 'EEE, MMM d · h:mm a') : span(a.start, a.end, a.allDay)) + (a.location ? ` · ${a.location}` : '') + past(a.start)
+    case 'event': return (a.due ? 'Due ' : '') + (a.due && !a.allDay ? format(a.start, 'EEE, MMM d · h:mm a') : span(a.start, a.end, a.allDay)) + (a.repeat ? ` · ${repeatLabel(a.repeat)}` : '') + (a.location ? ` · ${a.location}` : '') + past(a.start)
     case 'move': return `${format(a.was.start, 'EEE h:mm a')} → ${span(a.start, a.end, a.allDay)}${past(a.start)}`
     case 'cancel': return `Remove from ${format(a.start, 'EEE, MMM d')}`
     case 'task': return `Add to “${a.docTitle}”`
@@ -214,16 +215,20 @@ export function perform(a: Act): () => void {
   const st = useStore.getState()
   switch (a.kind) {
     case 'event': {
-      const e = st.addEvent({ title: a.title, start: a.start, end: a.end, allDay: a.allDay, location: a.location, color: eventColor(a) })
+      const e = st.addEvent({ title: a.title, start: a.start, end: a.end, allDay: a.allDay, location: a.location, color: eventColor(a), repeat: a.repeat })
       return () => useStore.getState().deleteEvent(e.id)
     }
-    case 'move':
-      st.updateEvent(a.eventId, { start: a.start, end: a.end, allDay: a.allDay })
-      return () => useStore.getState().updateEvent(a.eventId, a.was)
+    // One date of a repeating event is moved or removed on its own; the rest of the series stays.
+    case 'move': {
+      const before = st.events
+      if (occurrenceOf(a.eventId)) st.detachEvent(a.eventId, { start: a.start, end: a.end, allDay: a.allDay })
+      else st.updateEvent(a.eventId, { start: a.start, end: a.end, allDay: a.allDay })
+      return () => useStore.setState({ events: before })
+    }
     case 'cancel': {
-      const e = st.events.find((x) => x.id === a.eventId)
+      const before = st.events
       st.deleteEvent(a.eventId)
-      return () => e && useStore.getState().addEvent({ ...e })
+      return () => useStore.setState({ events: before })
     }
     case 'task': {
       const li = `<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>${esc(a.title)}</p></li></ul>`

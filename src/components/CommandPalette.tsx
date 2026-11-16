@@ -10,11 +10,12 @@ import { startRecording } from '../lib/recordNext'
 import { related } from '../ai/system1'
 import { eventColor, parseQuickEvent, whenLabel } from '../lib/dates'
 import { dueLabel, useWorkspace } from '../lib/graph'
+import { useOwnEvents } from '../lib/events'
 
 export function CommandPalette() {
   const open = useStore((s) => s.paletteOpen)
   const items = useStore((s) => s.items)
-  const events = useStore((s) => s.events)
+  const events = useOwnEvents()
   const st = useStore.getState()
   const [q, setQ] = useState('')
   const close = () => (st.setUI({ paletteOpen: false }), setQ(''))
@@ -77,7 +78,7 @@ export function CommandPalette() {
                 )}
                 {parsed && (
                   <Command.Group heading="Schedule">
-                    <Command.Item onSelect={run(() => { st.addEvent({ title: parsed.title, start: parsed.start.getTime(), end: parsed.end.getTime(), allDay: parsed.allDay, location: parsed.location, color: eventColor(parsed) }); st.go('calendar') })}>
+                    <Command.Item onSelect={run(() => { st.addEvent({ title: parsed.title, start: parsed.start.getTime(), end: parsed.end.getTime(), allDay: parsed.allDay, location: parsed.location, color: eventColor(parsed), repeat: parsed.repeat }); st.go('calendar') })}>
                       <CalendarPlus size={16} />
                       <span>Add “{parsed.title}”</span>
                       <small>{whenLabel(parsed)}</small>
@@ -127,9 +128,13 @@ export function CommandPalette() {
                 {q &&
                   events
                     .filter((e) => e.title.toLowerCase().includes(ql))
+                    .sort((a, b) => a.start - b.start)
+                    // What's coming first, and a repeating event once (its next date).
+                    .filter((e, _i, all) => e.end > Date.now() || !all.some((x) => x.end > Date.now()))
+                    .filter((e, i, all) => !e.seriesId || all.findIndex((x) => x.seriesId === e.seriesId) === i)
                     .slice(0, 4)
                     .map((e) => (
-                      <Command.Item key={e.id} onSelect={run(() => st.go('calendar'))}>
+                      <Command.Item key={e.id} value={`event-${e.id}`} onSelect={run(() => st.openCalendarDate(new Date(e.start)))}>
                         <CalendarDays size={16} />
                         <span>{e.title}</span>
                         <small>{format(e.start, 'EEE MMM d')}</small>

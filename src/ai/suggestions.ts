@@ -4,13 +4,14 @@ import { SAMPLE_IDS, useStore } from '../store'
 import type { Suggestion } from '../types'
 import { eventColor, findDatedCommitments } from '../lib/dates'
 import { htmlToText } from '../lib/util'
+import { useOwnEvents } from '../lib/events'
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim()
 
 /** Rule-based proactive suggestions: instant, private, and work even before a model is loaded. */
 export function useRuleSuggestions(): Suggestion[] {
   const items = useStore((s) => s.items)
-  const events = useStore((s) => s.events)
+  const events = useOwnEvents()
   const activeId = useStore((s) => s.activeId)
   const dismissed = useStore((s) => s.dismissed)
   const [tick, setTick] = useState(0)

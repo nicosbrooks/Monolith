@@ -1,4 +1,5 @@
 import { addDays, addMinutes, nextDay, set, startOfDay, type Day } from 'date-fns'
+import type { Repeat } from '../types'
 
 // Quick add: turn "math 19a homework due tomorrow 9pm" into an event titled "Math 19a homework", tomorrow at 9 PM,
 // marked as a deadline. Used by the Ask bar, the command palette, the assistant (quick adds and pinning the model's
@@ -25,6 +26,8 @@ export interface ParsedEvent {
   location?: string
   /** The sentence this was found in, when it came from free text. */
   line?: string
+  /** "every week", "weekdays", "daily"… */
+  repeat?: Repeat
 }
 
 // ——— pieces ———
@@ -59,8 +62,38 @@ function hour24(c: Clock, part: number | null): number {
 /** Sunday of next week. */
 export const nextWeek = (now: Date) => addDays(startOfDay(now), 7 - now.getDay())
 
+/** "weekly", "every tuesday", "every day"… in quick-add text. Returns the repeat and the text without those words. */
+export function parseRepeat(text: string): { repeat?: Repeat; text: string } {
+  // "daily", "weekly"… on their own count only where they can't be part of a name: at the end, or before a date or
+  // time ("gym daily 7am"). "Weekly review" and "daily standup" are names, and stay names.
+  const AFTER = String.raw`(?=\s*$|\s+(?:at|on|from|until|\d|today|tonight|tomorrow|mon|tue|wed|thu|fri|sat|sun))`
+  const rules: [RegExp, Repeat['every']][] = [
+    [/\b(every|each) (week ?day|school day)s?\b|\bweekdays\b/i, 'weekday'],
+    [new RegExp(String.raw`\b(every|each) (other|second) week\b|\bevery (2|two) weeks\b|\b(biweekly|fortnightly)${AFTER}`, 'i'), '2weeks'],
+    [new RegExp(String.raw`\b(every|each) day\b|\bdaily${AFTER}`, 'i'), 'day'],
+    [new RegExp(String.raw`\b(every|each) week\b|\bweekly${AFTER}`, 'i'), 'week'],
+    [new RegExp(String.raw`\b(every|each) month\b|\bmonthly${AFTER}`, 'i'), 'month'],
+    [new RegExp(String.raw`\b(every|each) year\b|\b(yearly|annually)${AFTER}`, 'i'), 'year'],
+  ]
+  for (const [re, every] of rules) {
+    if (re.test(text)) return { repeat: { every }, text: text.replace(re, ' ').replace(/\s+/g, ' ').trim() }
+  }
+  // "every tuesday", "mondays": weekly on that day; the day stays in the text for the date parser.
+  const day = text.match(/\b(?:every|each) ((?:mon|tues|wednes|thurs|fri|satur|sun)day|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)\b/i) ?? text.match(/\b((?:mon|tues|wednes|thurs|fri|satur|sun)day)s\b/i)
+  if (day) return { repeat: { every: 'week' }, text: text.replace(day[0], ` ${day[1]} `).replace(/\s+/g, ' ').trim() }
+  return { text }
+}
+
 /** Parse a date, time and title from quick-add text. Null when there's no date or time in it. */
 export function parseQuickEvent(input: string, now = new Date()): ParsedEvent | null {
+  const r = parseRepeat(input)
+  if (!r.repeat) return parseOnce(input, now)
+  // Something that repeats with no day given starts today ("standup weekdays 9am", "journal daily").
+  const p = parseOnce(r.text, now) ?? parseOnce(`${r.text} today`, now)
+  return p && { ...p, repeat: r.repeat }
+}
+
+function parseOnce(input: string, now: Date): ParsedEvent | null {
   let text = ` ${input.replace(/[’‘]/g, "'").replace(/[–—]/g, '-').replace(/\s+/g, ' ')} `
   const matched: string[] = []
   let due = false
@@ -284,11 +317,12 @@ export function findDatedCommitments(text: string, now = new Date()): ParsedEven
 export const weekdayName = (d: number) => WEEKDAYS[d]
 
 /** What a parsed event's preview says under its title: "Due Mon, Nov 16 · 9:00 PM · Chipotle". */
-export function whenLabel(p: Pick<ParsedEvent, 'start' | 'allDay' | 'due' | 'location'>) {
+export function whenLabel(p: Pick<ParsedEvent, 'start' | 'allDay' | 'due' | 'location' | 'repeat'>) {
   const d = p.start
   const day = `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]}, ${d.toLocaleString('en-US', { month: 'short' })} ${d.getDate()}`
   const time = p.allDay ? '' : ` · ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
-  return `${p.due ? 'Due ' : ''}${day}${time}${p.location ? ` · ${p.location}` : ''}`
+  const again = p.repeat ? ` · ${{ day: 'Every day', weekday: 'Weekdays', week: 'Every week', '2weeks': 'Every 2 weeks', month: 'Every month', year: 'Every year' }[p.repeat.every]}` : ''
+  return `${p.due ? 'Due ' : ''}${day}${time}${again}${p.location ? ` · ${p.location}` : ''}`
 }
 
 /** The calendar colour for a new event: deadlines and exams stand out. */

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { allEvents, ownEvents } from '../lib/events'
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowUp, BookOpen, CalendarClock, CalendarPlus, CalendarX, Check, CheckSquare, Clock, FileInput, List, Loader2, Lightbulb, ListPlus, Square, X, Wand2, HelpCircle, RefreshCw } from 'lucide-react'
 import { useStore } from '../store'
@@ -244,7 +245,7 @@ function Chat() {
     // Exact answers from the app's own data need no model: a plain "add … thu 4pm", or "what's on tomorrow".
     const quick = quickAct(text)
     if (quick?.kind === 'event') return put('', { sources: [], acts: [quick] })
-    const instant = !wantsAction(text) && instantAnswer(text, { events: st.events, items: st.items })
+    const instant = !wantsAction(text) && instantAnswer(text, { events: allEvents(), items: st.items })
     if (instant) return put(instant.text, { sources: [{ id: null, title: instant.source === 'calendar' ? 'Your calendar' : 'Your open tasks' }], acts: [] })
 
     const controller = new AbortController()
@@ -261,7 +262,7 @@ function Chat() {
       const query = evidenceQuery(text, previous)
       if (wantsDeviceContext(query)) await Promise.race([refreshDevice(), new Promise((r) => setTimeout(r, 1500))])
       const current = useStore.getState()
-      const workspace: Workspace = { items: current.items, events: current.events, now: new Date(), device: deviceContext() }
+      const workspace: Workspace = { items: current.items, events: ownEvents(current.events), now: new Date(), device: deviceContext() }
       const open = useCtx && active ? current.items.find((item) => item.id === active.id && !item.deletedAt) : null
       // System 1 ranks passages by meaning when it's ready (a few milliseconds); otherwise words alone decide.
       const semantic = await passageScores(query).catch(() => undefined)
@@ -298,7 +299,7 @@ function Chat() {
       }, (t) => setMsgs([...next, { role: 'assistant', content: t }]), { signal: controller.signal, temperature: 0.3, maxTokens: act ? 800 : 500 }))
       if (packed && !controller.signal.aborted) sent.current.set(base.length, { ...packed, workspace })
       const now = useStore.getState()
-      const acts = act ? fresh(pinToAsked(splitActs(full, { events: now.events, items: now.items, openId: useCtx ? active?.id : null }).acts, text), now.events) : []
+      const acts = act ? fresh(pinToAsked(splitActs(full, { events: ownEvents(now.events), items: now.items, openId: useCtx ? active?.id : null }).acts, text), ownEvents(now.events)) : []
       if (!visible(full) && !acts.length) put(act ? 'I couldn’t work out that change. Try saying it another way, with the day and time.' : 'No answer came back. Try asking another way.', { sources, acts: [], failed: true })
       else put(full, { sources, acts })
     } catch (e) {

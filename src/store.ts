@@ -6,6 +6,7 @@ import type { CalEvent, FileMeta, Folder, Item, ItemKind, Section, Source } from
 import { extractTags, htmlToText, uid, withoutLegacyTitle } from './lib/util'
 import { APP_NAME } from './brand'
 import { openBlob, openText, sealBlob, sealText, vaultReady } from './lib/vault'
+import { occurrenceOf } from './lib/repeat'
 
 // Writes are batched: typing changes state several times a second, and each save serializes
 // everything. We save at most every 500 ms, and immediately when the tab is hidden or closed.
@@ -122,6 +123,8 @@ interface State {
   addEvent: (e: Omit<CalEvent, 'id'>) => CalEvent
   updateEvent: (id: string, patch: Partial<CalEvent>) => void
   deleteEvent: (id: string) => void
+  /** Turn one date of a repeating event into an event of its own (the series skips that date). */
+  detachEvent: (id: string, patch?: Partial<CalEvent>) => CalEvent | null
   dismiss: (id: string) => void
   setUI: (patch: Partial<Pick<State, 'aiOpen' | 'paletteOpen' | 'settingsOpen' | 'connectOpen' | 'drawerOpen' | 'sidebarCollapsed'>>) => void
   setSettings: (patch: Partial<Settings>) => void
@@ -336,8 +339,36 @@ export const useStore = create<State>()(
         setS((s) => ({ events: [...s.events, ev] }))
         return ev
       },
-      updateEvent: (id, patch) => setS((s) => ({ events: s.events.map((e) => (e.id === id ? { ...e, ...patch } : e)) })),
-      deleteEvent: (id) => setS((s) => ({ events: s.events.filter((e) => e.id !== id) })),
+      // An id like `<series>@<start>` is one date of a repeating event (lib/repeat.ts). Changing it changes the whole
+      // series; a new time moves every date by the same amount.
+      updateEvent: (id, patch) => {
+        const occ = occurrenceOf(id)
+        if (!occ) return setS((s) => ({ events: s.events.map((e) => (e.id === id ? { ...e, ...patch } : e)) }))
+        setS((s) => ({
+          events: s.events.map((e) => {
+            if (e.id !== occ.seriesId) return e
+            const { start, end, seriesId: _s, id: _i, ...rest } = patch
+            const shift = start !== undefined ? start - occ.start : 0
+            const len = end !== undefined ? end - (start ?? occ.start) : e.end - e.start
+            return { ...e, ...rest, start: e.start + shift, end: e.start + shift + len, skip: shift ? e.skip?.map((x) => x + shift) : e.skip }
+          }),
+        }))
+      },
+      // Deleting one date of a series skips that date; deleting the series (its own id) removes them all.
+      deleteEvent: (id) => {
+        const occ = occurrenceOf(id)
+        if (!occ) return setS((s) => ({ events: s.events.filter((e) => e.id !== id) }))
+        setS((s) => ({ events: s.events.map((e) => (e.id === occ.seriesId ? { ...e, skip: [...(e.skip ?? []), occ.start] } : e)) }))
+      },
+      detachEvent: (id, patch) => {
+        const occ = occurrenceOf(id)
+        const series = occ && getS().events.find((e) => e.id === occ.seriesId)
+        if (!occ || !series) return null
+        const { repeat: _r, skip: _k, seriesId: _s, ...base } = series
+        const one: CalEvent = { ...base, id: uid(), start: occ.start, end: occ.start + (series.end - series.start), ...patch }
+        setS((s) => ({ events: [...s.events.map((e) => (e.id === series.id ? { ...e, skip: [...(e.skip ?? []), occ.start] } : e)), one] }))
+        return one
+      },
       dismiss: (id) => setS((s) => ({ dismissed: [...s.dismissed.filter((d) => d !== id).slice(-499), id] })),
       setUI: (patch) => setS(patch.connectOpen || patch.settingsOpen || patch.paletteOpen ? { ...patch, drawerOpen: false } : patch),
       setSettings: (patch) => setS((s) => ({ settings: { ...s.settings, ...patch } })),

@@ -101,6 +101,7 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
       end: event.end.getTime(),
       allDay: event.allDay,
       location: event.location,
+      repeat: event.repeat,
       color: eventColor({ title, due: event.due }),
     })
     toast(`Added “${title}” · ${whenLabel(event)}`, { action: { label: 'Undo', run: () => st.deleteEvent(ev.id) } })

@@ -651,6 +651,7 @@ details.advanced[open] > summary::after {
 .ctx,
 .send,
 .field input,
+.field select,
 .ev-notes,
 .modal select,
 .slash-menu .ico,
@@ -2209,4 +2210,71 @@ body {
 }
 @media (max-width: 680px) {
   .set-nav button.on::before { display: none; }
+}
+
+/* ── Calendar: repeating events and dated tasks (CalendarView.tsx, lib/repeat.ts) ── */
+.field select {
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+.ev small svg {
+  display: inline;
+  vertical-align: -1px;
+  margin-right: 4px;
+}
+.ev-hint {
+  margin: -4px 0 0;
+}
+.ev-del {
+  display: flex;
+  gap: 8px;
+}
+.ev-del .btn {
+  flex: 1;
+  justify-content: center;
+}
+/* A task on its day: a small empty box (check it off) and its words (open its doc). No colour: it isn't an event. */
+.chip.task {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 7px 0 0;
+  background: var(--card-hover);
+  color: var(--text);
+  border-radius: 8px;
+}
+.chip.task .box {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+}
+.chip.task .box::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1.4px var(--text-2);
+}
+.chip.task .box:hover::before {
+  box-shadow: inset 0 0 0 1.4px var(--text);
+  background: var(--raised-fill-2);
+}
+.chip.task .txt {
+  flex: 1;
+  min-width: 0;
+  min-height: 24px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.chip.task.in-month {
+  margin-bottom: 2px;
+  font-weight: 500;
 }

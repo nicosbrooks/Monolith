@@ -530,6 +530,7 @@ button:focus-visible {
   backdrop-filter: none;
 }
 .field input,
+.field select,
 .ev-notes,
 .modal select {
   border-radius: 6px;
