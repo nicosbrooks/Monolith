@@ -1285,21 +1285,24 @@ a,
    Off via Settings → Appearance, when the OS asks for reduced transparency, or without blur support. */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root[data-glass='on'] {
-    --glass: color-mix(in oklab, var(--surface) 68%, transparent);
+    /* ~90% opaque: frosted, but text on it keeps full contrast. */
+    --glass: color-mix(in oklab, #ffffff 90%, transparent);
+    --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0) 60%);
     --glass-chrome: color-mix(in oklab, var(--content) 78%, transparent);
-    --glass-filter: blur(24px) saturate(1.7);
-    --glass-border: color-mix(in oklab, var(--fg) 13%, transparent);
-    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-    --ambient-a: rgba(20, 20, 40, 0.07);
-    --ambient-b: rgba(20, 20, 40, 0.05);
+    --glass-filter: blur(28px) saturate(1.6);
+    --glass-border: color-mix(in oklab, var(--fg) 11%, transparent);
+    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    --ambient-a: rgba(255, 255, 255, 0.9);
+    --ambient-b: rgba(205, 196, 178, 0.22);
   }
   :root[data-glass='on'][data-theme='dark'] {
-    --glass: color-mix(in oklab, #26262b 62%, transparent);
+    --glass: color-mix(in oklab, #242423 88%, transparent);
+    --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 55%);
     --glass-chrome: color-mix(in oklab, var(--content) 74%, transparent);
     --glass-border: rgba(255, 255, 255, 0.11);
     --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.09);
-    --ambient-a: rgba(255, 255, 255, 0.075);
-    --ambient-b: rgba(255, 255, 255, 0.045);
+    --ambient-a: rgba(150, 160, 215, 0.17);
+    --ambient-b: rgba(215, 170, 130, 0.1);
   }
   /* A soft neutral backdrop gives the glass some depth to pick up. */
   [data-glass='on'] .app {
@@ -1308,11 +1311,11 @@ a,
       radial-gradient(760px 560px at 108% 112%, var(--ambient-b), transparent 60%),
       var(--bg);
   }
-  /* The main panel is only tinted, not blurred: blurring a whole screen costs frames for no visible gain. */
-  [data-glass='on'] .app:not(.mobile) .main { background: var(--glass-chrome); }
+  /* The page itself is clear, so the ambient light shows behind the cards. Only floating layers blur. */
+  [data-glass='on'] .app:not(.mobile) .main { background: transparent; }
   /* Floating layers */
-  [data-glass='on'] :is(.drop, .slash-menu, .bubble, .palette, .modal, .confirm, .sheet, .toast, .commit-box) {
-    background: var(--glass);
+  [data-glass='on'] :is(.drop, .slash-menu, .bubble, .palette, .modal, .confirm, .sheet, .toast, .commit-box, .convo, .ask-pop) {
+    background: var(--glass-sheen), var(--glass);
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
     border-color: var(--glass-border);

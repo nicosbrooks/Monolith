@@ -6,13 +6,13 @@ Status of each area is in [Coverage](#coverage) at the end: not every screen fol
 
 ## Principles
 
-1. **Calm and monochrome.** Black, white and warm greys. No brand colour, gradients or glows.
+1. **Calm and nearly monochrome.** Black, white and warm greys. No brand colour and no glows. Gradients are light, not colour: a small lightness shift that makes a surface look lit from above, and a faint cool and warm wash of ambient light behind the page (see [Surfaces](#surfaces)).
 2. **Colour only where it means something.** Red while recording, blue for calendar time, green/red for status, and an event's own colour as a dot.
 3. **AI first, in one place.** On Home the assistant speaks from a single card at the top. It says what it found, when, and exactly where (doc title plus the quoted line), then offers two labelled choices.
 4. **One control per action per screen.** Secondary actions go in a ··· or right-click menu. Before adding a button, check the action isn't already on that screen.
 5. **Nothing shown twice.** If the assistant is asking about a task, that task is not also listed under Tasks.
 6. **Every action can be taken back.** Deletes, checks, adds and dismissals show a notification with Undo. Only "delete forever" asks first, with a consequence line ("This can't be undone.").
-7. **No dividing lines.** Space, soft fills and a hover or press wash separate things.
+7. **No dividing lines.** Space, soft fills and a hover or press wash separate things. A surface's lit top edge is a highlight, not a line.
 8. **About five, then the rest elsewhere.** Lists on Home show 5 items, then "Show all" / "See all".
 9. **No visible plumbing.** Raw Markdown never appears. Counts and search appear only when there is something to count or search.
 10. **No "AI" decoration.** No sparkles (✨) anywhere. The assistant is labelled with words, and actions get an icon for what they do: a speech bubble to ask, a pen to write notes, a lightbulb for insights.
@@ -48,8 +48,9 @@ Web tokens are CSS variables; the current values are set in `src/soft.css` (it l
 | Faint text (times, sources) | `--text-3` | `#94938e` | `#8a8983` | |
 | Status | `--ok` `--info` `--danger` | `#7fd69e` `#86b3ff` `#ff7a70` | `#2f9e62` `#2f6fdb` `#d4483f` | `Theme.local`, `Theme.time` |
 
-- Primary buttons are the text colour with the page colour as the label (white on dark, near-black on light).
-- Anything that pops up (menu, dialog, palette, notification) uses the solid `--raised` surface with an edge and a real shadow. No see-through glass on popups.
+- Primary buttons are the text colour with the page colour as the label (white on dark, near-black on light), with a faint top-lit gradient (`--btn-primary-grad`).
+- Anything that pops up (menu, dialog, palette, Ask bar options, conversation, notification) uses the frosted `--glass` layer: about 90% opaque in both themes, blurred, with a lit top edge, a hairline edge and a real shadow, over a dark scrim. It is always the most opaque layer on screen, so text on it keeps full contrast. With glass off (the `glass` setting, or the OS asks for reduced transparency) it falls back to the solid `--raised` surface.
+- Glass tokens (`--glass`, `--glass-sheen`, `--glass-filter`, `--ambient-a/b`) live in `src/theme.css`; panel and button tokens (`--panel`, `--panel-edge`, `--btn-grad`, `--btn-edge`) live in `src/soft.css`.
 
 ## Type
 
@@ -82,7 +83,7 @@ No uppercase labels and no mono labels.
 | Content column | 728px max, centred, 24px side padding (14px on phones) |
 | Bottom clearance for the Ask bar | 132px (110px on phones) |
 
-Cards have no border. In light mode they carry a 1px-soft shadow; in dark the fill alone lifts them.
+Cards have no border. With glass on, a card is a frosted panel: a soft top-lit gradient, a lit top edge and a long soft shadow (`--panel`, `--panel-edge`). With glass off, the flat `--card` fill is used. Toolbar actions in a page header (listen, favourite, ···) are 34px round chips on `--btn-grad`.
 
 ### iOS spacing (`Space` in `apple/iOS/Theme.swift`)
 iPhone screens felt cramped at web sizes, so iOS runs a little roomier. Use the tokens, not new numbers.
@@ -127,6 +128,21 @@ After pairing, both screens show the same six digits (`checkCode`, "824 793"). T
 ### Fills inside a card
 `Theme.wash` (iOS) and `--card-hover` (web) are for the page. Anything filled *inside* a card (an icon tile, a status row, a secondary pill) uses `Theme.tile`: white 7% in dark, black 4.5% in light. A wash on a card is too close to read.
 
+## Surfaces
+
+Added Nov 16 for the frosted-glass rework. Everything on screen sits on one of three layers, from back to front:
+
+1. **Ground.** The page colour with a faint ambient wash: a cool light at the top left and a warm one at the bottom right, no stronger than about 17% in dark and 22% in light (`.app` background in `src/theme.css`). Nothing on the ground has its own fill.
+2. **Panels.** Cards, the sidebar and the Ask bar. Translucent, top-lit, with a lit top edge and a soft shadow. Only the Ask bar blurs what scrolls beneath it; cards and the sidebar don't, because blurring a whole column costs frames for nothing visible.
+3. **Popups.** Menus, dialogs, the palette, the conversation and notifications. The most opaque layer (about 90%), blurred 28px with saturation 1.6, always over a scrim.
+
+Rules:
+- A layer is never more see-through than the one behind it. Popups outrank panels.
+- Inside a panel, rows are flat. They get a hover or press wash, never a filled box of their own. Round icon tiles and pills are fine; nested rectangles are not.
+- Inside a popup, controls use the flat `--raised-fill` / `--raised-fill-2` fills, not gradients or blur (a blurred layer can't blur through its own parent).
+- Glass is off when the `glass` setting is false or the OS asks for reduced transparency; everything must still read correctly on the solid fallback.
+- Gradients stay under about 10% lightness change and carry no hue of their own. If a surface looks tinted, it is too much.
+
 ## Components
 
 ### Card and rows (`.hm-card`, `.hm-list`, `.hm-row`)
@@ -138,7 +154,7 @@ A quiet label above a card, with at most one text link on the right ("Open calen
 ### Assistant card (`.hm-asst`)
 The card shows one of two things: a suggestion found in your docs (below), or **starting points**.
 
-**Starting points** (`.hm-starters` / iOS `starters`). Up to three rows that each open the assistant with that question already asked, so the person can take the conversation anywhere. They are built from what is really there: the next event ("Help me get ready for “calc review”"), the open tasks ("Which of my 2 tasks should I do first?"), and the last doc worked on ("Summarize “…”"). Each row has an icon, the question, and a small ↗. They are shown only when a model is ready.
+**Starting points** (`.hm-starters` / iOS `starters`). Up to three rows that each open the assistant with that question already asked, so the person can take the conversation anywhere. They are built from what is really there: the next event ("Help me get ready for “calc review”"), the open tasks ("Which of my 2 tasks should I do first?"), and the last doc worked on ("Summarize “…”"). Each row is flat, with no fill until hover: a round 34px icon tile, the question, and a small ↗ that appears on hover or focus. They are shown only when a model is ready.
 
 The card's title changes so a daily app never repeats itself (`startersTitle` in `src/lib/greeting.ts`, iOS `Greeting.startersTitle`): "Start from here" only on the first day after setup, then "Coming up" when an event starts within 90 minutes, "Pick up where you left off" when the only starting point is a doc, otherwise "For this morning" / "For this afternoon" / "For tonight".
 
@@ -171,7 +187,7 @@ Seven equal day buttons: weekday, date, up to three event-colour dots. The selec
 
 ### Buttons
 - `.btn.primary`: one per card or dialog, for the action we expect.
-- `.btn`: the alternative, on the `--btn` fill.
+- `.btn`: the alternative, a pill on a faint top-lit gradient (`--btn-grad`). Inside a popup it sits on the flat `--raised-fill-2` instead, so it never fights the glass.
 - In cards and empty states they are 38px tall with 18px side padding. Labels are verbs: "Add to calendar", "Start recording".
 - `.icon-btn`: round, for toolbar actions. Always has a `title` and `aria-label`.
 
@@ -377,6 +393,7 @@ Three files load in order: `src/index.css` (base), `src/theme.css`, `src/soft.cs
 | Web Tasks, links and connections, Settings sections | Yes (Nov 15, 0.10): dark and light, axe-checked |
 | Web repeating events, event editor, earlier versions, reminders, export | Yes (Nov 16, 0.11): axe-checked; print checked in the print preview only |
 | Web Ask bar, conversation, quick access (⌘K), sidebar, Recently Deleted | Yes (Nov 15, 0.12): dark, desktop width, axe-checked in the e2e run. Light mode and phone width not re-checked |
+| Web surfaces: frosted popups, panels, round buttons, ambient light | Home, sidebar, Ask bar, ⌘K palette, Settings, doc header and Calendar header seen on desktop in dark and light (Nov 16). Phone seen on Home in dark only. Light-mode popups and the conversation panel need a contrast check |
 | Web Docs, doc editor, Recordings detail, Calendar | Not yet reviewed against this file |
 | iOS Tasks, links, connections | Not built: iOS shows a link as its text, and has no Tasks screen yet |
 | iOS Home, drawer, Docs and Recordings lists | Yes (Nov 15, pass 2): `Space` tokens, drawer icon column. Checked in the iPhone 17 simulator, dark only |

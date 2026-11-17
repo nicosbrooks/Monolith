@@ -113,11 +113,10 @@ export default function App() {
     return () => mq.removeEventListener('change', apply)
   }, [settings.theme])
 
-  // frosted glass, unless the OS asks for reduced transparency
+  // frosted glass, unless it's switched off or the OS asks for reduced transparency
   useEffect(() => {
     const mq = matchMedia('(prefers-reduced-transparency: reduce)')
-    // Solid surfaces: see-through popups blended into the page behind them.
-    const apply = () => (document.documentElement.dataset.glass = 'off')
+    const apply = () => (document.documentElement.dataset.glass = settings.glass && !mq.matches ? 'on' : 'off')
     apply()
     mq.addEventListener('change', apply)
     return () => mq.removeEventListener('change', apply)

@@ -101,7 +101,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       </div>
       <button className="side-search" onClick={() => (s.setUI({ paletteOpen: true }), onNavigate?.())}>
         <Search size={15} strokeWidth={1.9} />
-        <span>Search and commands</span>
+        <span>Search</span>
         <kbd>⌘K</kbd>
       </button>
 

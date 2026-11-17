@@ -102,6 +102,20 @@
 .icon-btn {
   border-radius: 999px;
 }
+/* Toolbar actions are visible round buttons, not bare glyphs. */
+.toolbar .icon-btn,
+.toolbar .tb {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--btn-grad);
+  box-shadow: var(--btn-edge);
+  color: var(--text);
+}
+.toolbar .icon-btn:hover,
+.toolbar .tb:hover {
+  background: var(--btn-grad-hover);
+}
 .text-btn {
   border-radius: 999px;
 }
@@ -191,10 +205,15 @@ kbd {
 :root {
   --card: #ffffff;
   --card-hover: rgba(0, 0, 0, 0.045);
+  /* Frosted panel (glass on): a soft top-lit gradient over the page, a hairline lit edge, a long soft shadow. */
+  --panel: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.64));
+  --panel-edge: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(60, 50, 30, 0.05), 0 14px 32px -20px rgba(60, 50, 30, 0.35);
 }
 :root[data-theme='dark'] {
   --card: #191918;
   --card-hover: rgba(255, 255, 255, 0.06);
+  --panel: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
+  --panel-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.04), 0 16px 36px -22px rgba(0, 0, 0, 0.75);
 }
 .hm {
   width: min(100%, 728px);
@@ -218,6 +237,10 @@ kbd {
 }
 :root[data-theme='light'] .hm-card {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+:root[data-glass='on'] .hm-card {
+  background: var(--panel);
+  box-shadow: var(--panel-edge);
 }
 .hm-sec {
   margin-top: 30px;
@@ -269,25 +292,43 @@ kbd {
 /* starting points: each one opens the assistant with that question */
 .hm-starters {
   display: grid;
-  gap: 8px;
-  margin-top: 14px;
+  gap: 2px;
+  margin: 10px -8px 0;
 }
 .hm-starter {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 48px;
-  padding: 10px 14px;
-  border-radius: 16px;
-  background: var(--card-hover);
+  min-height: 52px;
+  padding: 9px 12px 9px 10px;
+  border-radius: 18px;
+  background: transparent;
   color: var(--text);
   font-size: 15px;
   text-align: left;
   transition: background 0.15s;
 }
 .hm-starter:hover {
-  background: var(--raised-fill-2);
+  background: var(--card-hover);
+}
+/* the icon is a small round tile, so the rows read as a list, not a stack of boxes */
+.hm-starter > svg:first-child {
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  padding: 8px;
+  border-radius: 50%;
+  background: var(--raised-fill);
+}
+/* the arrow only shows when the row is hovered or focused */
+.hm-starter > svg:last-child {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.hm-starter:hover > svg:last-child,
+.hm-starter:focus-visible > svg:last-child {
+  opacity: 1;
 }
 .hm-starter:focus-visible {
   outline: 2px solid var(--text-2);
@@ -796,6 +837,12 @@ details.advanced[open] > summary::after {
   --raised-fill-2: rgba(0, 0, 0, 0.09);
   --btn: #e6e5e0;
   --btn-hover: #dad9d3;
+  /* round buttons get a faint top-lit gradient and a hairline lit edge */
+  --btn-grad: linear-gradient(180deg, #f1f0ec, #e4e3de);
+  --btn-grad-hover: linear-gradient(180deg, #ebeae5, #dad9d3);
+  --btn-edge: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 1px 1px rgba(0, 0, 0, 0.05);
+  --btn-primary-grad: linear-gradient(180deg, #2c2c2a, #161615);
+  --btn-primary-edge: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 1px 2px rgba(0, 0, 0, 0.25);
   --scrim: rgba(20, 20, 18, 0.32);
 }
 :root[data-theme='dark'] {
@@ -805,6 +852,11 @@ details.advanced[open] > summary::after {
   --raised-fill-2: rgba(255, 255, 255, 0.12);
   --btn: #2a2a28;
   --btn-hover: #353533;
+  --btn-grad: linear-gradient(180deg, #333331, #2a2a28);
+  --btn-grad-hover: linear-gradient(180deg, #3d3d3b, #333331);
+  --btn-edge: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  --btn-primary-grad: linear-gradient(180deg, #f7f6f3, #dddbd5);
+  --btn-primary-edge: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(0, 0, 0, 0.3);
   --scrim: rgba(0, 0, 0, 0.62);
 }
 .overlay,
@@ -812,6 +864,9 @@ details.advanced[open] > summary::after {
   background: var(--scrim) !important;
   backdrop-filter: none !important;
 }
+/* The solid look below is the fallback for when frosted glass is off (Settings, or the OS asks for
+   reduced transparency). With glass on, theme.css's frosted layer takes over: about 90% opaque,
+   so a popup still reads clearly above the page. */
 .modal,
 .palette,
 .confirm,
@@ -820,17 +875,16 @@ details.advanced[open] > summary::after {
 .slash-menu,
 .bubble,
 .sheet {
-  background: var(--raised) !important;
-  backdrop-filter: none !important;
-  border: 1px solid var(--raised-edge) !important;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+  background: var(--raised);
+  border: 1px solid var(--raised-edge);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
 }
-:root[data-theme='light'] .modal,
-:root[data-theme='light'] .palette,
-:root[data-theme='light'] .confirm,
-:root[data-theme='light'] .drop,
-:root[data-theme='light'] .sheet {
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+:root[data-theme='light']:not([data-glass='on']) .modal,
+:root[data-theme='light']:not([data-glass='on']) .palette,
+:root[data-theme='light']:not([data-glass='on']) .confirm,
+:root[data-theme='light']:not([data-glass='on']) .drop,
+:root[data-theme='light']:not([data-glass='on']) .sheet {
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 /* Rows and controls inside popups use fills relative to the raised surface, so they stay visible. */
 .modal .btn,
@@ -873,20 +927,22 @@ details.advanced[open] > summary::after {
 /* Buttons on the page */
 .btn,
 .btn.sm {
-  background: var(--btn);
+  background: var(--btn-grad);
+  box-shadow: var(--btn-edge);
   color: var(--text);
 }
 .btn:hover:not(:disabled) {
-  background: var(--btn-hover);
+  background: var(--btn-grad-hover);
 }
 .btn.primary,
 .modal .btn.primary,
 .confirm .btn.primary {
-  background: var(--text);
+  background: var(--btn-primary-grad);
+  box-shadow: var(--btn-primary-edge);
   color: var(--bg);
 }
 .btn.primary:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--text) 88%, var(--bg));
+  opacity: 0.9;
 }
 .btn.danger.solid,
 .confirm .btn.danger.solid {
@@ -1086,9 +1142,9 @@ body {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--text);
+  background: var(--btn-primary-grad);
   color: var(--bg);
-  box-shadow: var(--shadow);
+  box-shadow: var(--btn-primary-edge), var(--shadow);
 }
 /* Assistant actions */
 .act-card {
@@ -1196,6 +1252,10 @@ body {
 :root[data-theme='light'] .app:not(.mobile) .sidebar {
   background: #ebeae5;
   box-shadow: none;
+}
+:root[data-glass='on'] .app:not(.mobile) .sidebar {
+  background: var(--panel);
+  box-shadow: var(--panel-edge);
 }
 .side-scroll {
   display: flex;
@@ -1373,6 +1433,20 @@ body {
 :root[data-theme='light'] .ask-bar:hover .ask-field {
   background: var(--raised);
   border-color: color-mix(in oklab, var(--text) 16%, transparent);
+}
+/* Glass on: the bar is a frosted pill, so the page scrolls blurred underneath it. */
+:root[data-glass='on'] .ask-field,
+:root[data-glass='on'] .ask-bar:hover .ask-field,
+:root[data-glass='on'] .ask-bar.focus .ask-field {
+  background: var(--glass-sheen), var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border-color: var(--glass-border);
+  box-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.5), var(--glass-edge);
+}
+:root[data-glass='on'] .ask-bar:hover .ask-field,
+:root[data-glass='on'] .ask-bar.focus .ask-field {
+  border-color: color-mix(in oklab, var(--text) 20%, transparent);
 }
 .ask-ico {
   flex: none;
