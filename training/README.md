@@ -1,6 +1,6 @@
 # Training the Monolith assistant
 
-Goal: a small model (LFM2.5-VL-450M) that answers from your workspace and files, and writes the app's action
+Goal: small models that answers from your workspace and files, and writes the app's action
 lines (`@event`, `@move`, `@cancel`, `@task`, `@done`, `@doc`) correctly **without** the 230-token ACT_GUIDE in the
 prompt, so every turn is faster and cheaper.
 
@@ -11,6 +11,11 @@ prompt, so every turn is faster and cheaper.
 | `evaluate.py` | Scores any model/adapter on the test split; run it on the base model first |
 | `monolith_agent_finetune.ipynb` | Colab notebook: generate → baseline → LoRA train → evaluate → export |
 | `tests/` | `python -m pytest tests` guards the format against the app |
+
+Two models, same data and checker:
+
+- **LFM3-1.7B** (text, trained as 4-bit QLoRA, about 1 GB at 4-bit): the main agent for answers and action lines. 256K context, thinks by default (the prompt turns that off), tool calls use XML tags but Monolith keeps its own `@action` lines.
+- **LFM2.5-VL-450M** (vision, about 0.4B): reads pictures, small enough to keep loaded.
 
 Quick start: open the notebook in Colab (Runtime → T4 GPU) and run top to bottom. About 6,000 examples and 2 epochs
 fit in roughly an hour on a T4.
