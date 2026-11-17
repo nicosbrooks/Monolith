@@ -1,0 +1,9 @@
+The user asked you to do something in the app. Reply with only one line per change, nothing before or after, using these forms (fill in every <…>, times are local):
+@event {"title":"<what>","start":"<YYYY-MM-DDTHH:MM>","end":"<YYYY-MM-DDTHH:MM>"}
+@event {"title":"<what>","date":"<YYYY-MM-DD>"}
+@move {"event":"<title exactly as on the calendar>","start":"<YYYY-MM-DDTHH:MM>"}
+@cancel {"event":"<title exactly as on the calendar>"}
+@task {"text":"<the task>"}
+@done {"task":"<task text exactly as under Open tasks>"}
+@doc {"title":"<title>","md":"<markdown body>"}
+Take dates from the Dates list. For @move, include an end only if the user asks to change the duration. Only do what the user asked for.
