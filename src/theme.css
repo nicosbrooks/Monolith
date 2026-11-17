@@ -404,85 +404,12 @@ button:focus-visible {
   border-radius: 8px;
 }
 /* ── lecture ── */
-.recorder {
-  border-radius: 8px;
-  background: var(--s2);
-}
-.recorder.live {
-  background: var(--content);
-  border-color: color-mix(in oklab, var(--danger) 35%, transparent);
-  color: var(--danger);
-}
-.rec-btn {
-  height: 34px;
-  border-radius: 6px;
-  padding: 0 14px 0 12px;
-  font-size: 13.5px;
-  background: var(--danger);
-  color: #fff;
-  box-shadow: none;
-}
-.round {
-  border-radius: 6px;
-  width: 34px;
-  height: 34px;
-}
-.round.stop {
-  background: var(--danger);
-  color: #fff;
-}
-.wave {
-  color: var(--danger);
-}
-.rec-dot,
+
 .now-line,
 .now-line::before {
   background: var(--danger);
 }
-.progress-card {
-  border-radius: 8px;
-  background: var(--s2);
-  border: 1px solid var(--border);
-  color: var(--text-2);
-}
-.tabs {
-  gap: 18px;
-  padding-bottom: 0;
-}
-.tabs > button:not(.btn) {
-  padding: 8px 0;
-  border-radius: 0;
-  background: none !important;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  font-weight: 500;
-}
-.tabs > button.on {
-  color: var(--text);
-  border-bottom-color: var(--fg);
-}
-.tabs .btn {
-  margin-bottom: 6px;
-}
-.tseg {
-  border-radius: 6px;
-}
-.tseg.now {
-  background: var(--s3);
-}
-.tseg.now .ts {
-  color: var(--text);
-}
-.face {
-  border-radius: 10px;
-  background: var(--content);
-}
-.face.back {
-  background: var(--s2);
-}
-.cards-modal {
-  border-radius: 12px;
-}
+
 /* ── calendar ── */
 .wd.today b,
 .md.today .num {
@@ -838,9 +765,7 @@ button:focus-visible {
 .toolbar {
   height: 54px;
 }
-.tabs > button.on {
-  border-bottom-color: var(--accent);
-}
+
 .tag.on {
   background: var(--accent);
   color: var(--on-accent);
@@ -866,12 +791,7 @@ button:focus-visible {
   --accent-soft: color-mix(in oklab, var(--blue) 14%, transparent);
   --accent-text: var(--blue-text);
 }
-.main.sec-lectures {
-  --accent: var(--red);
-  --on-accent: #fff;
-  --accent-soft: color-mix(in oklab, var(--red) 12%, transparent);
-  --accent-text: var(--red);
-}
+/* Recordings carry no accent of their own: red is for the moment of recording only (the dot, the wave, Stop). */
 /* AI writing / busy: a quiet neutral pulse, no color */
 
 .avatar {
@@ -1285,21 +1205,24 @@ a,
    Off via Settings → Appearance, when the OS asks for reduced transparency, or without blur support. */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root[data-glass='on'] {
-    --glass: color-mix(in oklab, var(--surface) 68%, transparent);
+    /* ~90% opaque: frosted, but text on it keeps full contrast. */
+    --glass: color-mix(in oklab, #ffffff 90%, transparent);
+    --glass-sheen: none;
     --glass-chrome: color-mix(in oklab, var(--content) 78%, transparent);
-    --glass-filter: blur(24px) saturate(1.7);
-    --glass-border: color-mix(in oklab, var(--fg) 13%, transparent);
-    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-    --ambient-a: rgba(20, 20, 40, 0.07);
-    --ambient-b: rgba(20, 20, 40, 0.05);
+    --glass-filter: blur(28px) saturate(1.6);
+    --glass-border: color-mix(in oklab, var(--fg) 11%, transparent);
+    --glass-edge: 0 0 0 0 transparent;
+    --ambient-a: rgba(255, 255, 255, 0.9);
+    --ambient-b: rgba(205, 196, 178, 0.08);
   }
   :root[data-glass='on'][data-theme='dark'] {
-    --glass: color-mix(in oklab, #26262b 62%, transparent);
+    --glass: color-mix(in oklab, #242423 88%, transparent);
+    --glass-sheen: none;
     --glass-chrome: color-mix(in oklab, var(--content) 74%, transparent);
     --glass-border: rgba(255, 255, 255, 0.11);
-    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.09);
-    --ambient-a: rgba(255, 255, 255, 0.075);
-    --ambient-b: rgba(255, 255, 255, 0.045);
+    --glass-edge: 0 0 0 0 transparent;
+    --ambient-a: rgba(150, 160, 215, 0.05);
+    --ambient-b: rgba(215, 170, 130, 0.03);
   }
   /* A soft neutral backdrop gives the glass some depth to pick up. */
   [data-glass='on'] .app {
@@ -1308,15 +1231,15 @@ a,
       radial-gradient(760px 560px at 108% 112%, var(--ambient-b), transparent 60%),
       var(--bg);
   }
-  /* The main panel is only tinted, not blurred: blurring a whole screen costs frames for no visible gain. */
-  [data-glass='on'] .app:not(.mobile) .main { background: var(--glass-chrome); }
+  /* The page itself is clear, so the ambient light shows behind the cards. Only floating layers blur. */
+  [data-glass='on'] .app:not(.mobile) .main { background: transparent; }
   /* Floating layers */
-  [data-glass='on'] :is(.drop, .slash-menu, .bubble, .palette, .modal, .confirm, .sheet, .toast, .commit-box) {
-    background: var(--glass);
+  [data-glass='on'] :is(.drop, .slash-menu, .bubble, .palette, .modal, .confirm, .sheet, .toast, .commit-box, .convo, .ask-pop, .library) {
+    background: var(--glass-sheen), var(--glass);
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
     border-color: var(--glass-border);
-    box-shadow: 0 18px 50px -12px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.08), var(--glass-edge);
+    box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.3), var(--glass-edge);
   }
   /* A blurred layer can't blur through its own parent, so menus nested in glass stay solid. */
   [data-glass='on'] .overlay { background: rgba(0, 0, 0, 0.2); }

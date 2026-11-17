@@ -2,8 +2,9 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 
-/// A small pill in the upper right after something happens, with Undo when it can be taken back.
-/// Same as the web app's toasts: "Doc moved to Recently Deleted · Undo", "Copied as Markdown".
+/// A short note just above the chat bar after something happens, with Undo when it can be taken back.
+/// Same as the web app's notifications: "Doc moved to Recently Deleted · Undo", "Copied as Markdown".
+/// `error` marks something that didn't work: a red alert icon, and it stays a little longer.
 @Observable
 final class Toaster {
     static let shared = Toaster()
@@ -12,14 +13,15 @@ final class Toaster {
         var title: String
         var detail: String?
         var action: (label: String, run: () -> Void)?
+        var error = false
     }
     private(set) var current: Toast?
 
-    func show(_ title: String, detail: String? = nil, action: (label: String, run: () -> Void)? = nil) {
-        let t = Toast(title: title, detail: detail, action: action)
+    func show(_ title: String, detail: String? = nil, action: (label: String, run: () -> Void)? = nil, error: Bool = false) {
+        let t = Toast(title: title, detail: detail, action: action, error: error)
         withAnimation(.snappy) { current = t }
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(action == nil ? 2.5 : 6))
+            try? await Task.sleep(for: .seconds(action == nil && !error ? 2.5 : 6))
             if current?.id == t.id { withAnimation(.snappy) { current = nil } }
         }
     }
@@ -31,22 +33,26 @@ struct ToastView: View {
     var toast: Toaster.Toast
     var body: some View {
         HStack(spacing: 10) {
+            if toast.error {
+                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red).font(.subheadline)
+            }
             VStack(alignment: .leading, spacing: 1) {
-                Text(toast.title).font(.subheadline.weight(.medium)).lineLimit(1)
+                Text(toast.title).font(.subheadline.weight(.medium)).lineLimit(2)
                 if let d = toast.detail { Text(d).font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
             }
+            // The one thing you can press, filled so it reads as a button.
             if let a = toast.action {
                 Button(a.label) { Haptics.tap(); a.run(); Toaster.shared.dismiss() }
                     .font(.footnote.weight(.semibold)).buttonStyle(.plain)
-                    .padding(.horizontal, 12).frame(height: 30)
-                    .background(Color.primary.opacity(0.12), in: .capsule)
+                    .foregroundStyle(Color(uiColor: .systemBackground))
+                    .padding(.horizontal, 14).frame(height: 30)
+                    .background(Color.primary, in: .capsule)
             }
         }
-        .padding(.leading, 16).padding(.trailing, toast.action == nil ? 16 : 7)
+        .padding(.leading, 16).padding(.trailing, toast.action == nil ? 16 : 7).padding(.vertical, 7)
         .frame(minHeight: 44)
-        .background(Theme.raised, in: .capsule)
-        .overlay(Capsule().strokeBorder(Theme.rule))
-        .shadow(color: .black.opacity(0.3), radius: 14, y: 6)
+        // The same glass as the chat bar it rises out of.
+        .glassEffect(.regular, in: .rect(cornerRadius: 22))
         .onTapGesture { Toaster.shared.dismiss() }
     }
 }

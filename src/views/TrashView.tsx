@@ -63,7 +63,7 @@ export function TrashView() {
         <section className="hm-sec" aria-labelledby="tr-items">
           <div className="hm-label">
             <h2 id="tr-items">Docs and recordings</h2>
-            {deleted.length > 0 && <button className="hm-more" onClick={empty}>Empty</button>}
+            {deleted.length > 0 && <button className="danger" onClick={empty}><Trash2 size={13} aria-hidden="true" /> Empty</button>}
           </div>
           {deleted.length ? (
             <div className="hm-card hm-list">

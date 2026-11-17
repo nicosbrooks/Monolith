@@ -1,13 +1,14 @@
 import { create } from 'zustand'
 import { useStore } from '../store'
 import { allEvents, ownEvents } from '../lib/events'
-import { chat, enqueue, ensureAI, isReady, type Msg } from './llm'
+import { chat, enqueue, ensureAI, isReady, isTuned, type Msg } from './llm'
 import { ACT_GUIDE, describe, fresh, perform, pinToAsked, splitActs, verbs, visible, wantsAction, type Act } from './act'
-import { CHAT_RULES, evidenceQuery, packTurn, sameEvidence, turnEvidence, wantsDeviceContext, type Evidence, type Workspace } from './context'
+import { readAttachment, MAX_FILES, type Attached } from './attach'
+import { CHAT_RULES, evidenceQuery, fileEvidence, packTurn, sameEvidence, turnEvidence, wantsDeviceContext, type Evidence, type Workspace } from './context'
 import { instantAnswer } from './instant'
 import { deviceContext, refreshDevice } from '../lib/integrations'
 import { passageScores } from './system1'
-import { toast } from '../components/Toast'
+import { toast, toastError } from '../components/Toast'
 import type { CalEvent } from '../types'
 
 /**
@@ -34,9 +35,24 @@ interface Convo {
   /** Questions are about the open doc or recording (the "About …" chip turns it off). */
   useCtx: boolean
   pending: Pending | null
+  /** Files attached to this conversation: the assistant reads them as evidence until they're removed or it starts over. */
+  files: Attached[]
 }
 
-export const useConvo = create<Convo>(() => ({ msgs: [], meta: {}, done: {}, streaming: false, open: false, useCtx: true, pending: null }))
+export const useConvo = create<Convo>(() => ({ msgs: [], meta: {}, done: {}, streaming: false, open: false, useCtx: true, pending: null, files: [] }))
+
+/** Attach files to the conversation. Anything that can't be read says why; the rest are added. */
+export async function attachFiles(list: File[]) {
+  for (const file of list) {
+    if (useConvo.getState().files.length >= MAX_FILES) return void toast(`Up to ${MAX_FILES} files in one conversation.`)
+    const r = await readAttachment(file)
+    if ('error' in r) toastError(r.error)
+    else useConvo.setState((s) => ({ files: s.files.length < MAX_FILES ? [...s.files, r.ok] : s.files }))
+  }
+  // A question is coming: load the model while the person types it.
+  if (useConvo.getState().files.length) void import('./llm').then((m) => m.warmUp())
+}
+export const detachFile = (id: string) => useConvo.setState((s) => ({ files: s.files.filter((f) => f.id !== id) }))
 
 let abort: AbortController | null = null
 // Keep the prompt prefix when its evidence is still current, so the runtime can reuse its cache.
@@ -56,7 +72,7 @@ export const stop = () => abort?.abort()
 export function reset() {
   abort?.abort()
   sent.clear()
-  useConvo.setState({ msgs: [], meta: {}, done: {}, streaming: false, pending: null })
+  useConvo.setState({ msgs: [], meta: {}, done: {}, streaming: false, pending: null, files: [] })
 }
 
 /** Add a question and the app's own answer to the thread, without the model (an event added, a detail asked for). */
@@ -104,7 +120,8 @@ export async function ask(text: string, base = useConvo.getState().msgs) {
   const put = (content: string, m: Meta) => useConvo.setState((s) => ({ msgs: [...next, { role: 'assistant', content }], meta: { ...s.meta, [at]: m } }))
 
   // Exact answers from the app's own data need no model ("what's on tomorrow").
-  const instant = !wantsAction(text) && instantAnswer(text, { events: allEvents(), items: st.items })
+  const files = useConvo.getState().files
+  const instant = !files.length && !wantsAction(text) && instantAnswer(text, { events: allEvents(), items: st.items })
   if (instant) return put(instant.text, { sources: [{ id: null, title: instant.source === 'calendar' ? 'Your calendar' : 'Your open tasks' }], acts: [] })
 
   const controller = new AbortController()
@@ -113,20 +130,28 @@ export async function ask(text: string, base = useConvo.getState().msgs) {
   put('', { sources: [], acts: [], status: 'Thinking…' }) // the question shows the moment it's sent
   const active = useConvo.getState().useCtx ? openItem() : null
   try {
+    // The model loads while the evidence is gathered below, not before it.
+    let loading: Promise<boolean> | null = null
     if (!isReady()) {
       put('', { sources: [], acts: [], status: 'Getting the assistant ready…' })
-      if (!(await ensureAI())) throw new Error('The assistant couldn’t start. Try again in a moment.')
+      loading = ensureAI().catch(() => false)
     }
     const act = wantsAction(text)
     const previous = base.findLast((m) => m.role === 'user')?.content
     const query = evidenceQuery(text, previous)
     if (wantsDeviceContext(query)) await Promise.race([refreshDevice(), new Promise((r) => setTimeout(r, 1500))])
     const current = useStore.getState()
-    const workspace: Workspace = { items: current.items, events: ownEvents(current.events), now: new Date(), device: deviceContext() }
+    const workspace: Workspace = { items: current.items, events: ownEvents(current.events), now: new Date(), device: deviceContext(), files }
     const open = active ? current.items.find((item) => item.id === active.id && !item.deletedAt) : null
     // System 1 ranks passages by meaning when it's ready (a few milliseconds); otherwise words alone decide.
     const semantic = await passageScores(query).catch(() => undefined)
-    const evidence = turnEvidence(query, { ...workspace, open, action: act, semantic })
+    // Attached files lead. With files on the table, one passage from the workspace is plenty: the question is about them.
+    let docs = 0
+    const evidence = [
+      ...fileEvidence(query, files),
+      ...turnEvidence(query, { ...workspace, open: files.length ? null : open, action: act, semantic }).filter((e) => e.kind !== 'doc' || !files.length || docs++ < 1),
+    ]
+    if (loading && !(await loading)) throw new Error('The assistant couldn’t start. Try again in a moment.')
     const start = Math.max(0, base.length - 10)
     for (const i of sent.keys()) if (i < start || i >= base.length) sent.delete(i)
     const meta = useConvo.getState().meta
@@ -146,10 +171,11 @@ export async function ask(text: string, base = useConvo.getState().msgs) {
     const full = await enqueue(() =>
       chat(
         (window, reserve) => {
-          packed = packTurn(text, evidence, { window, reserve, guide: act ? ACT_GUIDE : undefined, open })
+          packed = packTurn(text, evidence, { window, reserve, guide: act && !isTuned() ? ACT_GUIDE : undefined, open })
           const bySource = new Map<string, Source>()
           for (const row of packed.kept) {
             if (row.item) bySource.set(row.item.id, { id: row.item.id, title: row.item.title || 'Untitled' })
+            else if (row.kind === 'file') bySource.set(`file:${row.file}`, { id: null, title: row.file ?? 'File' })
             else if (row.kind === 'calendar') bySource.set('calendar', { id: null, title: 'Your calendar' })
             else if (row.kind === 'tasks') bySource.set('tasks', { id: null, title: 'Your open tasks' })
           }

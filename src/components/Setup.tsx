@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowLeft, FolderOpen, Laptop, Lock } from 'lucide-react'
+import { ArrowLeft, FolderOpen, Laptop, Lock, Upload } from 'lucide-react'
 import { saveNow, useStore } from '../store'
 import { APP_NAME } from '../brand'
 import { hasFolderAccess } from '../storage/folder'
@@ -162,7 +162,7 @@ export function Setup() {
 
               {error && <p className="su-error" role="alert">{error}</p>}
               <div className="su-actions">
-                {!again && <button type="button" className="su-link" onClick={() => openBackup('import')}>Restore from a backup</button>}
+                {!again && <button type="button" className="btn su-link" onClick={() => openBackup('import')}><Upload size={15} aria-hidden="true" /> Restore from a backup</button>}
                 <button className="btn primary" type="submit" disabled={!!busy}>{busy || primary}</button>
               </div>
             </motion.form>

@@ -545,7 +545,7 @@ struct LectureView: View {
         .onDisappear { playback.stop() }
         .onChange(of: recordingThis) { if recordingThis { playback.stop() } }
         .onAppear(perform: measure)
-        // The web app's recording menu: Record again, Transcribe again, Use an audio file, then Pin and Delete.
+        // The web app's recording menu: Record again, Transcribe again, Upload audio, then Pin and Delete.
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -555,8 +555,9 @@ struct LectureView: View {
                             Button(transcribing ? "Transcribing…" : "Transcribe again", systemImage: "captions.bubble") { Task { await retranscribe() } }
                                 .disabled(transcribing)
                         }
-                        if !recordingThis {
-                            Button("Use an audio file", systemImage: "square.and.arrow.up") { importing = true }
+                        // Before there's audio, Upload audio is a button on the screen itself; after, it lives here.
+                        if !recordingThis && item.audioFile != nil {
+                            Button("Upload audio", systemImage: "square.and.arrow.up") { importing = true }
                         }
                     }))
                 } label: { Image(systemName: "ellipsis") }
@@ -618,6 +619,14 @@ struct LectureView: View {
                 if recordingThis { Text("Recording").font(.footnote).foregroundStyle(.red) }
             }
             Spacer()
+            // The other way in, beside the record button: the same pair as the web (Start recording / Upload audio).
+            if item.audioFile == nil && !recorder.isRecording {
+                Button { importing = true } label: {
+                    Label("Upload audio", systemImage: "square.and.arrow.up").font(.subheadline.weight(.medium))
+                        .padding(.horizontal, 4).frame(height: 36)
+                }
+                .buttonStyle(.glass)
+            }
             if item.audioFile != nil && !recordingThis {
                 Button { if let url = item.audioURL { playback.toggle(url) } } label: {
                     Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill").frame(width: 44, height: 44)
@@ -645,7 +654,7 @@ struct LectureView: View {
         transcribing = true
         defer { transcribing = false }
         let segs = await LectureRecorder.transcribe(url)
-        if segs.isEmpty { Toaster.shared.show("Couldn\u{2019}t transcribe this recording"); return }
+        if segs.isEmpty { Toaster.shared.show("Couldn\u{2019}t transcribe this recording", error: true); return }
         let old = item.transcript
         item.transcript = segs
         item.touch()
@@ -658,7 +667,7 @@ struct LectureView: View {
         defer { if ok { src.stopAccessingSecurityScopedResource() } }
         let name = "\(item.id.uuidString)-import-\(Int(Date.now.timeIntervalSince1970)).\(src.pathExtension.isEmpty ? "m4a" : src.pathExtension)"
         let dest = Storage.audio.appending(path: name)
-        do { try FileManager.default.copyItem(at: src, to: dest) } catch { Toaster.shared.show("Couldn\u{2019}t use that file"); return }
+        do { try FileManager.default.copyItem(at: src, to: dest) } catch { Toaster.shared.show("Couldn\u{2019}t use that file", error: true); return }
         playback.stop()
         item.audioFile = name
         item.duration = 0

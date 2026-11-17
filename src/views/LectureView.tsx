@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Connections } from '../components/Connections'
 import type { Editor as TEditor } from '@tiptap/react'
 import { format } from 'date-fns'
-import { Mic, Square, Pause, Play, PenLine, Upload, Trash2, Layers, Loader2, Captions, RotateCcw, MoreHorizontal } from 'lucide-react'
+import { Mic, Square, Pause, Play, PenLine, Upload, Trash2, Layers, Captions, RotateCcw, MoreHorizontal } from 'lucide-react'
 import { openMenu } from '../components/Overlays'
 import { motion } from 'motion/react'
 import { loadAudio, saveAudio, useStore } from '../store'
@@ -12,8 +12,8 @@ import { Editor } from '../components/editor/Editor'
 import { liveTranscribe, transcribe, type Live } from '../ai/stt'
 import { chat, enqueue, ensureAI, isReady, SYSTEM } from '../ai/llm'
 import { formatDuration, mdToHtml } from '../lib/util'
-import { toast } from '../components/Toast'
-import { takeRecordWhenOpened, willRecordWhenOpened } from '../lib/recordNext'
+import { toast, toastError } from '../components/Toast'
+import { takeRecordWhenOpened, takeTranscribeWhenOpened, willRecordWhenOpened } from '../lib/recordNext'
 
 export function LectureView({ item }: { item: Item }) {
   const st = useStore.getState()
@@ -26,6 +26,7 @@ export function LectureView({ item }: { item: Item }) {
   const [status, setStatus] = useState<{ text: string; p?: number } | null>(null)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [t, setT] = useState(0)
+  const [playing, setPlaying] = useState(false)
   const [gen, setGen] = useState(false)
   const [cards, setCards] = useState<{ q: string; a: string }[] | null>(null)
   const edRef = useRef<TEditor | null>(null)
@@ -61,6 +62,22 @@ export function LectureView({ item }: { item: Item }) {
     return () => {
       live = false
     }
+  }, [item.id]) // eslint-disable-line
+
+  // Made by an "Upload audio" button: the audio is already saved, so show it and transcribe it straight away.
+  useEffect(() => {
+    const go = () => {
+      if (!takeTranscribeWhenOpened(item.id)) return
+      void loadAudio(item.id).then((b) => {
+        if (!b) return
+        setAudioUrl((u) => u ?? URL.createObjectURL(b))
+        setTab('transcript')
+        void runTranscribe(b)
+      })
+    }
+    go()
+    window.addEventListener('monolith:transcribe', go)
+    return () => window.removeEventListener('monolith:transcribe', go)
   }, [item.id]) // eslint-disable-line
 
   useEffect(() => {
@@ -120,7 +137,7 @@ export function LectureView({ item }: { item: Item }) {
     } catch (e) {
       if (still && !still()) return
       takeRecordWhenOpened(item.id)
-      toast('Microphone access was blocked: ' + (e as Error).message)
+      toastError('Microphone access was blocked: ' + (e as Error).message)
     }
   }
 
@@ -199,7 +216,7 @@ export function LectureView({ item }: { item: Item }) {
       setLec({ status: 'done', transcript: fallback.length ? fallback : lec.transcript })
       const msg = (e as Error)?.message || ''
       // A download that didn't arrive gets plain words, not the browser's "Failed to fetch".
-      toast(/fetch|network|load failed/i.test(msg) || !navigator.onLine ? 'The speech model couldn’t download. Check your connection and try again.' : `Transcription failed: ${msg}`)
+      toastError(/fetch|network|load failed/i.test(msg) || !navigator.onLine ? 'The speech model couldn’t download. Check your connection and try again.' : `Transcription failed: ${msg}`)
     } finally {
       setStatus(null)
     }
@@ -270,7 +287,7 @@ export function LectureView({ item }: { item: Item }) {
       st.updateItem(item.id, { content: html })
       st.dismiss(`lec:${item.id}`)
     } catch (e) {
-      toast((e as Error).message)
+      toastError((e as Error).message)
     } finally {
       setGen(false)
       setStatus(null)
@@ -286,7 +303,7 @@ export function LectureView({ item }: { item: Item }) {
         chat([{ role: 'system', content: SYSTEM }, { role: 'user', content: `Create 8 flashcards from this material. Format each strictly as:\nQ: question\nA: short answer\n\n${src.slice(0, 7000)}` }], undefined, { temperature: 0.4 }),
       )
       const list = [...out.matchAll(/Q:\s*(.+)\n+\s*A:\s*(.+)/g)].map((m) => ({ q: m[1].trim(), a: m[2].trim() }))
-      if (!list.length) toast('No cards came back. Try again.')
+      if (!list.length) toastError('No cards came back. Try again.')
       setCards(list)
     } finally {
       setGen(false)
@@ -321,8 +338,9 @@ export function LectureView({ item }: { item: Item }) {
             aria-label="More"
             onClick={(e) =>
               openMenu(e, [
-                ...(lec.hasAudio && !recording ? [{ label: 'Record again', icon: Mic, run: start }, { label: 'Transcribe again', icon: Captions, run: () => runTranscribe() }] : []),
-                ...(!recording ? [{ label: 'Use an audio file', icon: Upload, run: importAudio }] : []),
+                ...((lec.hasAudio || lec.transcript.length) && !recording ? [{ label: 'Record again', icon: Mic, run: start }] : []),
+                ...(lec.hasAudio && !recording ? [{ label: 'Transcribe again', icon: Captions, run: () => runTranscribe() }] : []),
+                ...(!recording ? [{ label: 'Upload audio', icon: Upload, run: importAudio }] : []),
                 ...(lec.transcript.length || item.content ? [{ label: 'Flashcards', icon: Layers, run: flashcards }] : []),
                 'sep' as const,
                 { label: 'Delete', icon: Trash2, danger: true, run: () => (st.trashItem(item.id), toast('Moved to Recently Deleted', { action: { label: 'Undo', run: () => st.restoreItem(item.id) } })) },
@@ -345,55 +363,76 @@ export function LectureView({ item }: { item: Item }) {
             onChange={(e) => st.updateItem(item.id, { title: e.target.value.replace(/\n/g, '') })}
             onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), e.currentTarget.blur())}
           />
-          {/* A card while there's something to start or watch; just the button once there's audio, so it lines up with the player. */}
-          <div className={`recorder ${recording ? 'live' : lec.hasAudio ? 'bare' : ''}`}>
-            {recording ? (
-              <>
-                <div className="rec-dot" />
-                <div className="rec-time">{formatDuration(elapsed)}</div>
-                <canvas ref={canvas} className="wave" />
-                <button className="round" onClick={pause} title={rec === 'paused' ? 'Resume' : 'Pause'}>{rec === 'paused' ? <Play size={18} /> : <Pause size={18} />}</button>
-                <button className="round stop" onClick={stop} title="Stop"><Square size={16} fill="currentColor" /></button>
-              </>
-            ) : (
-              <>
-                {/* One way to start. Importing is the quiet alternative; re-doing things lives in the ⋯ of a finished recording. */}
-                {!lec.hasAudio ? (
-                  <>
-                    <motion.button whileTap={{ scale: 0.94 }} className="rec-btn" onClick={() => void start()} disabled={transcribing}>
-                      <Mic size={20} /> Start recording
-                    </motion.button>
-                    <button className="text-btn muted" onClick={importAudio} disabled={transcribing}>or use an audio file</button>
-                  </>
-                ) : (
-                  !transcribing && !lec.transcript.length && <button className="btn" onClick={() => runTranscribe()}><Captions size={15} /> Transcribe</button>
-                )}
-              </>
-            )}
-          </div>
+          {/* One row under the title: the way to start, the live recorder, or what's left to do with the audio. */}
+          {recording ? (
+            <div className="rc-live" role="group" aria-label="Recording">
+              <i className="rc-dot" aria-hidden="true" />
+              <span className="rc-time">{formatDuration(elapsed)}</span>
+              <canvas ref={canvas} className="rc-wave" />
+              <button className="rc-round" onClick={pause} title={rec === 'paused' ? 'Resume' : 'Pause'} aria-label={rec === 'paused' ? 'Resume' : 'Pause'}>{rec === 'paused' ? <Play size={16} /> : <Pause size={16} />}</button>
+              <button className="rc-round stop" onClick={stop} title="Stop" aria-label="Stop"><Square size={13} fill="currentColor" /></button>
+            </div>
+          ) : !lec.hasAudio && !lec.transcript.length ? (
+            // One way to start. Importing is the quiet alternative; re-doing things lives in the ⋯ of a finished recording.
+            <div className="rc-start">
+              <motion.button whileTap={{ scale: 0.96 }} className="btn primary rec" onClick={() => void start()} disabled={transcribing}>
+                <i className="rec-mark" aria-hidden="true" /> Start recording
+              </motion.button>
+              <button className="btn" onClick={importAudio} disabled={transcribing}><Upload size={15} aria-hidden="true" /> Upload audio</button>
+            </div>
+          ) : (
+            lec.hasAudio && !transcribing && !lec.transcript.length && (
+              <div className="rc-start">
+                <button className="btn" onClick={() => runTranscribe()}><Captions size={15} /> Transcribe</button>
+              </div>
+            )
+          )}
 
-          {audioUrl && !recording && <audio ref={audioRef} className="player" src={audioUrl} controls onTimeUpdate={(e) => setT(e.currentTarget.currentTime)} />}
+          {audioUrl && !recording && (
+            <div className="rc-player">
+              <button className="rc-round" onClick={() => { const a = audioRef.current; if (a) void (a.paused ? a.play() : a.pause()) }} title={playing ? 'Pause' : 'Play'} aria-label={playing ? 'Pause' : 'Play'}>
+                {playing ? <Pause size={16} /> : <Play size={16} />}
+              </button>
+              <span className="rc-time sm">{formatDuration(t)}</span>
+              <input
+                type="range"
+                className="rc-seek"
+                aria-label="Position"
+                min={0}
+                max={Math.max(lec.duration, t, 1)}
+                step={0.1}
+                value={t}
+                style={{ '--p': `${(t / Math.max(lec.duration, t, 1)) * 100}%` } as React.CSSProperties}
+                onChange={(e) => { const a = audioRef.current; if (a) a.currentTime = Number(e.target.value); setT(Number(e.target.value)) }}
+              />
+              <span className="rc-time sm end">{formatDuration(lec.duration)}</span>
+              <audio ref={audioRef} src={audioUrl} onTimeUpdate={(e) => setT(e.currentTarget.currentTime)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} />
+            </div>
+          )}
 
           {status && (
-            <div className="progress-card">
-              <Loader2 size={15} className="spin" />
+            <div className="rc-status" role="status">
+              <span className="slab-wait" aria-hidden="true" />
               <span>{status.text}</span>
               {status.p !== undefined && <div className="bar"><i style={{ width: `${status.p * 100}%` }} /></div>}
             </div>
           )}
 
-          {(lec.transcript.length > 0 || recording) && <div className="tabs">
-            <button className={tab === 'notes' ? 'on' : ''} onClick={() => setTab('notes')}>Notes</button>
-            <button className={tab === 'transcript' ? 'on' : ''} onClick={() => setTab('transcript')}>
-              Transcript {lec.transcript.length > 0 && <em>{lec.transcript.length}</em>}
-            </button>
-            <span className="grow" />
-            {lec.transcript.length > 0 && !recording && (
-              <button className="btn sm ai" onClick={generate} disabled={gen}>
-                {gen ? <Loader2 size={14} className="spin" /> : <PenLine size={14} />} Write notes
-              </button>
-            )}
-          </div>}
+          {(lec.transcript.length > 0 || recording) && (
+            <div className="rc-bar">
+              <div className="seg" role="tablist" aria-label="Notes or transcript">
+                <button role="tab" aria-selected={tab === 'notes'} className={tab === 'notes' ? 'on' : ''} onClick={() => setTab('notes')}>Notes</button>
+                <button role="tab" aria-selected={tab === 'transcript'} className={tab === 'transcript' ? 'on' : ''} onClick={() => setTab('transcript')}>
+                  Transcript {lec.transcript.length > 0 && <small>{lec.transcript.length}</small>}
+                </button>
+              </div>
+              {lec.transcript.length > 0 && !recording && (
+                <button className="btn sm" onClick={generate} disabled={gen}>
+                  {gen ? <span className="slab-wait" aria-hidden="true" /> : <PenLine size={14} />} Write notes
+                </button>
+              )}
+            </div>
+          )}
 
           {tab === 'notes' ? (
             <Editor
@@ -404,9 +443,9 @@ export function LectureView({ item }: { item: Item }) {
               onChange={(html) => st.updateItem(item.id, { content: html })}
             />
           ) : (
-            <div className="transcript">
+            <div className="rc-transcript">
               {recording && (
-                <p className="live-cap">
+                <p className="rc-cap">
                   {live.lines.map((l) => l.text).join(' ')}
                   {live.lines.length > 0 && ' '}
                   <span className="interim">{live.interim}</span>
@@ -415,8 +454,8 @@ export function LectureView({ item }: { item: Item }) {
               )}
               {!recording &&
                 lec.transcript.map((s, i) => (
-                  <button key={i} className={`tseg ${t >= s.start && t < s.end ? 'now' : ''}`} onClick={() => seek(s.start)}>
-                    <span className="ts">{formatDuration(s.start)}</span>
+                  <button key={i} className={`rc-seg ${t >= s.start && t < s.end ? 'now' : ''}`} onClick={() => seek(s.start)}>
+                    <span className="rc-ts">{formatDuration(s.start)}</span>
                     <span>{s.text}</span>
                   </button>
                 ))}
@@ -456,9 +495,9 @@ function Flashcards({ cards, onClose, onSave }: { cards: { q: string; a: string 
   if (!c) return null
   return (
     <div className="overlay" onMouseDown={onClose}>
-      <div className="cards-modal" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal rc-cards" role="dialog" aria-modal="true" aria-label="Flashcards" onMouseDown={(e) => e.stopPropagation()}>
         <div className="muted small">Card {i + 1} of {cards.length} · Space to flip, ← → to move</div>
-        <motion.div className="flashcard" onClick={() => setFlip(!flip)} animate={{ rotateY: flip ? 180 : 0 }} transition={{ type: 'spring', duration: 0.5 }}>
+        <motion.div className="rc-card" onClick={() => setFlip(!flip)} animate={{ rotateY: flip ? 180 : 0 }} transition={{ type: 'spring', duration: 0.5 }}>
           <div className="face front">{c.q}</div>
           <div className="face back">{c.a}</div>
         </motion.div>

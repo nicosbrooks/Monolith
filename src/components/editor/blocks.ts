@@ -4,7 +4,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { addFile } from '../../lib/files'
-import { toast } from '../Toast'
+import { toast, toastError } from '../Toast'
 
 export interface Block {
   id: string
@@ -48,7 +48,7 @@ export async function insertFiles(editor: Editor, files: File[], pos?: number) {
         nodes.push({ type: 'image', attrs: { src: await readDataUrl(file), alt: file.name } })
       } else toast('Docs kept in a folder, GitHub or Drive can hold pictures, but not other files.')
     } catch (e) {
-      toast((e as Error).message || `Couldn’t add “${file.name}”.`)
+      toastError((e as Error).message || `Couldn’t add “${file.name}”.`)
     }
   }
   // All at once: an inserted file is selected, so inserting the next one separately would replace it.

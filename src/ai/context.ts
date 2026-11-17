@@ -5,6 +5,7 @@ import { dueLabel, readWorkspace } from '../lib/graph'
 import { APP_NAME } from '../brand'
 import { promptBudget, tokensOf } from './prompt'
 import { gapLine, requestedMinutes } from './availability'
+import type { Attached } from './attach'
 
 // What the assistant is told. Small on-device models are only as accurate as what they're given, and every
 // character they read costs time before the first word appears. So:
@@ -193,12 +194,43 @@ export function passages(found: Found[]) {
 }
 
 export type Evidence = {
-  kind: 'dates' | 'calendar' | 'tasks' | 'recent' | 'device' | 'doc'
+  kind: 'dates' | 'calendar' | 'tasks' | 'recent' | 'device' | 'doc' | 'file'
   text: string
   item?: Item
+  /** The attached file this came from. */
+  file?: string
 }
 
-export type Workspace = { items: Item[]; events: CalEvent[]; now: Date; device?: string }
+export type Workspace = { items: Item[]; events: CalEvent[]; now: Date; device?: string; files?: Attached[] }
+
+/** A file this short is given whole; a longer one gives the passages that match the question. */
+const WHOLE_FILE = 2400
+
+/**
+ * What the attached files say about a question. Files come first: they were attached on purpose, so they get the room
+ * before anything from the workspace. A short file goes in whole; a long one gives its best passages, or its opening
+ * when nothing matches ("summarize this").
+ */
+export function fileEvidence(question: string, files: Attached[], budget = 3000): Evidence[] {
+  const out: Evidence[] = []
+  let left = budget
+  for (const [index, f] of files.entries()) {
+    const share = Math.floor(left / (files.length - index))
+    if (share < 200) break
+    const all = chunks(f.item)
+    const whole = all.reduce((n, c) => n + c.text.length, 0) <= Math.min(WHOLE_FILE, share)
+    let found = whole ? all.map((c) => ({ item: f.item, text: c.text })) : relevant(question, { items: [f.item], budget: share })
+    if (!found.length) {
+      let used = 0
+      found = all.filter((c) => (used += c.text.length) <= share).map((c) => ({ item: f.item, text: c.text }))
+    }
+    if (!found.length) continue
+    const text = `From attached file “${f.name}”${whole ? '' : ' (excerpts)'}:\n${found.map((x) => x.text).join(whole ? '\n' : '\n…\n')}`
+    left -= text.length
+    out.push({ kind: 'file', text, file: f.name })
+  }
+  return out
+}
 
 const calendarIntent = /\b(calendar|schedule[ds]?|agenda|appointments?|meetings?|events?|free|busy|availability|conflicts?|overlap|reschedule|postpone|cancel|move|shift|when(?:['’]s| (?:is|was|does|did)))\b/i
 const taskIntent = /\b(tasks?|to-?dos?|checklists?|check off|tick off|mark .* (?:done|complete|finished)|done with|left to do|prioriti[sz]e)\b/i
@@ -324,6 +356,7 @@ export function sameEvidence(evidence: Evidence[], before: Workspace, after: Wor
     if (kind === 'calendar') return before.events === after.events
     if (kind === 'tasks' || kind === 'recent') return before.items === after.items
     if (kind === 'device') return before.device === after.device
+    if (kind === 'file') return before.files === after.files
     if (kind === 'dates') return before.now.toDateString() === after.now.toDateString()
     return after.items.some((current) => current === item)
   })

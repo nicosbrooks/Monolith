@@ -1,7 +1,7 @@
 import type { Editor } from '@tiptap/core'
 import { chat, enqueue, ensureAI, isReady, SYSTEM } from './llm'
 import { mdToHtml } from '../lib/util'
-import { toast } from '../components/Toast'
+import { toast, toastError } from '../components/Toast'
 
 let activeEditor: Editor | null = null
 export const setActiveEditor = (e: Editor | null) => (activeEditor = e)
@@ -32,7 +32,7 @@ async function streamInto(editor: Editor, prompt: string, opts: { asBlocks?: boo
     if (opts.asBlocks) editor.chain().focus().insertContentAt({ from, to: from + len }, mdToHtml(out)).run()
     return out
   } catch (e) {
-    toast((e as Error).message)
+    toastError((e as Error).message)
   } finally {
     editor.view.dom.classList.remove('ai-writing')
   }

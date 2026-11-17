@@ -54,17 +54,13 @@
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
 }
-/* ── layout: the panel floats on the ground with round corners ── */
-.app:not(.mobile) .main,
-.app.collapsed:not(.mobile) .main{
-  margin: 10px 10px 10px 0;
+/* ── layout: the page floats on the ground with round corners; there is no sidebar, just the dock ── */
+.app:not(.mobile) .main {
+  margin: 10px;
   border: 0;
-  border-radius: 20px;
+  border-radius: 22px;
   background: var(--content);
   overflow: hidden;
-}
-.app.collapsed:not(.mobile) .main {
-  margin-left: 10px;
 }
 .side-wrap,
 .sidebar {
@@ -101,6 +97,20 @@
 }
 .icon-btn {
   border-radius: 999px;
+}
+/* Toolbar actions are visible round buttons, not bare glyphs. */
+.toolbar .icon-btn,
+.toolbar .tb {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--btn-grad);
+  box-shadow: var(--btn-edge);
+  color: var(--text);
+}
+.toolbar .icon-btn:hover,
+.toolbar .tb:hover {
+  background: var(--btn-grad-hover);
 }
 .text-btn {
   border-radius: 999px;
@@ -191,15 +201,24 @@ kbd {
 :root {
   --card: #ffffff;
   --card-hover: rgba(0, 0, 0, 0.045);
+  /* Frosted panel (glass on): a soft top-lit gradient over the page, a hairline lit edge, a long soft shadow. */
+  --panel: #ffffff;
+  --panel-edge: 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 :root[data-theme='dark'] {
   --card: #191918;
   --card-hover: rgba(255, 255, 255, 0.06);
+  --panel: rgba(255, 255, 255, 0.05);
+  --panel-edge: 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 .hm {
   width: min(100%, 728px);
   margin-inline: auto;
   padding: 56px 24px 132px;
+}
+.app:not(.mobile) .hm {
+  width: min(100%, 1080px);
+  padding: 52px 40px 168px;
 }
 .hm-head h1 {
   margin: 0;
@@ -213,11 +232,12 @@ kbd {
   font-size: 15px;
 }
 .hm-card {
-  border-radius: 22px;
+  border-radius: 16px;
   background: var(--card);
 }
-:root[data-theme='light'] .hm-card {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+:root[data-glass='on'] .hm-card {
+  background: var(--panel);
+  box-shadow: var(--panel-edge);
 }
 .hm-sec {
   margin-top: 30px;
@@ -269,25 +289,43 @@ kbd {
 /* starting points: each one opens the assistant with that question */
 .hm-starters {
   display: grid;
-  gap: 8px;
-  margin-top: 14px;
+  gap: 2px;
+  margin: 10px -8px 0;
 }
 .hm-starter {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 48px;
-  padding: 10px 14px;
-  border-radius: 16px;
-  background: var(--card-hover);
+  min-height: 52px;
+  padding: 9px 12px 9px 10px;
+  border-radius: 18px;
+  background: transparent;
   color: var(--text);
   font-size: 15px;
   text-align: left;
   transition: background 0.15s;
 }
 .hm-starter:hover {
-  background: var(--raised-fill-2);
+  background: var(--card-hover);
+}
+/* the icon is a small round tile, so the rows read as a list, not a stack of boxes */
+.hm-starter > svg:first-child {
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  padding: 8px;
+  border-radius: 50%;
+  background: var(--raised-fill);
+}
+/* the arrow only shows when the row is hovered or focused */
+.hm-starter > svg:last-child {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.hm-starter:hover > svg:last-child,
+.hm-starter:focus-visible > svg:last-child {
+  opacity: 1;
 }
 .hm-starter:focus-visible {
   outline: 2px solid var(--text-2);
@@ -630,8 +668,6 @@ details.advanced[open] > summary::after {
 .twisty,
 .search,
 .thumb,
-.round,
-.tseg,
 .quick-add,
 [cmdk-item],
 .ctx,
@@ -645,7 +681,6 @@ details.advanced[open] > summary::after {
 :focus-visible {
   border-radius: 10px;
 }
-.rec-btn,
 .chip,
 .mev,
 .mev.all,
@@ -667,7 +702,6 @@ details.advanced[open] > summary::after {
 .list-pane,
 .subdocs,
 .sketch-tools,
-.tabs,
 .cal-head,
 .week-days,
 .week-allday,
@@ -796,6 +830,12 @@ details.advanced[open] > summary::after {
   --raised-fill-2: rgba(0, 0, 0, 0.09);
   --btn: #e6e5e0;
   --btn-hover: #dad9d3;
+  /* round buttons get a faint top-lit gradient and a hairline lit edge */
+  --btn-grad: #e9e8e3;
+  --btn-grad-hover: #dedcd6;
+  --btn-edge: none;
+  --btn-primary-grad: #1c1c1a;
+  --btn-primary-edge: none;
   --scrim: rgba(20, 20, 18, 0.32);
 }
 :root[data-theme='dark'] {
@@ -805,6 +845,11 @@ details.advanced[open] > summary::after {
   --raised-fill-2: rgba(255, 255, 255, 0.12);
   --btn: #2a2a28;
   --btn-hover: #353533;
+  --btn-grad: #2d2d2b;
+  --btn-grad-hover: #383836;
+  --btn-edge: none;
+  --btn-primary-grad: #f1efea;
+  --btn-primary-edge: none;
   --scrim: rgba(0, 0, 0, 0.62);
 }
 .overlay,
@@ -812,6 +857,9 @@ details.advanced[open] > summary::after {
   background: var(--scrim) !important;
   backdrop-filter: none !important;
 }
+/* The solid look below is the fallback for when frosted glass is off (Settings, or the OS asks for
+   reduced transparency). With glass on, theme.css's frosted layer takes over: about 90% opaque,
+   so a popup still reads clearly above the page. */
 .modal,
 .palette,
 .confirm,
@@ -820,17 +868,16 @@ details.advanced[open] > summary::after {
 .slash-menu,
 .bubble,
 .sheet {
-  background: var(--raised) !important;
-  backdrop-filter: none !important;
-  border: 1px solid var(--raised-edge) !important;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+  background: var(--raised);
+  border: 1px solid var(--raised-edge);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
 }
-:root[data-theme='light'] .modal,
-:root[data-theme='light'] .palette,
-:root[data-theme='light'] .confirm,
-:root[data-theme='light'] .drop,
-:root[data-theme='light'] .sheet {
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+:root[data-theme='light']:not([data-glass='on']) .modal,
+:root[data-theme='light']:not([data-glass='on']) .palette,
+:root[data-theme='light']:not([data-glass='on']) .confirm,
+:root[data-theme='light']:not([data-glass='on']) .drop,
+:root[data-theme='light']:not([data-glass='on']) .sheet {
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 /* Rows and controls inside popups use fills relative to the raised surface, so they stay visible. */
 .modal .btn,
@@ -873,20 +920,23 @@ details.advanced[open] > summary::after {
 /* Buttons on the page */
 .btn,
 .btn.sm {
-  background: var(--btn);
+  background: var(--btn-grad);
+  box-shadow: var(--btn-edge);
   color: var(--text);
 }
 .btn:hover:not(:disabled) {
-  background: var(--btn-hover);
+  background: var(--btn-grad-hover);
 }
 .btn.primary,
 .modal .btn.primary,
 .confirm .btn.primary {
-  background: var(--text);
+  background: var(--btn-primary-grad);
+  box-shadow: var(--btn-primary-edge);
   color: var(--bg);
+  border-color: transparent;
 }
 .btn.primary:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--text) 88%, var(--bg));
+  opacity: 0.9;
 }
 .btn.danger.solid,
 .confirm .btn.danger.solid {
@@ -1033,14 +1083,10 @@ body {
   --content: #f4f3f0;
   --nav-on: #e8e7e2;
 }
-.app:not(.mobile) .main,
-.app.collapsed:not(.mobile) .main{
-  margin: 0;
-  border-radius: 0;
+.app:not(.mobile) .main {
+  margin: 10px;
+  border-radius: 22px;
   background: var(--bg);
-}
-.app.collapsed:not(.mobile) .main {
-  margin-left: 0;
 }
 /* Flush with the section rows: same highlight edge, titles in the same column (see the padding in Sidebar.tsx). */
 .side-tree {
@@ -1061,10 +1107,10 @@ body {
   bottom: 24px;
   transform: translateX(-50%);
   /* One width whether or not the conversation is open, so the bar never jumps. */
-  width: min(680px, calc(100% - 48px));
+  width: min(720px, calc(100% - 48px));
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   z-index: 20;
 }
 /* The page fades out under the bar, so rows never collide with it. */
@@ -1086,9 +1132,9 @@ body {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--text);
+  background: var(--btn-primary-grad);
   color: var(--bg);
-  box-shadow: var(--shadow);
+  box-shadow: var(--btn-primary-edge), var(--shadow);
 }
 /* Assistant actions */
 .act-card {
@@ -1196,6 +1242,10 @@ body {
 :root[data-theme='light'] .app:not(.mobile) .sidebar {
   background: #ebeae5;
   box-shadow: none;
+}
+:root[data-glass='on'] .app:not(.mobile) .sidebar {
+  background: var(--panel);
+  box-shadow: var(--panel-edge);
 }
 .side-scroll {
   display: flex;
@@ -1352,7 +1402,6 @@ body {
   border-radius: 999px;
   background: var(--btn);
   border: 1px solid var(--raised-edge);
-  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.45);
   transition: background 0.15s, border-color 0.15s;
 }
 .ask-bar.phone .ask-field {
@@ -1368,11 +1417,22 @@ body {
 /* Light: a white field like the cards around it, not a grey slab floating over them. */
 :root[data-theme='light'] .ask-field {
   background: var(--raised);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 12px 32px -16px rgba(0, 0, 0, 0.28);
 }
 :root[data-theme='light'] .ask-bar:hover .ask-field {
   background: var(--raised);
   border-color: color-mix(in oklab, var(--text) 16%, transparent);
+}
+/* The bar is flat: a solid field with a hairline edge, no blur and no glow. */
+:root[data-glass='on'] .ask-field,
+:root[data-glass='on'] .ask-bar:hover .ask-field,
+:root[data-glass='on'] .ask-bar.focus .ask-field {
+  background: var(--raised);
+  border-color: var(--raised-edge);
+  box-shadow: none;
+}
+:root[data-glass='on'] .ask-bar:hover .ask-field,
+:root[data-glass='on'] .ask-bar.focus .ask-field {
+  border-color: color-mix(in oklab, var(--text) 20%, transparent);
 }
 .ask-ico {
   flex: none;
@@ -1640,7 +1700,9 @@ body {
 }
 .su-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 10px;
   margin-top: 24px;
 }
 .su-actions .btn {
@@ -1863,21 +1925,6 @@ body {
   justify-content: space-between;
   align-items: center;
 }
-.su-link {
-  color: var(--text-2);
-  font-size: 14px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  text-decoration-color: var(--text-3);
-}
-.su-link:hover {
-  color: var(--text);
-}
-.su-link:focus-visible {
-  outline: 2px solid var(--text-2);
-  outline-offset: 3px;
-  border-radius: 4px;
-}
 
 /* ── assistant: what it's doing, and where an answer came from ── */
 .ai-status {
@@ -1980,7 +2027,7 @@ body {
 }
 
 /* Recording view: once there's audio, the Transcribe button sits on the content edge like the player below it. */
-.recorder.bare { padding: 0; background: none; border: 0; margin-top: 4px; }
+
 /* Sidebar row icons are centred on the text line, whatever icon they hold. */
 .nav .emoji { display: grid; place-items: center; height: 18px; line-height: 0; }
 /* File menus: on a card, after Open; on a picture, in its corner while hovered or selected. */
@@ -2509,6 +2556,9 @@ body {
     border-radius: 0 !important;
   }
   .side-wrap,
+  .dock,
+  .library,
+  .library-scrim,
   .toolbar,
   .home-dock,
   .p-dock,
@@ -2830,4 +2880,996 @@ body {
 .app.mobile .tr-row {
   padding-top: 8px;
   padding-bottom: 8px;
+}
+
+/* ── Shell: the dock, the Library, the Docs page, and Home as a board ── */
+.dock {
+  flex: none;
+  align-self: center;
+  position: relative;
+  z-index: 42;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 52px;
+  margin: 10px 0 10px 6px;
+}
+.dock-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--text-3);
+  transition: background 0.12s, color 0.12s;
+}
+.dock-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.dock-btn.on {
+  background: var(--hover);
+  color: var(--text);
+}
+.dock-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* Names appear to the right on hover or keyboard focus, so the rail can stay narrow. */
+.dock-btn::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: calc(100% + 14px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: var(--raised);
+  border: 1px solid var(--raised-edge);
+  color: var(--text);
+  font: 550 12.5px/1 var(--font);
+  white-space: pre;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s, transform 0.12s;
+}
+.dock-btn:hover::after,
+.dock-btn:focus-visible::after {
+  opacity: 1;
+  transform: translateY(-50%);
+  transition-delay: 0.25s;
+}
+.dock-sep {
+  width: 20px;
+  height: 1px;
+  margin: 6px 0;
+  background: var(--border-2);
+}
+/* Short windows: tighter, so the whole rail always fits without scrolling. */
+@media (max-height: 560px) {
+  .dock {
+    gap: 2px;
+    padding: 5px 0;
+  }
+  .dock-btn {
+    width: 34px;
+    height: 34px;
+  }
+  .dock-sep {
+    margin: 2px 0;
+  }
+}
+.library-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.18);
+}
+.library {
+  position: fixed;
+  z-index: 41;
+  top: 10px;
+  bottom: 10px;
+  left: 70px;
+  width: min(var(--side-w), calc(100vw - 90px));
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--raised);
+  border: 1px solid var(--raised-edge);
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.35);
+}
+.library .sidebar {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+/* Home: a board of cards. The assistant leads; the week sits beside it. */
+.hm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  column-gap: 24px;
+}
+.hm-head h1 {
+  flex: 1 1 100%;
+}
+.hm-quick {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  order: 3;
+}
+.hm-head time,
+.hm-head p {
+  flex: 1;
+}
+.hm-quick button {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  background: var(--btn-grad);
+  color: var(--text);
+  font: 550 13.5px/1 var(--font);
+}
+.hm-quick button:hover {
+  background: var(--btn-grad-hover, var(--btn-hover));
+}
+/* A page's own main action (New doc on Docs, Record on Recordings) is the one filled pill. */
+.hm-quick button.primary {
+  background: var(--btn-primary-grad, var(--text));
+  color: var(--bg);
+}
+.hm-quick button.primary:hover {
+  opacity: 0.88;
+}
+.hm-quick button:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: 2px;
+}
+.hm-quick kbd {
+  color: var(--text-3);
+  font: 500 11.5px var(--font);
+}
+.hm-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px 22px;
+  align-items: start;
+}
+.app.mobile .hm-board {
+  display: block;
+}
+.app:not(.mobile) .hm-board > .hm-sec,
+.app:not(.mobile) .hm-board > .hm-asst {
+  margin-top: 0;
+}
+.app:not(.mobile) .hm-board {
+  margin-top: 30px;
+}
+.hm-board > .hm-asst {
+  grid-column: span 2;
+  padding: 26px 28px 28px;
+}
+.hm-board > .hm-asst h2 {
+  font-size: 22px;
+}
+.hm-board > .hm-cal {
+  grid-column: 3;
+  grid-row: 1;
+}
+.hm-board > .hm-recent {
+  grid-column: span 2;
+}
+.hm-board > .hm-tasks {
+  grid-column: 3;
+}
+@media (max-width: 1000px) {
+  .hm-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .hm-board > .hm-asst,
+  .hm-board > .hm-recent {
+    grid-column: 1 / -1;
+  }
+  .hm-board > .hm-cal,
+  .hm-board > .hm-tasks {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+/* Docs and Recordings: a wide page of cards */
+.lib-col {
+  width: min(100%, 1080px);
+  margin-inline: auto;
+  padding: 52px 40px 168px;
+}
+.lib-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 26px 0 22px;
+}
+.lib-search {
+  flex: 1 1 240px;
+  max-width: 360px;
+  height: 40px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text-3);
+}
+.lib-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+}
+.lib-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lib-chips button {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text-2);
+  font: 550 13.5px/1 var(--font);
+}
+.lib-chips button:hover {
+  color: var(--text);
+}
+.lib-chips button.on {
+  background: var(--btn-grad);
+  color: var(--text);
+}
+.lib-chips input {
+  width: 150px;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  font: 550 13.5px/1 var(--font);
+  outline: 2px solid var(--text-2);
+  outline-offset: -2px;
+}
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+.lib-card {
+  min-height: 172px;
+  padding: 18px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+  border-radius: 16px;
+  background: var(--card);
+  transition: background 0.12s;
+}
+:root[data-glass='on'] .lib-card {
+  background: var(--panel);
+  box-shadow: var(--panel-edge);
+}
+.lib-card:hover {
+  background: var(--card-hover);
+}
+.lib-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.lib-card-top {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.lib-ico {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--btn-grad);
+  font-size: 16px;
+}
+.lib-card b {
+  font: 600 15.5px/1.3 var(--font);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.lib-card-text {
+  flex: 1;
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+.lib-card small {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.lib-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14vh 24px 0;
+  color: var(--text-3);
+  text-align: center;
+}
+.lib-empty b {
+  color: var(--text-2);
+}
+
+/* Files attached to the Ask bar */
+.ask-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.ask-file {
+  height: 30px;
+  max-width: 100%;
+  padding: 0 4px 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  background: var(--raised);
+  border: 1px solid var(--raised-edge);
+  color: var(--text-2);
+  font-size: 13px;
+}
+.ask-file b {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 550;
+}
+.ask-file small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.ask-file button {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-3);
+}
+.ask-file button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.ask-attach {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-3);
+}
+.ask-attach:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.ask-bar.dropping .ask-field {
+  outline: 2px dashed var(--text-3);
+  outline-offset: 3px;
+}
+
+.ask-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  object-fit: cover;
+  flex: none;
+}
+
+/* ── Recording (LectureView, `rc-`) ──
+   The same layers as every other page: the recorder and player are flat panels on the ground, buttons are the app's
+   pills and round chips, and red appears only while it is recording (the dot, the wave, Stop). */
+.rc-start,
+.rc-live,
+.rc-player,
+.rc-status {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rc-start .btn {
+  height: 38px;
+  padding: 0 18px;
+}
+.rc-live,
+.rc-player,
+.rc-status {
+  min-height: 52px;
+  padding: 7px 8px 7px 18px;
+  border-radius: 999px;
+  background: var(--card);
+}
+:root[data-glass='on'] :is(.rc-live, .rc-player, .rc-status) {
+  background: var(--panel);
+  box-shadow: var(--panel-edge);
+}
+.rc-player {
+  padding-left: 8px;
+  padding-right: 18px;
+}
+.rc-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: pulse 1.1s infinite;
+}
+.rc-time {
+  flex: none;
+  min-width: 52px;
+  font: 600 17px/1 var(--font);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.rc-time.sm {
+  min-width: 38px;
+  font: 500 13px/1 var(--font);
+  color: var(--text-2);
+}
+.rc-time.end {
+  text-align: right;
+  color: var(--text-3);
+}
+.rc-wave {
+  flex: 1;
+  min-width: 60px;
+  height: 34px;
+  color: var(--danger);
+}
+.rc-round {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--btn-grad);
+  color: var(--text);
+  transition: background 0.12s;
+}
+.rc-round:hover {
+  background: var(--btn-grad-hover, var(--btn-hover));
+}
+.rc-round.stop,
+.rc-round.stop:hover {
+  background: var(--danger);
+  color: #fff;
+}
+.rc-round:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: 2px;
+}
+/* The scrubber: a 4px track filled up to where it is playing, and a knob that shows on hover or focus. */
+.rc-seek {
+  flex: 1;
+  min-width: 60px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.rc-seek::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(to right, var(--text) var(--p, 0%), var(--raised-fill-2) var(--p, 0%));
+}
+.rc-seek::-moz-range-track {
+  height: 4px;
+  border-radius: 4px;
+  background: var(--raised-fill-2);
+}
+.rc-seek::-moz-range-progress {
+  height: 4px;
+  border-radius: 4px;
+  background: var(--text);
+}
+.rc-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--text);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.rc-seek::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+}
+.rc-seek:hover::-webkit-slider-thumb,
+.rc-seek:focus-visible::-webkit-slider-thumb {
+  opacity: 1;
+}
+.rc-seek:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+.rc-status {
+  flex-wrap: wrap;
+  row-gap: 8px;
+  padding: 12px 18px;
+  border-radius: 22px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.rc-status .bar {
+  flex-basis: 100%;
+}
+/* Notes or Transcript, and the one action for the transcript, on a single row. */
+.rc-bar {
+  margin: 26px 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rc-bar .seg button {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13.5px;
+}
+.rc-bar .btn .slab-wait {
+  margin: 0 3px;
+}
+.rc-transcript {
+  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+}
+.rc-seg {
+  display: flex;
+  gap: 14px;
+  margin: 0 -12px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  text-align: left;
+  font-size: 15px;
+  line-height: 1.6;
+  transition: background 0.12s;
+}
+.rc-seg:hover,
+.rc-seg.now {
+  background: var(--card-hover);
+}
+.rc-seg:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: -2px;
+}
+.rc-ts {
+  flex: none;
+  width: 44px;
+  padding-top: 2px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.rc-seg.now .rc-ts {
+  color: var(--text);
+}
+.rc-cap {
+  font-size: 17px;
+  line-height: 1.7;
+}
+.rc-cap .interim {
+  color: var(--text-3);
+}
+/* Flashcards sit on the popup surface, like any dialog. */
+.modal.rc-cards {
+  width: min(560px, calc(100vw - 32px));
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  perspective: 1200px;
+}
+.rc-card {
+  position: relative;
+  height: 280px;
+  transform-style: preserve-3d;
+  cursor: pointer;
+}
+.rc-card .face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 30px;
+  border-radius: 16px;
+  background: var(--raised-fill);
+  backface-visibility: hidden;
+  text-align: center;
+  font: 600 20px/1.4 var(--font);
+}
+.rc-card .face.back {
+  transform: rotateY(180deg);
+  background: var(--raised-fill-2);
+  font: 500 17px/1.5 var(--font);
+}
+.app.mobile :is(.rc-start, .rc-live, .rc-player, .rc-status) {
+  margin-top: 14px;
+}
+
+/* ── Calendar header: the same title and pills as every other page, on one row above the grid ── */
+.app:not(.mobile) .cal-head {
+  padding: 26px 28px 14px 24px;
+  gap: 10px;
+}
+.app:not(.mobile) .cal-head h2 {
+  min-width: 0;
+  margin-right: 8px;
+  font: 650 30px/1.2 var(--font-display);
+  letter-spacing: -0.028em;
+}
+.app:not(.mobile) .cal-head h2 .muted {
+  font-weight: 400;
+  color: var(--text-3);
+}
+.app:not(.mobile) .cal-head .btn.sm {
+  height: 36px;
+  padding: 0 14px;
+  font: 550 13.5px/1 var(--font);
+}
+.app:not(.mobile) .cal-head .icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+.app:not(.mobile) .cal-head .seg {
+  padding: 3px;
+}
+.app:not(.mobile) .cal-head .seg button {
+  height: 30px;
+  padding: 0 14px;
+  font-size: 13.5px;
+}
+/* A grid child may shrink below its content, so a long title is cut with an ellipsis instead of running off its card. */
+.hm-board > * {
+  min-width: 0;
+}
+
+/* ── Calendar grid lines ──
+   The one place lines stay: a grid of time reads faster with them. A hairline of its own (`--grid-line`), because
+   `--border` is transparent everywhere else. Hours and days get the same weight; the all-day row and the day names sit
+   above a line of the same weight. */
+:root {
+  --grid-line: rgba(0, 0, 0, 0.075);
+}
+:root[data-theme='dark'] {
+  --grid-line: rgba(255, 255, 255, 0.07);
+}
+.calendar .cols {
+  background-image: linear-gradient(var(--grid-line) 1px, transparent 1px);
+  background-size: 100% 52px;
+}
+.calendar .col,
+.calendar .ad {
+  border-left: 1px solid var(--grid-line) !important;
+}
+.calendar .week-days,
+.calendar .week-allday {
+  border-bottom: 1px solid var(--grid-line) !important;
+}
+.calendar .mh {
+  border-bottom: 1px solid var(--grid-line) !important;
+}
+.calendar .month > .md {
+  border-right: 1px solid var(--grid-line);
+  border-bottom: 1px solid var(--grid-line);
+}
+.calendar .month > .md:nth-child(7n) {
+  border-right: 0;
+}
+
+/* ── Notifications (`Toast.tsx`) ──
+   They rise out of the Ask bar: centred over it, the same pill shape, on the popup glass. Nothing at the top of the
+   page is ever covered. While the conversation or the Ask options are open (they own the space above the bar),
+   notifications drop in at the top centre instead. */
+.toaster {
+  position: fixed;
+  z-index: 300;
+  left: 58px;
+  right: 0;
+  bottom: 84px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 24px;
+  pointer-events: none;
+}
+/* Newest nearest where they come from: the bar below, or the top edge while the bar's space is taken. */
+.toaster {
+  flex-direction: column;
+}
+.app:has(.convo, .ask-pop) .toaster {
+  bottom: auto;
+  top: 16px;
+  flex-direction: column-reverse;
+}
+.app.mobile .toaster {
+  left: 0;
+  bottom: calc(74px + env(safe-area-inset-bottom));
+  padding: 0 14px;
+}
+.app.mobile:has(.convo, .ask-pop) .toaster {
+  top: calc(10px + env(safe-area-inset-top));
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, 100%);
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 22px;
+  background: var(--raised);
+  border: 1px solid var(--raised-edge);
+  box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font: 500 14px/1.4 var(--font);
+}
+.toast span {
+  padding-block: 11px;
+}
+.toast-ico {
+  flex: none;
+  color: var(--danger);
+  margin-left: -2px;
+}
+/* The action is a real pill: the one thing you can press. */
+.toast button {
+  flex: none;
+  height: 30px;
+  margin-right: -10px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font: 600 13px/1 var(--font);
+  transition: opacity 0.12s;
+}
+.toast button:hover {
+  opacity: 0.86;
+}
+.toast button:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: 2px;
+}
+@media print {
+  .toaster { display: none !important; }
+}
+
+/* ── Every action looks pressable ──
+   Anything you can press has a shape at rest: a filled pill, a round chip, or a card with a visible ···. Plain text is
+   never a button. Links that go somewhere end in a chevron; the alternative to a page's main action sits beside it as
+   a quieter pill with its own icon (Start recording / Upload audio, New doc / New folder). */
+.text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--btn-grad);
+  color: var(--text);
+  font: 550 13px/1 var(--font);
+}
+.text-btn:hover {
+  background: var(--btn-grad-hover, var(--btn-hover));
+}
+.text-btn.xs {
+  height: 24px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+.modal .text-btn,
+.confirm .text-btn {
+  background: var(--raised-fill-2);
+}
+/* Section links (Open, See all): a small pill with a chevron. */
+.hm-label {
+  align-items: center;
+}
+.hm-label button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  padding: 0 8px 0 12px;
+  border-radius: 999px;
+  background: var(--btn-grad);
+  color: var(--text-2);
+  font: 550 13px/1 var(--font);
+  transition: background 0.12s, color 0.12s;
+}
+.hm-label button:hover {
+  color: var(--text);
+  background: var(--btn-grad-hover, var(--btn-hover));
+}
+.hm-label button.danger {
+  gap: 6px;
+  padding: 0 12px;
+  color: var(--danger);
+}
+.hm-label button:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: 2px;
+}
+.hm-more {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+/* Record carries the record mark: a red dot, the one sign everyone reads as "this records". */
+.rec-mark {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--danger) 28%, transparent);
+}
+.btn.primary.rec .rec-mark,
+.hm-quick .primary.rec .rec-mark {
+  margin-right: 1px;
+}
+.su-link {
+  height: 38px;
+  padding: 0 16px;
+}
+/* Cards: the ··· that was only on right-click, visible on hover and keyboard focus (always on touch screens). */
+.lib-cell {
+  position: relative;
+  display: flex;
+}
+.lib-cell > .lib-card {
+  flex: 1;
+}
+.lib-card-top {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.lib-more {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--btn-grad);
+  color: var(--text-2);
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s;
+}
+.lib-cell:hover .lib-more,
+.lib-cell:focus-within .lib-more,
+.lib-more[aria-expanded='true'] {
+  opacity: 1;
+}
+.lib-more:hover {
+  color: var(--text);
+  background: var(--btn-grad-hover, var(--btn-hover));
+}
+.lib-more:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--text-2);
+  outline-offset: 2px;
+}
+@media (hover: none) {
+  .lib-more {
+    opacity: 1;
+  }
+}
+/* The calendar's previous and next are round chips like every other toolbar action. */
+.app:not(.mobile) .cal-head .cal-nav .icon-btn {
+  background: var(--btn-grad);
+  color: var(--text);
+}
+.app:not(.mobile) .cal-head .cal-nav .icon-btn:hover {
+  background: var(--btn-grad-hover, var(--btn-hover));
+}
+
+.p-rc-start {
+  margin: 4px 16px 10px;
+  flex-wrap: wrap;
+}
+.app.mobile .su-actions:has(.su-link) .btn {
+  flex: 1 1 auto;
+}
+
+/* Home's calendar: one day, stepped with round chips either side of its name. */
+.hm-day {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 4px;
+}
+.hm-day-name {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+}
+.hm-day-name b {
+  font: 600 16px/1.2 var(--font);
+}
+.hm-day-name small {
+  color: var(--text-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.hm-step {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--btn-grad);
+  color: var(--text-2);
+}
+.hm-step:hover {
+  color: var(--text);
+  background: var(--btn-grad-hover, var(--btn-hover));
+}
+.hm-step:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: 2px;
 }

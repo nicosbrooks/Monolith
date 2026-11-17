@@ -10,7 +10,7 @@ import { APP_NAME } from '../brand'
 import { disconnect, kindLabel, pendingChanges, pull, reconnect, useSync } from '../storage/sync'
 import { signOutGitHub, useAccounts } from '../storage/accounts'
 import { confirmDialog } from './Overlays'
-import { toast } from './Toast'
+import { toast, toastError } from './Toast'
 
 export const SourceIcon = ({ kind, size = 16 }: { kind: Source['kind']; size?: number }) =>
   kind === 'folder' ? <FolderOpen size={size} /> : kind === 'github' ? <GitBranch size={size} /> : <Cloud size={size} />
@@ -40,7 +40,7 @@ export function StorageSettings() {
       const n = (k: number, w: string) => (k ? [`${k} ${w}${k === 1 ? '' : 's'}`] : [])
       toast(`Exported ${[...n(x.docs, 'doc'), ...n(x.recordings, 'recording'), ...n(x.files, 'file'), ...n(x.events, 'event')].join(', ') || 'an empty workspace'}`)
     } catch (e) {
-      toast(`Couldn’t export: ${(e as Error).message}`)
+      toastError(`Couldn’t export: ${(e as Error).message}`)
     } finally {
       setExporting(false)
     }
