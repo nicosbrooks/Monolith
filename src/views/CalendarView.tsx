@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   addDays, addMonths, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, isToday, startOfDay, startOfMonth, startOfWeek, differenceInMinutes, addMinutes,
 } from 'date-fns'
-import { ChevronLeft, ChevronRight, MapPin, Plus, Trash2, X, StickyNote, Mic, Layers, Eye, EyeOff, Loader2, Link2, CircleAlert, AudioWaveform, Repeat as RepeatIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, MapPin, Upload, Plus, Trash2, X, StickyNote, Mic, Layers, Eye, EyeOff, Loader2, Link2, CircleAlert, AudioWaveform, Repeat as RepeatIcon } from 'lucide-react'
 import { importFile, refreshStale, subscribe, unsubscribe, updateSub, useCalendars, useSubEvents } from '../lib/calendars'
 import { openMenu } from '../components/Overlays'
-import { toast } from '../components/Toast'
+import { toast, toastError } from '../components/Toast'
 import { useMobile } from '../lib/useMobile'
 import { animate, motion, AnimatePresence, useMotionValue, useReducedMotion } from 'motion/react'
 import { listenForSwipes, swipeEdge, type SwipeDirection } from '../lib/swipe'
@@ -512,7 +512,7 @@ function CalendarsPanel({ onClose }: { onClose: () => void }) {
       await subscribe(url)
       setUrl('')
     } catch (e) {
-      toast((e as Error).message || 'Couldn’t add that calendar.')
+      toastError((e as Error).message || 'Couldn’t add that calendar.')
     } finally {
       setAdding(false)
     }
@@ -542,8 +542,8 @@ function CalendarsPanel({ onClose }: { onClose: () => void }) {
           <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste a calendar link" />
           {url && <button className="btn sm primary" disabled={adding}>{adding ? <Loader2 size={13} className="spin" /> : 'Add'}</button>}
         </form>
-        <button className="text-btn muted" onClick={() => file.current?.click()}>or open an .ics file</button>
-        <input ref={file} type="file" accept=".ics,text/calendar" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile(f).catch(() => toast('Couldn’t read that file.')); e.target.value = '' }} />
+        <button className="btn sm" onClick={() => file.current?.click()}><Upload size={14} aria-hidden="true" /> Open .ics file</button>
+        <input ref={file} type="file" accept=".ics,text/calendar" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile(f).catch(() => toastError('Couldn’t read that file.')); e.target.value = '' }} />
         <details className="advanced">
           <summary>Where’s the link?</summary>
           <p className="muted small">Google Calendar: Settings → your calendar → <b>Secret address in iCal format</b>. Apple: share the calendar publicly and copy its link. Outlook: Settings → Shared calendars → <b>Publish</b>, then the ICS link.</p>

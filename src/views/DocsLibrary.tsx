@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import { formatDistanceToNowStrict } from 'date-fns'
-import { AudioWaveform, FilePlus2, FileText, FolderPlus, Mic, Pin, Search, X } from 'lucide-react'
+import { AudioWaveform, FilePlus2, FileText, FolderPlus, Mic, MoreHorizontal, Pin, Search, Upload, X } from 'lucide-react'
 import { useStore } from '../store'
 import { formatDuration, itemEmoji, preview } from '../lib/util'
 import { openMenu } from '../components/Overlays'
 import { docMenu } from '../components/Sidebar'
 import { rowMenu } from './ItemList'
-import { startRecording } from '../lib/recordNext'
+import { startRecording, uploadRecording } from '../lib/recordNext'
 import type { Item } from '../types'
 
 /** Docs or Recordings with nothing open: every one as a card on a wide page, filtered by folder or search. */
@@ -28,9 +28,12 @@ export function DocsLibrary({ kind }: { kind: 'doc' | 'lecture' }) {
   }, [items, kind, docs, folderId, q])
 
   const create = () => (docs ? st.createItem('doc', folderId ? { folderId } : undefined) : startRecording())
-  const newFolder = () => {
-    const name = prompt('New folder')?.trim()
+  // A new folder is named in place, as a chip beside the others: no browser prompt.
+  const [naming, setNaming] = useState<string | null>(null)
+  const saveFolder = () => {
+    const name = naming?.trim()
     if (name) st.createFolder(name)
+    setNaming(null)
   }
   const title = docs ? 'Docs' : 'Recordings'
   const total = items.filter((i) => i.kind === kind && !i.deletedAt && !i.file?.dir).length
@@ -38,15 +41,18 @@ export function DocsLibrary({ kind }: { kind: 'doc' | 'lecture' }) {
   return (
     <div className="lib page-scroll">
       <div className="lib-col">
-        <header className="lib-head">
-          <div>
-            <h1>{title}</h1>
-            <p>{total ? `${total} ${docs ? (total === 1 ? 'doc' : 'docs') : total === 1 ? 'recording' : 'recordings'}` : docs ? 'Nothing here yet' : 'Nothing recorded yet'}</p>
-          </div>
-          <div className="lib-actions">
-            {docs && <button className="icon-btn round" onClick={newFolder} title="New folder" aria-label="New folder"><FolderPlus size={17} /></button>}
-            <button className="btn primary" onClick={create}>
-              {docs ? <FilePlus2 size={15} /> : <Mic size={15} />} {docs ? 'New doc' : 'Record'}
+        {/* The same header as Home, Tasks and Recently Deleted: title, one quiet line, actions as pills on the right. */}
+        <header className="hm-head">
+          <h1>{title}</h1>
+          <p>{total ? `${total} ${docs ? (total === 1 ? 'doc' : 'docs') : total === 1 ? 'recording' : 'recordings'}` : docs ? 'Nothing here yet' : 'Nothing recorded yet'}</p>
+          <div className="hm-quick">
+            {docs ? (
+              <button onClick={() => setNaming('')}><FolderPlus size={15} aria-hidden="true" /> New folder</button>
+            ) : (
+              <button onClick={uploadRecording}><Upload size={15} aria-hidden="true" /> Upload audio</button>
+            )}
+            <button className={`primary ${docs ? '' : 'rec'}`} onClick={create}>
+              {docs ? <FilePlus2 size={15} aria-hidden="true" /> : <i className="rec-mark" aria-hidden="true" />} {docs ? 'New doc' : 'Record'}
             </button>
           </div>
         </header>
@@ -57,10 +63,21 @@ export function DocsLibrary({ kind }: { kind: 'doc' | 'lecture' }) {
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${title.toLowerCase()}`} aria-label={`Search ${title.toLowerCase()}`} />
             {q && <button className="icon-btn sm" onClick={() => setQ('')} aria-label="Clear"><X size={13} /></button>}
           </label>
-          {docs && folders.length > 0 && (
+          {docs && (folders.length > 0 || naming !== null) && (
             <div className="lib-chips" role="group" aria-label="Folders">
               <button className={!folderId ? 'on' : ''} onClick={() => useStore.setState({ folderId: null })}>All</button>
               {folders.map((f) => <button key={f.id} className={folderId === f.id ? 'on' : ''} onClick={() => st.setFolder(f.id)}>{f.name}</button>)}
+              {naming !== null && (
+                <input
+                  autoFocus
+                  value={naming}
+                  placeholder="Folder name"
+                  aria-label="Folder name"
+                  onChange={(e) => setNaming(e.target.value)}
+                  onBlur={saveFolder}
+                  onKeyDown={(e) => (e.key === 'Enter' ? saveFolder() : e.key === 'Escape' && (e.stopPropagation(), setNaming(null)))}
+                />
+              )}
             </div>
           )}
         </div>
@@ -88,6 +105,7 @@ function Card({ item }: { item: Item }) {
     ? `${formatDuration(item.lecture?.duration || 0)} · ${item.lecture?.transcript.length ? 'Transcribed' : item.lecture?.hasAudio ? 'Audio saved' : 'Not recorded'}`
     : preview(item.content, item.title)
   return (
+    <div className="lib-cell">
     <button className="lib-card" onClick={() => useStore.getState().open(item.id)} onContextMenu={(e) => openMenu(e, rec ? rowMenu(item) : docMenu(item))}>
       <span className="lib-card-top">
         <span className="lib-ico">{emoji || (rec ? <AudioWaveform size={16} strokeWidth={1.8} /> : <FileText size={16} strokeWidth={1.8} />)}</span>
@@ -97,5 +115,7 @@ function Card({ item }: { item: Item }) {
       <span className="lib-card-text">{text || 'No additional text'}</span>
       <small>{Date.now() - item.updatedAt < 60_000 ? 'Just now' : formatDistanceToNowStrict(item.updatedAt, { addSuffix: true })}</small>
     </button>
+    <button className="lib-more" aria-label="More" title="More" onClick={(e) => openMenu(e, rec ? rowMenu(item) : docMenu(item))}><MoreHorizontal size={16} /></button>
+    </div>
   )
 }

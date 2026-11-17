@@ -8,7 +8,7 @@ import { CHAT_RULES, evidenceQuery, fileEvidence, packTurn, sameEvidence, turnEv
 import { instantAnswer } from './instant'
 import { deviceContext, refreshDevice } from '../lib/integrations'
 import { passageScores } from './system1'
-import { toast } from '../components/Toast'
+import { toast, toastError } from '../components/Toast'
 import type { CalEvent } from '../types'
 
 /**
@@ -46,7 +46,7 @@ export async function attachFiles(list: File[]) {
   for (const file of list) {
     if (useConvo.getState().files.length >= MAX_FILES) return void toast(`Up to ${MAX_FILES} files in one conversation.`)
     const r = await readAttachment(file)
-    if ('error' in r) toast(r.error)
+    if ('error' in r) toastError(r.error)
     else useConvo.setState((s) => ({ files: s.files.length < MAX_FILES ? [...s.files, r.ok] : s.files }))
   }
   // A question is coming: load the model while the person types it.

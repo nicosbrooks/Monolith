@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { Download, Maximize2, Minimize2, Plus, X } from 'lucide-react'
 import { fileBlob, fileUrl, formatSize, putFile } from '../lib/files'
-import { toast } from './Toast'
+import { toast, toastError } from './Toast'
 
 /**
  * Viewing (and, for text, editing) a file from a doc without leaving Monolith. Pictures, PDFs (the browser's own
@@ -140,7 +140,7 @@ function Viewer({ v }: { v: Viewing }) {
       setDraft(null)
       toast(`Saved “${v.name}”`)
     } catch (e) {
-      toast((e as Error).message || 'Couldn’t save it. Try again.')
+      toastError((e as Error).message || 'Couldn’t save it. Try again.')
     }
   }
   useEffect(() => {

@@ -19,7 +19,7 @@ import { addTask, dueLabel, removeTask, useWorkspace, type Task } from '../lib/g
 import { useOwnEvents } from '../lib/events'
 import { readDoc, readEvent, readTask, ruleKind, taskPreview, type RequestKind } from '../lib/request'
 import { focusAsk } from './AskBar'
-import { toast } from './Toast'
+import { toast, toastError } from './Toast'
 import { completeTask } from '../views/TasksView'
 import type { CalEvent, Item } from '../types'
 
@@ -71,7 +71,7 @@ async function exportEverything() {
     setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
     toast('Exported everything')
   } catch (e) {
-    toast(`Couldn’t export: ${(e as Error).message}`)
+    toastError(`Couldn’t export: ${(e as Error).message}`)
   }
 }
 

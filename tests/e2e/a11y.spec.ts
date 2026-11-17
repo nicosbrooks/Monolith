@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
+import { library, place } from './shell.ts'
 
 // Every main screen, checked against WCAG 2.2 A and AA with axe, in dark and light. Each test gets a fresh workspace.
 let n = 0
@@ -44,7 +45,7 @@ for (const scheme of ['dark', 'light'] as const) {
 
     test('home, docs, recordings and calendar', async ({ page }) => {
       await check(page, 'home')
-      await page.locator('.sidebar .tree-title', { hasText: 'Study system' }).click()
+      await (await library(page)).locator('.tree-title', { hasText: 'Study system' }).click()
       await expect(page.locator('.ProseMirror')).toBeVisible()
       await check(page, 'a doc')
       // Study system is linked from the welcome doc, so its connections show; the welcome doc has a link in its text.
@@ -52,18 +53,18 @@ for (const scheme of ['dark', 'light'] as const) {
       await page.locator('.cx-row').first().click()
       await expect(page.locator('.ProseMirror a[href^="#doc/"]')).toBeVisible()
       await check(page, 'a doc with a link')
-      await page.locator('.sidebar .nav', { hasText: 'Tasks' }).click()
+      await place(page, 'Tasks')
       await expect(page.locator('.hm-task').first()).toBeVisible()
       await check(page, 'tasks')
-      await page.locator('.sidebar .tree-title', { hasText: 'Study system' }).click()
+      await (await library(page)).locator('.tree-title', { hasText: 'Study system' }).click()
       await page.getByRole('button', { name: 'More options' }).click()
       await page.getByText('Earlier versions').click()
       await expect(page.locator('.modal .hist-blank')).toBeVisible()
       await check(page, 'earlier versions (empty)', '.modal')
       await page.keyboard.press('Escape')
-      await page.locator('.sidebar .nav', { hasText: 'Recently Deleted' }).click()
+      await (await library(page)).locator('.nav', { hasText: 'Recently Deleted' }).click()
       await check(page, 'recently deleted')
-      await page.getByText('Calendar', { exact: true }).first().click()
+      await place(page, 'Calendar')
       await expect(page.locator('input[placeholder*="Add an event"]').first()).toBeVisible()
       await check(page, 'calendar')
       await page.locator('.ev').first().click()

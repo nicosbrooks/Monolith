@@ -404,85 +404,12 @@ button:focus-visible {
   border-radius: 8px;
 }
 /* ── lecture ── */
-.recorder {
-  border-radius: 8px;
-  background: var(--s2);
-}
-.recorder.live {
-  background: var(--content);
-  border-color: color-mix(in oklab, var(--danger) 35%, transparent);
-  color: var(--danger);
-}
-.rec-btn {
-  height: 34px;
-  border-radius: 6px;
-  padding: 0 14px 0 12px;
-  font-size: 13.5px;
-  background: var(--danger);
-  color: #fff;
-  box-shadow: none;
-}
-.round {
-  border-radius: 6px;
-  width: 34px;
-  height: 34px;
-}
-.round.stop {
-  background: var(--danger);
-  color: #fff;
-}
-.wave {
-  color: var(--danger);
-}
-.rec-dot,
+
 .now-line,
 .now-line::before {
   background: var(--danger);
 }
-.progress-card {
-  border-radius: 8px;
-  background: var(--s2);
-  border: 1px solid var(--border);
-  color: var(--text-2);
-}
-.tabs {
-  gap: 18px;
-  padding-bottom: 0;
-}
-.tabs > button:not(.btn) {
-  padding: 8px 0;
-  border-radius: 0;
-  background: none !important;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  font-weight: 500;
-}
-.tabs > button.on {
-  color: var(--text);
-  border-bottom-color: var(--fg);
-}
-.tabs .btn {
-  margin-bottom: 6px;
-}
-.tseg {
-  border-radius: 6px;
-}
-.tseg.now {
-  background: var(--s3);
-}
-.tseg.now .ts {
-  color: var(--text);
-}
-.face {
-  border-radius: 10px;
-  background: var(--content);
-}
-.face.back {
-  background: var(--s2);
-}
-.cards-modal {
-  border-radius: 12px;
-}
+
 /* ── calendar ── */
 .wd.today b,
 .md.today .num {
@@ -838,9 +765,7 @@ button:focus-visible {
 .toolbar {
   height: 54px;
 }
-.tabs > button.on {
-  border-bottom-color: var(--accent);
-}
+
 .tag.on {
   background: var(--accent);
   color: var(--on-accent);
@@ -866,12 +791,7 @@ button:focus-visible {
   --accent-soft: color-mix(in oklab, var(--blue) 14%, transparent);
   --accent-text: var(--blue-text);
 }
-.main.sec-lectures {
-  --accent: var(--red);
-  --on-accent: #fff;
-  --accent-soft: color-mix(in oklab, var(--red) 12%, transparent);
-  --accent-text: var(--red);
-}
+/* Recordings carry no accent of their own: red is for the moment of recording only (the dot, the wave, Stop). */
 /* AI writing / busy: a quiet neutral pulse, no color */
 
 .avatar {

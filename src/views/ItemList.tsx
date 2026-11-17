@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { isToday, isYesterday, differenceInDays, format } from 'date-fns'
-import { LayoutGrid, List, Pin, PinOff, Search, SquarePen, Mic, Hash, X, Trash2, RotateCcw, FolderInput, Inbox, Ellipsis, FolderPlus, Settings, ChevronLeft } from 'lucide-react'
+import { LayoutGrid, List, Pin, PinOff, Search, SquarePen, Mic, Upload, Hash, X, Trash2, RotateCcw, FolderInput, Inbox, Ellipsis, FolderPlus, Settings, ChevronLeft } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useStore } from '../store'
 import type { Item, ItemKind } from '../types'
@@ -8,7 +8,7 @@ import { formatDuration, preview } from '../lib/util'
 import { confirmDialog, openMenu, type MenuItem } from '../components/Overlays'
 import { toast } from '../components/Toast'
 import { useLongPress, useMobile, useScrolled } from '../lib/useMobile'
-import { startRecording } from '../lib/recordNext'
+import { startRecording, uploadRecording } from '../lib/recordNext'
 import { fileUrl, hashOf } from '../lib/files'
 import { PhoneTitle } from '../components/Phone'
 
@@ -85,7 +85,7 @@ export function ItemList({ kind, trash }: { kind?: ItemKind; trash?: boolean }) 
           <span className="blank-ico"><Mic size={22} strokeWidth={1.7} /></span>
           <b>No recordings yet</b>
           <p>Record a class or meeting. You get a transcript, and notes written for you.</p>
-          <button className="btn primary" onClick={newItem}><Mic size={15} /> Start recording</button>
+          <button className="btn primary rec" onClick={newItem}><i className="rec-mark" aria-hidden="true" /> Start recording</button>
         </div>
       ))}
     </>
@@ -108,6 +108,13 @@ export function ItemList({ kind, trash }: { kind?: ItemKind; trash?: boolean }) 
           lead={trash ? <button className="icon-btn back" onClick={() => st.go('docs')} aria-label="Back"><ChevronLeft size={22} /></button> : undefined}
           actions={!trash && <button className="icon-btn" onClick={more} aria-label="More"><Ellipsis size={20} /></button>}
         />
+        {/* Recordings on a phone: the same two ways in as on the computer, right under the title. */}
+        {kind === 'lecture' && !trash && list.length > 0 && (
+          <div className="rc-start p-rc-start">
+            <button className="btn primary rec" onClick={newItem}><i className="rec-mark" aria-hidden="true" /> Start recording</button>
+            <button className="btn" onClick={uploadRecording}><Upload size={15} aria-hidden="true" /> Upload audio</button>
+          </div>
+        )}
         {(list.length > 8 || q) && <label className="search p-search">
           <Search size={15} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={trash ? 'Search' : `Search ${kind}s`} />

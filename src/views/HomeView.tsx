@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { addDays, format, formatDistanceToNowStrict, isSameDay, isToday, startOfDay } from 'date-fns'
-import { ArrowUpRight, CalendarDays, FilePlus2, FileText, ListChecks, MapPin, Mic, AudioWaveform, Search, StickyNote } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, FilePlus2, FileText, ListChecks, MapPin, AudioWaveform, Search, StickyNote } from 'lucide-react'
 import { startRecording } from '../lib/recordNext'
 import { useMobile, useScrolled } from '../lib/useMobile'
 import { PhoneTitle } from '../components/Phone'
@@ -88,7 +88,7 @@ export function HomeView() {
           {!mobile && (
             <div className="hm-quick">
               <button onClick={() => st.createItem('doc')}><FilePlus2 size={15} aria-hidden="true" /> New doc</button>
-              <button onClick={() => void startRecording()}><Mic size={15} aria-hidden="true" /> Record</button>
+              <button className="rec" onClick={() => void startRecording()}><i className="rec-mark" aria-hidden="true" /> Record</button>
               <button onClick={() => st.setUI({ paletteOpen: true })}><Search size={15} aria-hidden="true" /> Search <kbd>⌘K</kbd></button>
             </div>
           )}
@@ -141,21 +141,10 @@ export function HomeView() {
 
         <Week events={events} today={today} />
 
-        <section className="hm-sec hm-tasks" aria-labelledby="hm-tasks">
-          <div className="hm-label">
-            <h2 id="hm-tasks">Tasks</h2>
-            {todos.length > 0 && <button onClick={() => st.go('tasks')}>{todos.length > SHOWN ? `See all ${todos.length}` : 'Open'}</button>}
-          </div>
-          <div className="hm-card hm-list">
-            {tasks.map((t) => <TaskRow key={`${t.itemId}:${t.n}`} task={t} docTitle={live.find((x) => x.id === t.itemId)?.title || 'Untitled'} />)}
-            {!todos.length && <p className="hm-empty">Nothing to do. Checklist items from your docs show up here.</p>}
-          </div>
-        </section>
-
         <section className="hm-sec hm-recent" aria-labelledby="hm-recent">
           <div className="hm-label">
             <h2 id="hm-recent">Recent</h2>
-            {recent.length > SHOWN && <button onClick={() => st.go('docs')}>See all</button>}
+            {recent.length > SHOWN && <button onClick={() => st.go('docs')}>See all<ChevronRight size={14} aria-hidden="true" /></button>}
           </div>
           <div className="hm-card hm-list">
             {recent.slice(0, SHOWN).map((r) => {
@@ -171,43 +160,43 @@ export function HomeView() {
             {!recent.length && <p className="hm-empty">Docs and recordings you’ve worked on show up here.</p>}
           </div>
         </section>
+        <section className="hm-sec hm-tasks" aria-labelledby="hm-tasks">
+          <div className="hm-label">
+            <h2 id="hm-tasks">Tasks</h2>
+            {todos.length > 0 && <button onClick={() => st.go('tasks')}>{todos.length > SHOWN ? `See all ${todos.length}` : 'Open'}<ChevronRight size={14} aria-hidden="true" /></button>}
+          </div>
+          <div className="hm-card hm-list">
+            {tasks.map((t) => <TaskRow key={`${t.itemId}:${t.n}`} task={t} docTitle={live.find((x) => x.id === t.itemId)?.title || 'Untitled'} />)}
+            {!todos.length && <p className="hm-empty">Nothing to do. Checklist items from your docs show up here.</p>}
+          </div>
+        </section>
+
         </div>
       </div>
     </div>
   )
 }
 
-/** The next seven days: pick a day to see what's on; pick it again (or the link) to open it in Calendar. */
+/** One day at a time: today first; ‹ › step through the days, and Open (or a row) shows that day in Calendar. */
 function Week({ events, today }: { events: CalEvent[]; today: Date }) {
-  const [selected, setSelected] = useState(today.getTime())
-  const days = Array.from({ length: 7 }, (_, i) => addDays(today, i))
-  const active = days.find((d) => d.getTime() === selected) ?? today
-  const on = (d: Date) =>
-    events
-      .filter((e) => (e.allDay ? e.start < addDays(d, 1).getTime() && e.end > d.getTime() : isSameDay(e.start, d)))
-      .sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start - b.start)
-  const evs = on(active)
+  const [offset, setOffset] = useState(0)
+  const active = addDays(today, offset)
+  const evs = events
+    .filter((e) => (e.allDay ? e.start < addDays(active, 1).getTime() && e.end > active.getTime() : isSameDay(e.start, active)))
+    .sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start - b.start)
   const openDay = () => useStore.getState().openCalendarDate(active)
+  const name = offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : offset === -1 ? 'Yesterday' : format(active, 'EEEE')
   return (
     <section className="hm-sec hm-cal" aria-labelledby="hm-week">
       <div className="hm-label">
         <h2 id="hm-week">Calendar</h2>
-        <button onClick={openDay}>Open</button>
+        <button onClick={openDay}>Open<ChevronRight size={14} aria-hidden="true" /></button>
       </div>
       <div className="hm-card">
-        <div className="hm-week" role="tablist" aria-label="Next seven days">
-          {days.map((d, i) => {
-            const isOn = d.getTime() === active.getTime()
-            const n = on(d)
-            return (
-              <button key={d.getTime()} role="tab" aria-selected={isOn} className={isOn ? 'on' : undefined} onClick={() => (isOn ? openDay() : setSelected(d.getTime()))} title={format(d, 'EEEE, MMMM d')}>
-                <span>{i === 0 ? 'Today' : format(d, 'EEE')}</span>
-                <b>{format(d, 'd')}</b>
-                <span className="sr-only">, {n.length} event{n.length === 1 ? '' : 's'}</span>
-                <i aria-hidden="true">{n.slice(0, 3).map((e) => <u key={e.id} style={{ background: COLORS[e.color] || COLORS.blue }} />)}</i>
-              </button>
-            )
-          })}
+        <div className="hm-day">
+          <button className="hm-step" onClick={() => setOffset(offset - 1)} aria-label="Previous day" title="Previous day"><ChevronLeft size={16} /></button>
+          <span className="hm-day-name" aria-live="polite"><b>{name}</b><small>{format(active, 'MMM d')}</small></span>
+          <button className="hm-step" onClick={() => setOffset(offset + 1)} aria-label="Next day" title="Next day"><ChevronRight size={16} /></button>
         </div>
         <div className="hm-list">
           {evs.slice(0, SHOWN).map((e) => (
@@ -225,7 +214,7 @@ function Week({ events, today }: { events: CalEvent[]; today: Date }) {
             </button>
           ))}
           {!evs.length && <p className="hm-empty">Nothing scheduled.</p>}
-          {evs.length > SHOWN && <button className="hm-more" onClick={openDay}>{evs.length - SHOWN} more in Calendar</button>}
+          {evs.length > SHOWN && <button className="hm-more" onClick={openDay}>{evs.length - SHOWN} more in Calendar<ChevronRight size={14} aria-hidden="true" /></button>}
         </div>
       </div>
     </section>

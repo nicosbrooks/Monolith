@@ -84,6 +84,15 @@ private struct BottomBar: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // Notifications rise out of the chat bar, as on the web: attached before the bar's inset, so they sit just
+            // above it (or above the keyboard while the bar steps aside) and never cover the title bar.
+            .overlay(alignment: .bottom) {
+                if let t = Toaster.shared.current {
+                    ToastView(toast: t).id(t.id)
+                        .padding(.horizontal, 14).padding(.bottom, 10)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 // Typing in a note or doc: the bar steps aside so the keyboard toolbar has the room.
                 if !keyboard || focused || recorder.isRecording {
@@ -103,15 +112,6 @@ private struct BottomBar: ViewModifier {
                     }
                     .padding(.horizontal, 14).padding(.top, 28).padding(.bottom, 8)
                     .background(Fog())
-                }
-            }
-            // Notifications: a pill in the upper right, as on the web. The bottom belongs to the chat bar.
-            .overlay(alignment: .topTrailing) {
-                if let t = Toaster.shared.current {
-                    ToastView(toast: t).id(t.id)
-                        // Below the title bar, so the title and its buttons stay readable and tappable.
-                        .padding(.horizontal, 14).padding(.top, 54)
-                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
             .animation(.snappy, value: recorder.isRecording)
