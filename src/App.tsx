@@ -187,12 +187,12 @@ export default function App() {
 
   return (
     <div className={`app ${mobile ? 'mobile' : ''}`}>
+      {!mobile && <Dock />}
       <main ref={mainRef} className={`main sec-${section}`} data-active={activeId || undefined}>
         <ErrorBoundary area="this page" resetKey={`${section}:${activeId}`}><Suspense fallback={<ViewFallback />}>{main}</Suspense></ErrorBoundary>
-        {/* One bar for the whole app: where you are, and the assistant. There is no separate chat panel. */}
+        {/* The Ask bar is on every page, and it's where the assistant lives: there is no separate chat panel. */}
         {!mobile && (
           <div className="home-dock">
-            <Dock />
             <AskBar />
           </div>
         )}

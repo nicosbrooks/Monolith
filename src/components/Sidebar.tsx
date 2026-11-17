@@ -54,7 +54,7 @@ function useFolded() {
  * moves when you open something. Places at the top, then your docs, folders and recordings as groups you can fold,
  * then Recently Deleted and Settings at the bottom.
  */
-export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
+export function Sidebar({ onNavigate, library }: { onNavigate?: () => void; library?: boolean } = {}) {
   // Only what the sidebar itself shows; the doc trees subscribe to items on their own.
   const view = useStore(useShallow((x) => ({ section: x.section, folders: x.folders, sources: x.sources })))
   const s = { ...useStore.getState(), ...view }
@@ -100,16 +100,17 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <button className="icon-btn" title="Close library (⌘\)" aria-label="Close library" onClick={() => toggleLibrary(false)}><PanelLeft size={17} /></button>
         </div>
       </div>
-      <button className="side-search" onClick={() => (s.setUI({ paletteOpen: true }), onNavigate?.())}>
+      {!library && <button className="side-search" onClick={() => (s.setUI({ paletteOpen: true }), onNavigate?.())}>
         <Search size={15} strokeWidth={1.9} />
         <span>Search</span>
         <kbd>⌘K</kbd>
-      </button>
+      </button>}
 
       <nav className="side-scroll">
-        {nav('home', 'Home', LayoutGrid)}
-        <TasksNav nav={nav} />
-        {nav('calendar', 'Calendar', CalendarDays)}
+        {/* In the desktop Library the dock already has these. */}
+        {!library && nav('home', 'Home', LayoutGrid)}
+        {!library && <TasksNav nav={nav} />}
+        {!library && nav('calendar', 'Calendar', CalendarDays)}
 
         {group('docs', 'Docs', { title: 'New doc (⌘N)', run: () => (useStore.setState({ folderId: null }), s.createItem('doc'), onNavigate?.()) })}
         {!folded.docs && <div className="side-tree"><DocTree onNavigate={onNavigate} /></div>}

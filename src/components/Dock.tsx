@@ -25,9 +25,8 @@ export function Dock() {
       {PLACES.map(({ id, label, Icon }) => {
         const on = section === id || (id === 'docs' && section === 'trash')
         return (
-          <button key={id} className={`dock-btn ${on ? 'on' : ''}`} aria-label={label} aria-current={on ? 'page' : undefined} title={label} onClick={() => (id === 'docs' || id === 'lectures' ? useStore.setState({ section: id, activeId: null, tagFilter: null, calendarDate: null }) : st.go(id))}>
+          <button key={id} className={`dock-btn ${on ? 'on' : ''}`} aria-label={label} aria-current={on ? 'page' : undefined} data-tip={label} onClick={() => (id === 'docs' || id === 'lectures' ? useStore.setState({ section: id, activeId: null, tagFilter: null, calendarDate: null }) : st.go(id))}>
             <Icon size={18} strokeWidth={1.8} />
-            {on && <span>{label}</span>}
           </button>
         )
       })}
@@ -35,10 +34,10 @@ export function Dock() {
       <button className={`dock-btn ${library ? 'on' : ''}`} aria-label="Library" aria-expanded={library} title="Library (⌘\)" onClick={() => toggleLibrary()}>
         <PanelLeft size={18} strokeWidth={1.8} />
       </button>
-      <button className="dock-btn" aria-label="Search" title="Search (⌘K)" onClick={() => st.setUI({ paletteOpen: true })}>
+      <button className="dock-btn" aria-label="Search" data-tip="Search  ⌘K" onClick={() => st.setUI({ paletteOpen: true })}>
         <Search size={18} strokeWidth={1.8} />
       </button>
-      <button className="dock-btn" aria-label="Settings" title="Settings (⌘,)" onClick={() => st.setUI({ settingsOpen: true })}>
+      <button className="dock-btn" aria-label="Settings" data-tip="Settings  ⌘," onClick={() => st.setUI({ settingsOpen: true })}>
         <Settings size={18} strokeWidth={1.8} />
       </button>
     </nav>
@@ -69,7 +68,7 @@ export function Library() {
             exit={{ x: -24, opacity: 0 }}
             transition={{ type: 'spring', duration: 0.35, bounce: 0 }}
           >
-            <ErrorBoundary area="the library"><Sidebar onNavigate={() => toggleLibrary(false)} /></ErrorBoundary>
+            <ErrorBoundary area="the library"><Sidebar library onNavigate={() => toggleLibrary(false)} /></ErrorBoundary>
           </motion.div>
         </>
       )}
