@@ -39,3 +39,6 @@ DerivedData/
 # Test output
 test-results/
 playwright-report/
+
+# Trained model outputs (large; kept local)
+models/

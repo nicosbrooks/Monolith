@@ -13,7 +13,7 @@ Status of each area is in [Coverage](#coverage) at the end: not every screen fol
 5. **Nothing shown twice.** If the assistant is asking about a task, that task is not also listed under Tasks.
 6. **Every action can be taken back.** Deletes, checks, adds and dismissals show a notification with Undo. Only "delete forever" asks first, with a consequence line ("This can't be undone.").
 7. **No dividing lines.** Space, soft fills and a hover or press wash separate things. A surface's lit top edge is a highlight, not a line.
-8. **About five, then the rest elsewhere.** Lists on Home show 5 items, then "Show all" / "See all".
+8. **About five, then the rest elsewhere, on phones.** Lists on a phone's Home show 5 items, then "See all". On a computer each Home panel scrolls inside itself instead.
 9. **No visible plumbing.** Raw Markdown never appears. Counts and search appear only when there is something to count or search.
 10. **No "AI" decoration.** No sparkles (✨) anywhere. The assistant is labelled with words, and actions get an icon for what they do: a speech bubble to ask, a pen to write notes, a lightbulb for insights.
 11. **Same product on every device.** iOS uses the web's icons, menu order and wording, done the native way.
@@ -216,13 +216,32 @@ The **only** place the assistant lives: there is no chat panel or sidebar. One 4
 - Your words in a soft bubble on the right; answers as plain rendered text (never raw Markdown) on the left.
 - The app's own short replies ("What should I call it?") have no Listen/Copy/Retry row.
 
-### The dock and the Library (desktop)
-**There is no sidebar on desktop.** A slim glass rail floats on the left, vertically centred, in its own gutter (it never overlaps a page), and the **Ask bar** sits at the bottom centre of every page.
-- **Dock** (`Dock.tsx`, a bare 52px rail with no container, outside `.main`): 40px rounded-square buttons for Home, Docs, Tasks, Calendar, Recordings; a divider; then Library (⌘\\), Search (⌘K) and Settings (⌘,). Icons only: the name and shortcut appear beside the button on hover or keyboard focus (`data-tip`), and every button has an `aria-label`. The current place is the one with a soft fill. Under 560px tall the buttons shrink to 34px, so the whole rail always fits and never scrolls. The Docs and Recordings buttons always go to their page of cards, never straight back into the last doc, so they double as "back".
-- **Library** (`Library` in `Dock.tsx`, the sidebar's rows without Home, Tasks, Calendar and Search, which the dock has): an 18px-round panel that opens beside the rail on a light scrim, from the Library button or ⌘\\. It holds the doc tree, folders, recordings, connected storage, Recently Deleted and Settings. Choosing anything, Esc or a click outside puts it away. The rail stays above the scrim. Nothing on a page waits on it being open.
-- **Docs and Recordings pages** (`DocsLibrary.tsx`): a wide page of round cards (icon tile, title, first lines, time), with search, folder chips and New doc / Record. Phones keep their own lists and tab bar.
-- **Home is a board** (`.hm-board`): the assistant card leads (two columns), the week sits beside it, Tasks (two columns) and Recent fill the next row. Under 1000px it folds to two columns, on phones to one. New doc, Record and Search sit top right as pills.
-- Rows inside the Library follow the rules below: icon + label, 38px tall (34px for sub-rows), soft fill for the current page, hover buttons float over the end of the row and never take room.
+### The sidebar and the workspace (desktop, Nov 17)
+Desktop is a workspace, not a poster: dense, and arranged by the person. The **Ask bar** sits at the bottom centre of every page.
+- **Sidebar** (`Rail.tsx`, `.rail`): a slim rail of icons down the left edge (Search, Home, Tasks, Docs, Recordings, Calendar; Settings at the foot). Resting the pointer on it for a moment (or tabbing into it) **opens it in place** over the page, 246px wide on the popup glass: names appear beside the same icons (each row keeps a fixed 40px icon column, so nothing moves), then **Favorites** and **Recent** docs, which scroll on their own, and Recently Deleted and Settings at the foot, always. Moving away, Esc or choosing something closes it; coming back while it is closing keeps it open. **⌘\\** (or the button at its top) keeps it open beside the page as a flat panel, remembered in this browser. There is no separate Library popup any more; the old `Sidebar.tsx` is only the phone drawer.
+- **Docs and Recordings pages** (`DocsLibrary.tsx`): a wide page of small cards (icon tile, title, first lines, time), with search, folder chips and New doc / Record. Phones keep their own lists and tab bar.
+- **Home is a few panels and open space** (`Board` in `HomeView.tsx`, `.hm-grid`, `.hm-tile`): a four-column grid; by default **Tasks and Calendar side by side at the top**, each as tall as what's in it (up to its height), and nothing filling the rest. **Empty space is fine.** Each panel has its name and link (Open, See all) in a 40px header and scrolls inside itself. **Hold a panel's header and drag** to move it (a mouse can just drag; touch holds still first); **drag its corner** to resize (whole columns 1–4, heights 1–3); its **⋯** menu does the same from the keyboard. **Panels** chooses which show (Calendar, Tasks, Favorites) and resets the layout. **Calendar hides itself when nothing is left today**, and comes back in its place tomorrow. **There is no assistant panel**: its starting points show when you click into the Ask bar. Remembered in this browser (`monolith-home-board-3`). Under 880px of board it shows two columns; phones keep one column (Calendar if anything is left, Tasks, Recent).
+- **Recent sits right above the Ask bar** (`.hm-shelf`): one row of plain chips (icon and title), no box around them, fading out at the right; See all goes to Docs.
+- **New** (`NewMenu.tsx`): Home has one **New ⌄** button instead of New doc / Record. Its menu: Doc (⌘N), Recording, Event, Task, then Upload files to the Vault and Upload a recording. Events and tasks open their page with the Ask bar ready.
+- **The Vault** (`VaultView.tsx`, sidebar › Vault): every uploaded file lives here, once. Docs **link** to a file (`monolith-file:<hash>`) instead of holding it, so one file can be in many docs. The page is a grid of cards (picture or kind icon, name, size, age, "in N docs"), with search, kind chips (Pictures, PDFs, Audio and video, Other) and drop-to-upload. Click opens it; **drag a card onto a doc** to link it; its menu has Rename, Download, **Linked from** (each doc), and Delete, which warns how many docs will show it missing. In a doc, **/ › From the Vault** opens a picker (search, arrow keys, Enter). Files in the Vault are never cleaned up on their own; only Delete removes them.
+- **A doc beside the page** (`lib/panes.ts`, `.side-pane`): from Home, Tasks and Calendar, a doc opens **beside** the page instead of replacing it; ⌘ or Ctrl-click does that from anywhere. Its header ends with **Open as the page** and **Close** (Esc). The edge between them drags to resize (double-click resets). Remembered in this browser.
+- **Where am I**: a doc's or recording's header starts with **back** and **forward** and its **place** ("Docs /", "Recordings /", "Recently Deleted /"), which goes to that page.
+
+### Looks and accent (Settings › Appearance, `lib/looks.ts`)
+Dark is the default; light and System are there too. On top of either:
+- **Look**: a soft wash of color that blooms from three corners of the window, behind everything. Graphite (none, the default), Dusk, Tide, Moss, Ember, Bloom, Aurora. With a look on, the page is clear and panels, the rail and the doc beside are frosted over the wash; the fade under the Ask bar blurs instead of painting plain ground. Color lives in the wash and the accent only, never on text or rows.
+- **Accent**: the color of primary buttons, the current place's icon, today, selection, focus rings and checkboxes. Neutral (the text color, the default), Match the look, Blue, Violet, Teal, Green, Amber, Rose. Dark mode uses the light shade with dark text on it; light mode uses a deep shade with white text. Calendar keeps its own blue.
+
+### Desktop density
+| Thing | Desktop | Phones |
+|---|---|---|
+| Page title | 22px / 650 | 26px |
+| Row | 34px, radius 8px, 14px text | 48px, radius 16px, 15px |
+| Panel (card) radius | 12px | 22px |
+| Panel label | 12.5px | 13.5px |
+| Header pills | 30px tall, 13px | 36px |
+| Page padding | 26px 28px; content up to 1480px (Tasks 920px) | 14px |
+| Gap between panels | 12px | 30px |
 
 ### Quick access (⌘K, `.palette.qa`, `CommandPalette.tsx`)
 The fastest way to anything. One input, a row of scopes under it (All, Docs, Tasks, Events, Recordings, Commands; Tab and Shift-Tab move between them, `>` means Commands, Backspace on an empty input goes back to All), a list of fixed height (so it doesn't resize as you type), and a footer of key hints.
@@ -391,6 +410,8 @@ Three files load in order: `src/index.css` (base), `src/theme.css`, `src/soft.cs
 | Web Tasks, links and connections, Settings sections | Yes (Nov 15, 0.10): dark and light, axe-checked |
 | Web repeating events, event editor, earlier versions, reminders, export | Yes (Nov 16, 0.11): axe-checked; print checked in the print preview only |
 | Web Ask bar, conversation, quick access (⌘K), sidebar, Recently Deleted | Yes (Nov 15, 0.12): dark, desktop width, axe-checked in the e2e run. Light mode and phone width not re-checked |
+| Web looks and accent; Home panels you drag; doc beside the page; back/forward in doc headers (Nov 17, later) | Seen on desktop in dark (Dusk, Ember, Moss) and light (Tide); e2e and axe pass. Phone width, iPad and iOS not ported |
+| Web Vault, New menu, Home with Recent above the Ask bar (Nov 17, latest) | Seen on desktop in dark; upload, link from a doc and "in N docs" checked by hand; e2e passes. Light mode, phone width and iOS not done; the Vault has no axe check of its own yet |
 | Web shell: dock, Library, Docs page, Home board (Nov 17) | Home, Docs page, open doc and Library flyout seen on desktop in dark and light; Home seen on phone in dark. axe contrast 0 issues. Calendar, Tasks and Recordings pages not re-checked under the new dock; iOS not yet ported |
 | Web surfaces: frosted popups, panels, round buttons, ambient light | Home, sidebar, Ask bar, ⌘K palette, Settings, doc header and Calendar header seen on desktop in dark and light (Nov 16). Phone seen on Home in dark only. Light-mode popups and the conversation panel need a contrast check |
 | Web Docs, doc editor, Recordings detail, Calendar | Not yet reviewed against this file |

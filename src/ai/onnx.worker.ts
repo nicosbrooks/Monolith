@@ -1,4 +1,4 @@
-import { InterruptableStoppingCriteria, pipeline, TextStreamer, type TextGenerationPipeline } from '@huggingface/transformers'
+import { env, InterruptableStoppingCriteria, pipeline, TextStreamer, type TextGenerationPipeline } from '@huggingface/transformers'
 
 /**
  * The second in-browser engine (Transformers.js + ONNX Runtime Web). It runs where WebLLM can't, such as Firefox,
@@ -6,7 +6,7 @@ import { InterruptableStoppingCriteria, pipeline, TextStreamer, type TextGenerat
  * browser has no WebGPU at all.
  */
 type In =
-  | { type: 'load'; model: string; device: 'webgpu' | 'wasm'; dtype: string }
+  | { type: 'load'; model: string; local?: boolean; device: 'webgpu' | 'wasm'; dtype: string }
   | {
       type: 'chat'
       messages: { role: string; content: string }[]
@@ -35,6 +35,10 @@ self.onmessage = async (e: MessageEvent<In>) => {
     try {
       await gen?.dispose()
       gen = null
+      // A model you trained comes from the dev server (server/models.ts), never from Hugging Face.
+      env.allowLocalModels = !!m.local
+      env.allowRemoteModels = !m.local
+      if (m.local) env.localModelPath = `${self.location.origin}/local-models/onnx/`
       gen = (await pipeline('text-generation', m.model, {
         device: m.device,
         dtype: m.dtype as 'q4f16',

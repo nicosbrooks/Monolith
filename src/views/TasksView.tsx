@@ -1,4 +1,5 @@
 import { ListChecks } from 'lucide-react'
+import { openDoc } from '../lib/panes'
 import { useMobile, useScrolled } from '../lib/useMobile'
 import { PhoneTitle } from '../components/Phone'
 import { useStore } from '../store'
@@ -20,7 +21,7 @@ export function TaskRow({ task, docTitle, group }: { task: Task; docTitle: strin
   return (
     <div className="hm-row hm-task">
       <input type="checkbox" checked={false} aria-label={`Mark done: ${task.text}`} onChange={() => completeTask(task)} />
-      <button className="hm-row-main" onClick={() => useStore.getState().open(task.itemId)} title="Open the doc">
+      <button className="hm-row-main" onClick={(e) => openDoc(task.itemId, e)} title="Open the doc">
         <span>{task.title}</span>
         <small>{docTitle}</small>
       </button>

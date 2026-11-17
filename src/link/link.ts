@@ -686,13 +686,15 @@ function updateRemote() {
   const { pairings, peers, info } = useLink.getState()
   const p = pairings.find((x) => (peers[x.room] ?? 0) > 0 && info[x.room]?.caps.includes('model'))
   const model = p ? info[p.room].model || 'its model' : ''
-  const k = p ? `${p.room}\u0000${p.name}\u0000${model}` : ''
+  const tuned = !!p && info[p.room].caps.includes('tuned')
+  const k = p ? `${p.room}\u0000${p.name}\u0000${model}\u0000${tuned}` : ''
   if (k === remoteKey) return
   remoteKey = k
   if (!p) return setRemote(null)
   const remote: RemoteModel = {
     device: p.name,
     model,
+    tuned,
     ask: (msgs, onText, opts) =>
       new Promise<string>((resolve, reject) => {
         const id = b64u.encode(random(9))

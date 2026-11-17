@@ -7,6 +7,7 @@ import { openMenu } from '../components/Overlays'
 import { motion } from 'motion/react'
 import { loadAudio, saveAudio, useStore } from '../store'
 import { MobileBack } from '../components/MobileBack'
+import { PaneNav, SideControls } from '../components/PaneNav'
 import type { Item, Segment } from '../types'
 import { Editor } from '../components/editor/Editor'
 import { liveTranscribe, transcribe, type Live } from '../ai/stt'
@@ -322,6 +323,7 @@ export function LectureView({ item }: { item: Item }) {
     <div className="doc-pane lecture">
       <div className="toolbar">
         <MobileBack item={item} />
+        <PaneNav item={item} />
         {/* Same layout as a doc: the name in the bar, the editable title above the content. */}
         <div className="crumbs"><span className="cur">{item.title || 'Untitled recording'}</span></div>
         <span className="grow" />
@@ -350,6 +352,7 @@ export function LectureView({ item }: { item: Item }) {
             <MoreHorizontal size={17} />
           </button>
         )}
+        <SideControls />
       </div>
 
       <div className="page-scroll">

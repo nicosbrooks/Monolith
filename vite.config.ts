@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import { authApi } from './server/oauth.ts'
 import { relay } from './server/relay.ts'
+import { localModels } from './server/models.ts'
 import { ics } from './server/ics.ts'
 
 /**
@@ -76,7 +77,7 @@ export default defineConfig(({ mode, command }) => {
   return {
     // Shown in Settings › About; the build stamp also names the service worker's cache, so each release replaces it.
     define: { __APP_VERSION__: JSON.stringify(pkg.version), __BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)) },
-    plugins: [react(), authApi(env), relay(), ics(), licenses(), stampWorker(`${pkg.version}-${Date.now().toString(36)}`), fitPages()],
+    plugins: [react(), authApi(env), relay(), localModels(), ics(), licenses(), stampWorker(`${pkg.version}-${Date.now().toString(36)}`), fitPages()],
     worker: { format: 'es' },
     optimizeDeps: { exclude: ['@huggingface/transformers', '@mlc-ai/web-llm', '@litert-lm/core'] },
     // allowedHosts lets `tailscale serve` (https://<machine>.<tailnet>.ts.net) reach the dev server

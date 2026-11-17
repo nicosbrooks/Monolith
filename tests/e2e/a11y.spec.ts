@@ -45,7 +45,7 @@ for (const scheme of ['dark', 'light'] as const) {
 
     test('home, docs, recordings and calendar', async ({ page }) => {
       await check(page, 'home')
-      await (await library(page)).locator('.tree-title', { hasText: 'Study system' }).click()
+      await (await library(page)).locator('.rl-doc', { hasText: 'Study system' }).click()
       await expect(page.locator('.ProseMirror')).toBeVisible()
       await check(page, 'a doc')
       // Study system is linked from the welcome doc, so its connections show; the welcome doc has a link in its text.
@@ -56,13 +56,13 @@ for (const scheme of ['dark', 'light'] as const) {
       await place(page, 'Tasks')
       await expect(page.locator('.hm-task').first()).toBeVisible()
       await check(page, 'tasks')
-      await (await library(page)).locator('.tree-title', { hasText: 'Study system' }).click()
+      await (await library(page)).locator('.rl-doc', { hasText: 'Study system' }).click()
       await page.getByRole('button', { name: 'More options' }).click()
       await page.getByText('Earlier versions').click()
       await expect(page.locator('.modal .hist-blank')).toBeVisible()
       await check(page, 'earlier versions (empty)', '.modal')
       await page.keyboard.press('Escape')
-      await (await library(page)).locator('.nav', { hasText: 'Recently Deleted' }).click()
+      await (await library(page)).locator('.rl-row', { hasText: 'Recently Deleted' }).click()
       await check(page, 'recently deleted')
       await place(page, 'Calendar')
       await expect(page.locator('input[placeholder*="Add an event"]').first()).toBeVisible()

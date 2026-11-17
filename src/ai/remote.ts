@@ -10,6 +10,8 @@ export interface RemoteModel {
   device: string
   /** The model it runs, as it names it ("Gemma 3n", "Apple Intelligence"). */
   model: string
+  /** Its model was trained on Monolith's action lines (training/), so prompts leave the format guide out. */
+  tuned?: boolean
   ask(messages: { role: string; content: string }[], onText: (full: string) => void, opts: { signal?: AbortSignal; maxTokens?: number; temperature?: number }): Promise<string>
 }
 

@@ -9,7 +9,7 @@ import {
 import { useShortcuts } from './Overlays'
 import { AnimatePresence, motion } from 'motion/react'
 import { useStore } from '../store'
-import { toggleLibrary } from '../lib/shell'
+import { toggleSidebar, useShell } from '../lib/shell'
 import { itemEmoji } from '../lib/util'
 import { fullText, searchText } from '../lib/text'
 import { startRecording } from '../lib/recordNext'
@@ -173,7 +173,7 @@ export function CommandPalette() {
     { g: 'Go to', l: 'Recently Deleted', i: Trash2, f: () => st.go('trash') },
     { g: 'Assistant', l: 'Ask the assistant', i: MessageCircle, k: '⌘J', f: () => focusAsk() },
     { g: 'Settings', l: dark ? 'Light mode' : 'Dark mode', i: dark ? Sun : Moon, f: () => st.setSettings({ theme: dark ? 'light' : 'dark' }) },
-    { g: 'Settings', l: 'Open library', i: PanelLeft, k: '⌘\\', f: () => toggleLibrary() },
+    { g: 'Settings', l: useShell.getState().pinned ? 'Let the sidebar close' : 'Keep the sidebar open', i: PanelLeft, k: '⌘\\', f: () => toggleSidebar() },
     { g: 'Settings', l: 'Settings', i: Settings, k: '⌘,', f: () => st.setUI({ settingsOpen: true }) },
     { g: 'Settings', l: 'Keep docs in a folder or Drive', i: HardDriveUpload, f: () => st.setUI({ connectOpen: true }) },
     { g: 'Settings', l: 'Add a device', i: Smartphone, f: () => import('./LinkDialog').then((m) => m.openLink()) },

@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 import { expect, test, type Page } from '@playwright/test'
 import { aesKey, b64u, checkCode, deriveKey, hmac, open, seal, syncRoom } from '../../src/link/crypto.ts'
+import { library } from './shell.ts'
 
 // Linking a phone, end to end: the browser shows a pairing code, and this test plays the phone (as
 // apple/iOS/Link/Linker.swift does) through the relay the preview server runs. It checks what crosses the relay
@@ -85,6 +86,7 @@ test('a linked phone syncs sealed records and lends the browser its model', asyn
 
   // A note made on the phone shows up here.
   const first = await p.send({ t: 'put', recs: [{ id: 'phone-note-1', kind: 'note', title: 'Written on the phone', body: 'Hello from the phone', updatedAt: Date.now() }] })
+  await library(page) // Recent docs and notes are in the sidebar
   await expect(page.getByText('Written on the phone').first()).toBeVisible()
   // The relay replaying an old frame can't undo a later edit.
   await p.send({ t: 'put', recs: [{ id: 'phone-note-1', kind: 'note', title: 'Renamed on the phone', body: 'Hello from the phone', updatedAt: Date.now() + 5 }] })
@@ -101,12 +103,12 @@ test('a linked phone syncs sealed records and lends the browser its model', asyn
   const want = await p.next('want', mark)
   expect(want.hs).toContain(h)
   await p.send({ t: 'file', h, nm: 'board.png', ty: 'image/png', sz: png.length, i: 0, of: 1, d: b64u.encode(new Uint8Array(png)) })
-  await page.getByText('Photo from the phone').first().click()
+  await (await library(page)).locator('.rl-doc', { hasText: 'Photo from the phone' }).click()
   await expect.poll(() => page.locator('.ProseMirror img').evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth), { timeout: 10_000 }).toBe(2)
 
   // A question goes to the phone's model, sealed, and its answer streams back.
   const before = p.inbox.length
-  const bar = page.locator('.ask-field input')
+  const bar = page.locator('.ask-field input:not([type=file])')
   await bar.fill('explain photosynthesis in one line')
   await bar.press('Enter')
   const ask = await p.next('ask', before)

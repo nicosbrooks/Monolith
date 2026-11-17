@@ -1,15 +1,19 @@
 import { expect, type Page } from '@playwright/test'
 
-// The desktop shell since the dock rework: places are buttons on the dock; the doc tree, folders, recordings and
-// Recently Deleted live in the Library flyout (⌘\).
+// The desktop shell: a sidebar rail (Rail.tsx) that opens on hover, with the places, Favorites, Recent docs and
+// Recently Deleted.
 
-/** Goes to a place on the dock: Home, Docs, Tasks, Calendar or Recordings. */
-export const place = (page: Page, name: 'Home' | 'Docs' | 'Tasks' | 'Calendar' | 'Recordings') => page.locator(`.dock-btn[aria-label="${name}"]`).click()
+/** Goes to a place in the sidebar: Home, Docs, Tasks, Calendar or Recordings. */
+export const place = (page: Page, name: 'Home' | 'Docs' | 'Tasks' | 'Calendar' | 'Recordings' | 'Vault') => page.locator(`.rl-place[aria-label="${name}"]`).click()
 
-/** The Library flyout, opened if it isn't already. */
+/** The sidebar, opened by resting the pointer on it. */
 export async function library(page: Page) {
-  const lib = page.locator('.library')
-  if (!(await lib.count())) await page.locator('.dock-btn[aria-label="Library"]').click()
-  await expect(lib).toBeVisible()
-  return lib
+  const rail = page.locator('.rail')
+  // Already open: use it. Otherwise wait until it has finished closing, so the pointer aims at where it really is.
+  if (!(await rail.getAttribute('class'))?.includes('wide')) {
+    await expect.poll(() => rail.evaluate((r) => Math.round(r.getBoundingClientRect().width))).toBeLessThan(60)
+    await rail.hover()
+  }
+  await expect(rail).toHaveClass(/wide/)
+  return rail
 }

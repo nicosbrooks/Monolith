@@ -83,6 +83,10 @@ export interface Settings {
   theme: 'system' | 'light' | 'dark'
   googleClientId: string
   glass: boolean
+  /** The workspace's gradient wash (lib/looks.ts). Unset: Graphite, no color. */
+  look?: string
+  /** The color of buttons, selection and highlights (lib/looks.ts). Unset: neutral. */
+  tint?: string
   /** What to call the person in greetings. Empty: no name. */
   name: string
   /** A connected folder that new docs are saved in, or null for this browser. */

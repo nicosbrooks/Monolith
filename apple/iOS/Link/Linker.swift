@@ -184,6 +184,8 @@ final class Linker {
         var c = ["files"]
         let model = Self.sharesModel && Assistant.isAvailable
         if model { c.append("model") }
+        // Trained on Monolith's action lines (training/): the computer leaves its format guide out of the prompt.
+        if model, Assistant.openModel(for: Assistant.choice)?.tuned == true { c.append("tuned") }
         return Msg(t: "hi", n: Self.deviceName, c: c, m: model ? Assistant.modelName : nil)
     }
     private var timer: Timer?

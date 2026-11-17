@@ -4,6 +4,7 @@ import { networkInterfaces } from 'node:os'
 import type { Duplex } from 'node:stream'
 import type { Plugin } from 'vite'
 import { WebSocketServer, type WebSocket } from 'ws'
+import { serveLocalModels } from './models.ts'
 
 /**
  * Sync relay: passes messages between a user's linked devices (phone ↔ browsers).
@@ -63,16 +64,17 @@ export function relay(): Plugin {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, room))
   }
 
-  // The relay on the local network: answers /relay upgrades and nothing else.
+  // The relay on the local network: answers /relay upgrades and, on the dev server, the models you trained
+  // (models.ts), so a real phone can try them. Nothing else.
   let lan: Server | null = null
   let lanURL = ''
-  const openLan = (http: Server | null | undefined) => {
+  const openLan = (http: Server | null | undefined, dev = false) => {
     if (!http || lan) return
     http.once('listening', () => {
       const port = (http.address() as AddressInfo | null)?.port
       const ip = lanAddress()
       if (!port || !ip) return
-      lan = createServer((_req, res) => (res.statusCode = 404, res.end()))
+      lan = createServer((req, res) => (dev && serveLocalModels(req, res) ? undefined : (res.statusCode = 404, res.end())))
       lan.on('upgrade', upgrade)
       lan.on('error', () => (lanURL = '')) // port taken: pairing falls back to the simulator-only path
       lan.listen(port - 1, '0.0.0.0', () => (lanURL = `ws://${ip}:${port - 1}`))
@@ -91,7 +93,7 @@ export function relay(): Plugin {
     configureServer(server) {
       server.httpServer?.on('upgrade', upgrade)
       server.middlewares.use(where)
-      openLan(server.httpServer as Server | null)
+      openLan(server.httpServer as Server | null, true)
     },
     configurePreviewServer(server) {
       server.httpServer?.on('upgrade', upgrade)

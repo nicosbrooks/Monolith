@@ -5,6 +5,7 @@ import { useStore } from '../store'
 import { chooseModel, deleteModel, fits, modelForTier, models, refreshCache, resolvedModel, useAI } from '../ai/llm'
 import { STT_MODELS, sttModel } from '../ai/stt'
 import { StorageSettings } from './StorageSettings'
+import { LOOKS, TINTS, lookOf, tintOf } from '../lib/looks'
 import { About } from './About'
 import { toast } from './Toast'
 import { openLink } from './LinkDialog'
@@ -80,6 +81,33 @@ export function SettingsModal() {
                       <I size={14} /> {t[0].toUpperCase() + t.slice(1)}
                     </button>
                   ))}
+                </div>
+                <h4 className="set-sub" id="set-look">Look</h4>
+                <div className="look-grid" role="radiogroup" aria-labelledby="set-look">
+                  {LOOKS.map((l) => {
+                    const on = lookOf(settings.look).id === l.id
+                    return (
+                      <button key={l.id} role="radio" aria-checked={on} className={`look-swatch ${on ? 'on' : ''}`} onClick={() => set({ look: l.id })}>
+                        <i style={{ background: `radial-gradient(circle at 15% 20%, ${l.swatch[0]}, transparent 70%), radial-gradient(circle at 90% 90%, ${l.swatch[1]}, transparent 65%), radial-gradient(circle at 90% 10%, ${l.swatch[2]}, transparent 55%), var(--bg)` }} aria-hidden="true">
+                          {on && <Check size={14} strokeWidth={2.4} />}
+                        </i>
+                        <span>{l.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <h4 className="set-sub" id="set-tint">Accent</h4>
+                <div className="tint-row" role="radiogroup" aria-labelledby="set-tint">
+                  {TINTS.map((t) => {
+                    const on = tintOf(settings.tint).id === t.id
+                    const look = lookOf(settings.look).swatch[0]
+                    const fill = t.dot ?? (t.id === 'look' ? `conic-gradient(${lookOf(settings.look).swatch.join(', ')}, ${look})` : 'var(--text)')
+                    return (
+                      <button key={t.id} role="radio" aria-checked={on} aria-label={t.name} title={t.name} className={`tint-dot ${on ? 'on' : ''}`} onClick={() => set({ tint: t.id })}>
+                        <i style={{ background: fill }} aria-hidden="true" />
+                      </button>
+                    )
+                  })}
                 </div>
               </section>
 

@@ -28,7 +28,8 @@ const PACKED_EXT = /\.(zip|gz|tgz|bz2|xz|7z|rar|docx|xlsx|pptx|odt|ods|odp|key|p
 
 export interface FileMeta { name: string; type: string; size: number }
 /** `gz`: stored gzip-compressed (lossless); read back exactly as added. */
-interface Rec extends FileMeta { data: Blob | { sealed: Uint8Array; type: string }; at: number; gz?: boolean }
+/** `vault`: kept in the Vault until deleted there, whether or not a doc uses it (every file added since Nov 17). */
+interface Rec extends FileMeta { data: Blob | { sealed: Uint8Array; type: string }; at: number; gz?: boolean; vault?: boolean }
 
 const key = (hash: string) => `file:${hash}`
 export const refOf = (hash: string) => FILE_SCHEME + hash
@@ -62,7 +63,7 @@ export async function putFile(blob: Blob, name: string): Promise<string> {
     const packed = await gzip(blob).catch(() => null)
     if (packed && packed.size <= blob.size * 0.9) (data = packed), (gz = true)
   }
-  await set(key(hash), { data: await sealBlob(data), name, type, size: blob.size, at: Date.now(), ...(gz ? { gz } : {}) } satisfies Rec)
+  await set(key(hash), { data: await sealBlob(data), name, type, size: blob.size, at: Date.now(), vault: true, ...(gz ? { gz } : {}) } satisfies Rec)
   // Anything showing this file as missing (it may have just arrived from a linked device) can show it now.
   urls.delete(hash)
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(FILE_ARRIVED, { detail: hash }))
@@ -188,12 +189,62 @@ export async function collectGarbage(htmls: string[], now = false) {
   for (const k of await keys()) {
     if (typeof k !== 'string' || !k.startsWith('file:') || used.has(k.slice(5))) continue
     const r = await get<Rec>(k)
-    if (r && (now || Date.now() - r.at > 86_400_000)) {
+    // Files in the Vault stay until they're deleted there.
+    if (r && !r.vault && (now || Date.now() - r.at > 86_400_000)) {
       freed += r.data instanceof Blob ? r.data.size : r.data.sealed.byteLength
       await del(k)
     }
   }
   return freed
+}
+
+// ─── The Vault: every file you've added, in one place ───
+
+export interface VaultFile extends FileMeta {
+  hash: string
+  at: number
+}
+/** Window event sent when the Vault changes (a file added or deleted). */
+export const VAULT_CHANGED = 'monolith:vault'
+const changed = () => typeof window !== 'undefined' && window.dispatchEvent(new Event(VAULT_CHANGED))
+
+/** Every stored file, newest first. */
+export async function listFiles(): Promise<VaultFile[]> {
+  const out: VaultFile[] = []
+  for (const k of await keys()) {
+    if (typeof k !== 'string' || !k.startsWith('file:')) continue
+    const r = await get<Rec>(k)
+    if (r) out.push({ hash: k.slice(5), name: r.name, type: r.type, size: r.size, at: r.at })
+  }
+  return out.sort((a, b) => b.at - a.at)
+}
+
+/** Files picked or dropped into the Vault itself. Returns how many were stored. */
+export async function uploadToVault(files: File[]) {
+  let n = 0
+  for (const f of files) {
+    await addFile(f)
+    n++
+  }
+  changed()
+  return n
+}
+
+/** Deletes a file from the Vault for good. Docs that link to it show it as missing. */
+export async function deleteFile(hash: string) {
+  await del(key(hash))
+  const u = urls.get(hash)
+  urls.delete(hash)
+  void u?.then((x) => x && URL.revokeObjectURL(x))
+  changed()
+}
+
+/** Gives a file a new name in the Vault (docs keep showing the name they were given). */
+export async function renameFile(hash: string, name: string) {
+  const r = await get<Rec>(key(hash))
+  if (!r || !name.trim()) return
+  await set(key(hash), { ...r, name: name.trim() })
+  changed()
 }
 
 /** For backups: the files the docs use, as base64. */

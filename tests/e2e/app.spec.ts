@@ -110,26 +110,28 @@ test('calendar quick add, with Undo', async ({ page }) => {
 
 test('Start recording records on the first press', async ({ page }) => {
   await start(page)
-  await page.locator('.hm-quick button.rec').click()
+  await page.locator('.new-btn').click()
+  await page.getByRole('menuitem', { name: 'Recording', exact: true }).click()
   await expect(page.locator('button[title="Stop"]')).toBeVisible()
   await page.waitForTimeout(1500)
   await page.click('button[title="Stop"]')
-  await expect((await library(page)).locator('.side-tree .nav.sub.on')).toHaveCount(1)
+  await expect((await library(page)).locator('.rl-doc.on')).toHaveCount(1)
 })
 
 test('Recently Deleted holds deleted docs and completed checklist lines, and restores each', async ({ page }) => {
   await start(page)
   // A deleted doc waits there, and Restore puts it back in the Library.
-  await (await library(page)).locator('.tree-title', { hasText: 'Study system' }).click({ button: 'right' })
+  await (await library(page)).locator('.rl-doc', { hasText: 'Study system' }).click({ button: 'right' })
   await page.getByText('Delete', { exact: true }).click()
   await expect(page.locator('.toast')).toContainText('Recently Deleted')
-  await expect((await library(page)).locator('.tree-title', { hasText: 'Study system' })).toHaveCount(0)
-  // A checklist line checked off on Home is listed under Completed.
+  await expect((await library(page)).locator('.rl-doc', { hasText: 'Study system' })).toHaveCount(0)
+  // A checklist line checked off on Home is listed under Completed. (Esc puts the open sidebar away first.)
+  await page.keyboard.press('Escape')
   const task = page.locator('.hm-task').first()
   const words = (await task.locator('.hm-row-main span').textContent())!.trim()
   await task.locator('input').click()
   await expect(page.locator('.toast', { hasText: 'Task done' })).toBeVisible()
-  await (await library(page)).locator('.nav', { hasText: 'Recently Deleted' }).click()
+  await (await library(page)).locator('.rl-row', { hasText: 'Recently Deleted' }).click()
   await expect(page.locator('.hm-head h1')).toHaveText('Recently Deleted')
   const doc = page.locator('.tr-row', { hasText: 'Study system' })
   await expect(doc).toContainText('deleted')
@@ -137,7 +139,7 @@ test('Recently Deleted holds deleted docs and completed checklist lines, and res
   await expect(done).toContainText('checked')
   // Restore each: the doc is back, and the line is an open task again.
   await doc.getByRole('button', { name: 'Restore' }).click()
-  await expect((await library(page)).locator('.tree-title', { hasText: 'Study system' })).toHaveCount(1)
+  await expect((await library(page)).locator('.rl-doc', { hasText: 'Study system' })).toHaveCount(1)
   await expect(page.locator('.tr-row', { hasText: 'Study system' })).toHaveCount(0)
   await done.getByRole('button', { name: 'Restore' }).click()
   await expect(page.locator('.tr-row', { hasText: words })).toHaveCount(0)
@@ -147,7 +149,7 @@ test('Recently Deleted holds deleted docs and completed checklist lines, and res
 
 test('Ask bar: "make an event for tomorrow" asks for the name instead of using the prompt as the title', async ({ page }) => {
   await start(page)
-  const bar = page.locator('.ask-field input')
+  const bar = page.locator('.ask-field input:not([type=file])')
   await bar.fill('make an event for tomorrow')
   // What Enter will do is shown first: an event tomorrow, named next.
   await expect(page.locator('.ask-opt.on')).toContainText('New event')
@@ -168,7 +170,7 @@ test('Ask bar: "make an event for tomorrow" asks for the name instead of using t
 test('Ask bar: questions open a conversation above the bar; there is no chat panel', async ({ page }) => {
   await start(page)
   await expect(page.locator('.ai-panel, .ai-wrap')).toHaveCount(0)
-  const bar = page.locator('.ask-field input')
+  const bar = page.locator('.ask-field input:not([type=file])')
   await bar.fill('what’s on tomorrow?')
   await expect(page.locator('.ask-opt.on')).toContainText('Ask')
   await bar.press('Enter')
@@ -197,7 +199,7 @@ test('Ask bar: questions open a conversation above the bar; there is no chat pan
 test('Ask bar: arrow keys pick another reading, like adding a task instead', async ({ page }) => {
   await start(page)
   await place(page, 'Tasks')
-  const bar = page.locator('.ask-field input')
+  const bar = page.locator('.ask-field input:not([type=file])')
   await bar.fill('add a task to email the professor')
   await expect(page.locator('.ask-opt.on')).toContainText('Add task “Email the professor”')
   await bar.press('Enter')
@@ -275,7 +277,7 @@ test('Tasks gathers checklist lines from every doc, sorts them by date, and adds
   await expect(page.locator('.hm-task', { hasText: 'buy index cards' })).toHaveCount(1)
   // Typing in the bar on this page adds a task, to a doc called Tasks.
   const before = await page.locator('.hm-task').count()
-  await page.locator('.ask-field input').fill('renew library books tomorrow')
+  await page.locator('.ask-field input:not([type=file])').fill('renew library books tomorrow')
   await expect(page.locator('.ask-opt.on')).toContainText('Add task “Renew library books”')
   await page.keyboard.press('Enter')
   await expect(page.locator('.toast')).toContainText('Added “Renew library books” · due')
@@ -342,7 +344,7 @@ test('a task with a date shows on the calendar and can be checked off there', as
 
 test('earlier versions: a replaced doc can be read and restored, and restoring can be undone', async ({ page }) => {
   await start(page)
-  await (await library(page)).locator('.tree-title', { hasText: 'Study system' }).click()
+  await (await library(page)).locator('.rl-doc', { hasText: 'Study system' }).click()
   await expect(page.locator('.ProseMirror')).toContainText('Weekly loop')
   await page.locator('.ProseMirror p').first().click()
   await page.keyboard.press('ControlOrMeta+a')
@@ -386,7 +388,7 @@ test('a doc named in plain words is offered under Mentioned in, and one press li
   await start(page)
   await newDoc(page, 'Thesis')
   await page.keyboard.type('I should follow my study system more closely.')
-  await (await library(page)).locator('.tree-title', { hasText: 'Study system' }).click()
+  await (await library(page)).locator('.rl-doc', { hasText: 'Study system' }).click()
   const pair = page.locator('.cx-pair', { hasText: 'Thesis' })
   await expect(pair.locator('q')).toHaveText('I should follow my study system more closely.')
   await pair.locator('.btn').click()
@@ -408,11 +410,9 @@ test('a workspace of 2,000 docs opens, lists and searches without stalling', asy
     await new Promise<void>((ok) => { const t = db.transaction('keyval', 'readwrite'); t.objectStore('keyval').put(JSON.stringify(saved), 'socratic-v1'); t.oncomplete = () => ok() })
   })
   await page.reload()
-  // The Library draws the first hundred and offers the rest.
-  await expect((await library(page)).locator('.more-rows')).toContainText('Show 100 more of 2002')
-  expect(await (await library(page)).locator('.tree-title').count()).toBeLessThan(110)
-  await (await library(page)).locator('.more-rows').click()
-  expect(await (await library(page)).locator('.tree-title').count()).toBeGreaterThan(190)
+  // The sidebar lists only your favorites and most recent docs; the Docs page holds the rest.
+  await expect((await library(page)).locator('.rl-doc').first()).toBeVisible()
+  expect(await (await library(page)).locator('.rl-doc').count()).toBeLessThanOrEqual(32)
   // A word that's in one doc out of two thousand is found as it's typed.
   await place(page, 'Home')
   await page.keyboard.press('Control+k')

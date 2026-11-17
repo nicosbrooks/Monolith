@@ -2,8 +2,8 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { FileText, Mic } from 'lucide-react'
 import { AskBar, focusAsk } from './components/AskBar'
 import { useStore } from './store'
-import { Dock, Library } from './components/Dock'
-import { toggleLibrary } from './lib/shell'
+import { Rail } from './components/Rail'
+import { toggleSidebar } from './lib/shell'
 import { DocsLibrary } from './views/DocsLibrary'
 import { Toaster } from './components/Toast'
 import { Overlays } from './components/Overlays'
@@ -19,10 +19,13 @@ import { Setup, Unlock } from './components/Setup'
 import { BackupDialog } from './components/BackupDialog'
 import { startRecording } from './lib/recordNext'
 import { FileViewer } from './components/FileViewer'
+import { VaultPicker } from './components/VaultPicker'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { checkVault, useVault } from './lib/vault'
 import { useHistory } from './lib/history'
 import { holdKey } from './lib/typeahead'
+import { applyLook } from './lib/looks'
+import { PaneContext, SIDE_MIN, closeBeside, setSideWidth, sideMax, useSidePane } from './lib/panes'
 
 void checkVault()
 
@@ -33,11 +36,13 @@ const views = {
   calendar: () => import('./views/CalendarView'),
   tasks: () => import('./views/TasksView'),
   trash: () => import('./views/TrashView'),
+  vault: () => import('./views/VaultView'),
 }
 const DocView = lazy(() => views.doc().then((m) => ({ default: m.DocView })))
 const LectureView = lazy(() => views.lecture().then((m) => ({ default: m.LectureView })))
 const TasksView = lazy(() => views.tasks().then((m) => ({ default: m.TasksView })))
 const TrashView = lazy(() => views.trash().then((m) => ({ default: m.TrashView })))
+const VaultView = lazy(() => views.vault().then((m) => ({ default: m.VaultView })))
 const CalendarView = lazy(() => views.calendar().then((m) => ({ default: m.CalendarView })))
 const loadPalette = () => import('./components/CommandPalette')
 const CommandPalette = lazy(() => loadPalette().then((m) => ({ default: m.CommandPalette })))
@@ -74,6 +79,8 @@ export default function App() {
   const settings = useStore((s) => s.settings)
   const vault = useVault((s) => s.state)
   const setupOpen = useStore((s) => s.setupOpen)
+  const side = useSidePane()
+  const sideItem = useStore((s) => (side.id ? s.items.find((i) => i.id === side.id && !i.deletedAt) : undefined))
 
   useEffect(() => useStore.persist.onFinishHydration(() => setHydrated(true)), [])
   useEffect(() => {
@@ -112,6 +119,7 @@ export default function App() {
     mq.addEventListener('change', apply)
     return () => mq.removeEventListener('change', apply)
   }, [settings.theme])
+  useEffect(() => applyLook(settings.look, settings.tint), [settings.look, settings.tint])
 
   // frosted glass, unless it's switched off or the OS asks for reduced transparency
   useEffect(() => {
@@ -132,7 +140,7 @@ export default function App() {
       if (mod && e.key === 'k' && !(e.target as HTMLElement).closest('.ProseMirror')) (e.preventDefault(), s.setUI({ paletteOpen: !s.paletteOpen }))
       else if (mod && e.key === 'p') (e.preventDefault(), s.setUI({ paletteOpen: true }))
       else if (mod && e.key === 'j') (e.preventDefault(), focusAsk())
-      else if (mod && e.key === '\\') (e.preventDefault(), toggleLibrary())
+      else if (mod && e.key === '\\') (e.preventDefault(), toggleSidebar())
       else if (mod && e.key === ',') (e.preventDefault(), s.setUI({ settingsOpen: true }))
       else if (mod && e.key.toLowerCase() === 'n') (e.preventDefault(), s.createItem('doc'))
       else if (e.key === 'Escape') s.setUI({ paletteOpen: false, settingsOpen: false, connectOpen: false })
@@ -163,6 +171,7 @@ export default function App() {
   let main: React.ReactNode
   if (section === 'home') main = <HomeView />
   else if (section === 'tasks') main = <TasksView />
+  else if (section === 'vault') main = <VaultView />
   else if (section === 'trash' && !showActive) main = <TrashView />
   else if (section === 'calendar') main = <CalendarView key={calendarDate ?? 'today'} initialDate={calendarDate} />
   else {
@@ -187,7 +196,7 @@ export default function App() {
 
   return (
     <div className={`app ${mobile ? 'mobile' : ''}`}>
-      {!mobile && <Dock />}
+      {!mobile && <Rail />}
       <main ref={mainRef} className={`main sec-${section}`} data-active={activeId || undefined}>
         <ErrorBoundary area="this page" resetKey={`${section}:${activeId}`}><Suspense fallback={<ViewFallback />}>{main}</Suspense></ErrorBoundary>
         {/* The Ask bar is on every page, and it's where the assistant lives: there is no separate chat panel. */}
@@ -197,7 +206,21 @@ export default function App() {
           </div>
         )}
       </main>
-      {!mobile && <Library />}
+      {/* A doc beside the page. Not when it's the page itself. */}
+      {!mobile && sideItem && !(activeId === sideItem.id && !atRoot) && (
+        <>
+          <SideSplitter width={side.width} />
+          <aside className="side-pane" style={{ width: side.width }} aria-label={`Beside: ${sideItem.title || 'Untitled'}`} onKeyDown={(e) => e.key === 'Escape' && !e.defaultPrevented && !(e.target as HTMLElement).closest('.ProseMirror, input, textarea') && closeBeside()}>
+            <PaneContext.Provider value="side">
+              <ErrorBoundary area="this doc" resetKey={sideItem.id}>
+                <Suspense fallback={<ViewFallback />}>
+                  {sideItem.kind === 'lecture' ? <LectureView key={sideItem.id} item={sideItem} /> : <DocView key={sideItem.id} item={sideItem} />}
+                </Suspense>
+              </ErrorBoundary>
+            </PaneContext.Provider>
+          </aside>
+        </>
+      )}
       {mobile && atRoot && <TabBar />}
       {mobile && !atRoot && <div className="p-dock detail"><AskBar phone /></div>}
       <Suspense fallback={null}>
@@ -211,8 +234,44 @@ export default function App() {
       <BackupDialog />
       <Overlays />
       <FileViewer />
+      <VaultPicker />
       <Toaster />
     </div>
+  )
+}
+
+/** The edge between the page and the doc beside it: drag to resize, double-click to reset, arrow keys too. */
+function SideSplitter({ width }: { width: number }) {
+  const start = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    const handle = e.currentTarget
+    handle.setPointerCapture(e.pointerId)
+    document.documentElement.classList.add('resizing-col')
+    const move = (ev: PointerEvent) => setSideWidth(window.innerWidth - ev.clientX - 10)
+    const end = () => (handle.removeEventListener('pointermove', move), document.documentElement.classList.remove('resizing-col'))
+    handle.addEventListener('pointermove', move)
+    handle.addEventListener('pointerup', end, { once: true })
+    handle.addEventListener('pointercancel', end, { once: true })
+  }
+  const key = (e: React.KeyboardEvent) => {
+    const step = { ArrowLeft: 32, ArrowRight: -32 }[e.key]
+    if (step) (e.preventDefault(), setSideWidth(width + step))
+  }
+  return (
+    <div
+      className="side-split"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the doc beside the page"
+      aria-valuenow={width}
+      aria-valuemin={SIDE_MIN}
+      aria-valuemax={sideMax()}
+      title="Drag to resize · double-click to reset"
+      tabIndex={0}
+      onPointerDown={start}
+      onDoubleClick={() => setSideWidth(560)}
+      onKeyDown={key}
+    />
   )
 }
 

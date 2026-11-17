@@ -99,7 +99,7 @@ export interface Repeat {
   until?: number
 }
 
-export type Section = 'home' | 'tasks' | 'docs' | 'lectures' | 'calendar' | 'trash'
+export type Section = 'home' | 'tasks' | 'docs' | 'lectures' | 'calendar' | 'vault' | 'trash'
 
 export interface Suggestion {
   id: string

@@ -16,6 +16,10 @@ struct OpenModel: Identifiable, Hashable {
     let note: String
     /// Device memory it needs to run comfortably, in GB.
     let needsGB: Double
+    /// Fine-tuned on Monolith's action format (training/): a linked computer can leave its format guide out.
+    var tuned = false
+    /// The id's folder name under models/mlx on the Mac running the dev server (`mac:<name>`), not a Hugging Face repo.
+    var fromMac: String? { id.hasPrefix("mac:") ? String(id.dropFirst(4)) : nil }
 }
 
 /// Open models, run on the device through Apple's MLX. Picking one is all a person does:
@@ -26,7 +30,19 @@ final class OpenModels {
 
     /// Same tiers as the web app, so Fast / Default / Enhanced mean the same everywhere. All 2B or smaller:
     /// quick to download, fast to answer.
-    static let catalog: [OpenModel] = [
+    static let catalog: [OpenModel] = hub + trained
+
+    /// Models you trained (training/), fetched over Wi-Fi from the Mac this phone is linked to while it runs the dev
+    /// server. Development builds only, under More models.
+    #if DEBUG
+    static let trained: [OpenModel] = [
+        .init(id: "mac:Monolith-LFM3-1.7B-4bit", name: "LFM 3 1.7B, trained", tier: .more, note: "Your fine-tune, from your Mac", needsGB: 3, tuned: true),
+    ]
+    #else
+    static let trained: [OpenModel] = []
+    #endif
+
+    private static let hub: [OpenModel] = [
         .init(id: "mlx-community/Qwen3.5-0.8B-4bit", name: "Qwen 3.5 0.8B", tier: .fast, note: "Instant answers, smallest download", needsGB: 3),
         // Liquid AI's LFM3: about 1 GB, fast on phones (the model Locally AI runs). Needs LFM3.swift until mlx-swift-lm ships it.
         .init(id: "LiquidAI/LFM3-1.7B-MLX-4bit", name: "LFM 3 1.7B", tier: .default, note: "Quick and accurate, about 1 GB", needsGB: 3),
@@ -87,13 +103,23 @@ final class OpenModels {
         container = nil
         loadedID = nil
         phase = .loading(0)
-        let configuration = LLMRegistry.shared.configuration(id: id)
-        let task = Task {
-            try await #huggingFaceLoadModelContainer(configuration: configuration) { progress in
-                let p = progress.fractionCompleted
-                Task { @MainActor in
-                    if OpenModels.shared.request == token, case .loading = OpenModels.shared.phase { OpenModels.shared.phase = .loading(p) }
-                }
+        let report: @Sendable (Double) -> Void = { p in
+            Task { @MainActor in
+                if OpenModels.shared.request == token, case .loading = OpenModels.shared.phase { OpenModels.shared.phase = .loading(p) }
+            }
+        }
+        let task: Task<ModelContainer, Error>
+        if let name = Self.catalogEntry(id)?.fromMac {
+            let mac = MacModels.address
+            task = Task {
+                guard let mac else { throw MacModels.Failure.notLinked }
+                let folder = try await MacModels.fetch(name, from: mac, progress: report)
+                return try await loadModelContainer(from: folder, using: #huggingFaceTokenizerLoader())
+            }
+        } else {
+            let configuration = LLMRegistry.shared.configuration(id: id)
+            task = Task {
+                try await #huggingFaceLoadModelContainer(configuration: configuration) { progress in report(progress.fractionCompleted) }
             }
         }
         pending = task
@@ -114,6 +140,8 @@ final class OpenModels {
             throw error
         }
     }
+
+    static func catalogEntry(_ id: String) -> OpenModel? { catalog.first { $0.id == id } }
 
     /// Models that have loaded on this device before, so warming one up never starts a surprise download.
     private static let loadedKey = "openModelsLoaded"
@@ -158,5 +186,83 @@ final class OpenModels {
         var s = raw.replacingOccurrences(of: #"<think>[\s\S]*?</think>"#, with: "", options: .regularExpression)
         if let open = s.range(of: "<think>") { s = String(s[..<open.lowerBound]) }
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+/// Fetches a model you trained from the Mac running the dev server (server/models.ts), over the same Wi-Fi the
+/// relay uses. Files land in Application Support and are fetched again only when their size changes, so a new
+/// training run is picked up by preparing the model again.
+enum MacModels {
+    enum Failure: LocalizedError {
+        case notLinked, missing(String)
+        var errorDescription: String? {
+            switch self {
+            case .notLinked: "Link this iPhone to Monolith running on your Mac (npm run dev), on the same Wi-Fi."
+            case .missing(let name): "Your Mac doesn't have \(name) in models/mlx."
+            }
+        }
+    }
+
+    /// http://<mac>:<port> of the first computer linked over the local network (the dev relay's address).
+    static var address: URL? {
+        Linker.shared.pairings.lazy
+            .filter { $0.relay.hasPrefix("ws://") }
+            .compactMap { URL(string: $0.relay.replacingOccurrences(of: "ws://", with: "http://")) }
+            .first
+    }
+
+    private struct Entry: Decodable {
+        struct File: Decodable { let path: String; let size: Int64 }
+        let name: String
+        let files: [File]
+    }
+
+    nonisolated static func folder(_ name: String) -> URL {
+        URL.applicationSupportDirectory.appending(path: "TrainedModels/\(name)", directoryHint: .isDirectory)
+    }
+
+    nonisolated static func fetch(_ name: String, from mac: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+        let (data, _) = try await URLSession.shared.data(from: mac.appending(path: "local-models/index.json"))
+        guard let entry = try JSONDecoder().decode([Entry].self, from: data).first(where: { $0.name == name }) else { throw Failure.missing(name) }
+        let dir = folder(name)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let total = max(1, entry.files.reduce(0) { $0 + $1.size })
+        var done: Int64 = 0
+        for file in entry.files {
+            let dest = dir.appending(path: file.path)
+            let have = (try? FileManager.default.attributesOfItem(atPath: dest.path(percentEncoded: false))[.size] as? Int64) ?? -1
+            if have != file.size {
+                let base = done
+                try await download(mac.appending(path: "local-models/\(name)/\(file.path)"), to: dest) { bytes in
+                    progress(Double(base + bytes) / Double(total))
+                }
+            }
+            done += file.size
+            progress(Double(done) / Double(total))
+        }
+        return dir
+    }
+
+    private final class Watch: @unchecked Sendable { var observation: NSKeyValueObservation?; var task: URLSessionDownloadTask? }
+
+    private nonisolated static func download(_ url: URL, to dest: URL, onBytes: @escaping @Sendable (Int64) -> Void) async throws {
+        let watch = Watch()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+                let task = URLSession.shared.downloadTask(with: url) { tmp, response, error in
+                    watch.observation?.invalidate()
+                    if let error { return c.resume(throwing: error) }
+                    guard let tmp, (response as? HTTPURLResponse)?.statusCode == 200 else { return c.resume(throwing: URLError(.badServerResponse)) }
+                    do {
+                        try? FileManager.default.removeItem(at: dest)
+                        try FileManager.default.moveItem(at: tmp, to: dest)
+                        c.resume()
+                    } catch { c.resume(throwing: error) }
+                }
+                watch.task = task
+                watch.observation = task.progress.observe(\.completedUnitCount) { p, _ in onBytes(p.completedUnitCount) }
+                task.resume()
+            }
+        } onCancel: { watch.task?.cancel() }
     }
 }

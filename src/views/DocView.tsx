@@ -5,6 +5,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { History, Printer, ArrowDownWideNarrow, CheckSquare, ChevronRight, Download, FilePlus2, FolderInput, MoreHorizontal, Trash2, Upload, Copy, Star, RotateCcw, Folder, Check, CircleAlert, Loader2, GitCommitHorizontal, FileText, SmilePlus } from 'lucide-react'
 import { useStore } from '../store'
 import { MobileBack } from '../components/MobileBack'
+import { PaneNav, SideControls } from '../components/PaneNav'
 import { confirmDialog } from '../components/Overlays'
 import type { Item } from '../types'
 import { Editor } from '../components/editor/Editor'
@@ -115,6 +116,7 @@ export function DocView({ item }: { item: Item }) {
     <div className="doc-pane doc">
       <div className="toolbar">
         <MobileBack item={item} />
+        <PaneNav item={item} />
         <div className="crumbs">
           {source && (
             <span className="src-crumb">
@@ -193,6 +195,7 @@ export function DocView({ item }: { item: Item }) {
             </div>
           </>
         )}
+        <SideControls />
       </div>
       <div className="page-scroll">
         <div className="doc-layout">

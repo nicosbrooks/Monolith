@@ -16,8 +16,9 @@ export interface ModelInfo {
   note: string
   /** GPU memory it needs, from WebLLM's catalogue. */
   needMB: number
-  /** Set for Transformers.js models: the Hugging Face repo and the weights to use on GPU and on CPU. */
-  onnx?: { repo: string; gpu: string; cpu?: string }
+  /** Set for Transformers.js models: the Hugging Face repo and the weights to use on GPU and on CPU. `local`: the repo
+   *  is a folder in models/onnx/exports, served by the dev server (server/models.ts), not Hugging Face. */
+  onnx?: { repo: string; gpu: string; cpu?: string; local?: boolean }
   /** Set for LiteRT-LM models (Gemma): the Hugging Face repo of the web build. */
   litert?: { repo: string }
   /** What runs instead if this model's engine can't start on this device. */
@@ -38,7 +39,26 @@ export interface ModelInfo {
  * prompt in one pass (a ~900-token pass crashes Safari's GPU process) and re-reads the whole chat every turn.
  * Same tier names as the iPhone and iPad app.
  */
+/**
+ * Models you trained (training/), exported to ONNX into models/onnx/exports and served by the dev server. They run in
+ * Transformers.js whichever engine this browser otherwise uses, and are listed under More models in development only.
+ */
+const TRAINED: ModelInfo[] = import.meta.env.DEV
+  ? [
+      {
+        id: 'local:Monolith-LFM3-1.7B',
+        name: 'LFM 3 1.7B, trained',
+        tier: 'more',
+        note: 'Your fine-tune, from models/ on this computer',
+        needMB: 1600,
+        onnx: { repo: 'Monolith-LFM3-1.7B-ONNX', gpu: 'q4f16', cpu: 'q4', local: true },
+        tuned: true,
+      },
+    ]
+  : []
+
 export const MODELS: ModelInfo[] = [
+  ...TRAINED,
   {
     id: 'Qwen3.5-0.8B-q4f16_1-MLC',
     name: 'Qwen 3.5 0.8B',
@@ -76,6 +96,7 @@ const FALLBACK_DEFAULT = 'Qwen3.5-0.8B-q4f16_1-MLC'
  * GPU kernels in ONNX Runtime; Qwen 3.5's hybrid attention measured several times slower there.
  */
 export const ONNX_MODELS: ModelInfo[] = [
+  ...TRAINED,
   {
     id: 'onnx:Qwen3-0.6B',
     name: 'Qwen 3 0.6B',
@@ -248,7 +269,10 @@ export async function refreshCache() {
       return
     }
     const hasModelInCache = (await webllmHasCache()) ? (await import('@mlc-ai/web-llm')).hasModelInCache : async () => false
-    const entries = await Promise.all(MODELS.map(async (m) => [m.id, m.litert ? !!(await cachedModel(m.litert.repo)) : await hasModelInCache(build(m.id))] as const))
+    const trained = await onnxCached(TRAINED.map((m) => m.onnx!.repo))
+    const entries = await Promise.all(
+      MODELS.map(async (m) => [m.id, m.onnx ? trained.has(m.onnx.repo) : m.litert ? !!(await cachedModel(m.litert.repo)) : await hasModelInCache(build(m.id))] as const),
+    )
     const dir = await navigator.storage.getDirectory().catch(() => null)
     const parts = await Promise.all(MODELS.filter((m) => m.litert).map(async (m) => [m.id, dir ? await partial(dir, modelFileName(m.litert!.repo)) : undefined] as const))
     const est = await navigator.storage?.estimate?.().catch(() => undefined)
@@ -287,7 +311,10 @@ export async function chooseModel(id: string) {
 }
 
 /** True when the model that answers has been trained on Monolith's own actions, so the prompt can leave the format guide out. */
-export const isTuned = () => !!findModel(useAI.getState().loadedModel ?? resolvedModel())?.tuned
+export const isTuned = () => {
+  const phone = phoneModel()
+  return phone ? !!phone.tuned : !!findModel(useAI.getState().loadedModel ?? resolvedModel())?.tuned
+}
 
 /** The model id to load: the saved choice, or the Default tier if nothing has been picked. */
 export function resolvedModel() {
@@ -344,6 +371,12 @@ export async function loadModel(modelId?: string) {
   }
   // Gemma runs in LiteRT-LM; if that can't start on this device, the tier's WebLLM model takes over.
   const m = findModel(id)
+  // A model you trained runs in Transformers.js on any browser.
+  if (m?.onnx) {
+    await unloadWebLLM()
+    await unloadLitert()
+    return void (await loadOnnx(m.id, true))
+  }
   if (m?.litert) {
     if (!litertFailed) {
       await unloadWebLLM()
@@ -542,6 +575,7 @@ async function clearFallbacks() {
 /** Load a Transformers.js model. False if it couldn't start; `showError` puts that on screen (no fallback left). */
 async function loadOnnx(modelId: string, showError: boolean): Promise<boolean> {
   const m = ONNX_MODELS.find((x) => x.id === modelId) ?? modelForTier('default')
+  if (!m.onnx) return false
   while (loading) await loading
   if (useAI.getState().loadedModel === m.id && loadedEngine === 'onnx') return true
   const device = gpu.adapter ? 'webgpu' : 'wasm'
@@ -558,6 +592,7 @@ async function loadOnnx(modelId: string, showError: boolean): Promise<boolean> {
         {
           type: 'load',
           model: m.onnx!.repo,
+          local: !!m.onnx!.local,
           device,
           dtype: device === 'webgpu' ? m.onnx!.gpu : (m.onnx!.cpu ?? 'q4'),
         },
@@ -764,7 +799,8 @@ async function generate(messages: Msg[], onToken: ((full: string) => void) | und
     return clean(full)
   }
   if (loadedEngine === 'onnx') {
-    const direct = useAI.getState().loadedModel?.startsWith('onnx:Qwen3')
+    // Qwen 3 and the trained LFM 3 think by default; answers here are direct.
+    const direct = useAI.getState().loadedModel?.startsWith('onnx:Qwen3') || isTuned()
     let full = ''
     const stop = () => onnx?.postMessage({ type: 'stop' })
     opts.signal?.addEventListener('abort', stop)

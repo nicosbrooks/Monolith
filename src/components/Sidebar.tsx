@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  LayoutGrid, CalendarDays, FileText, Mic, Trash2, Plus, Folder, Settings, ChevronRight, PanelLeft, FolderPlus, 
+  LayoutGrid, CalendarDays, Archive, FileText, Mic, Trash2, Plus, Folder, Settings, ChevronRight, PanelLeft, FolderPlus, 
   AudioWaveform, RefreshCw, Search, ListChecks, GitCommitHorizontal, CircleAlert, Pencil, Star, StarOff, FilePlus2, Unplug, Inbox,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
@@ -15,7 +15,6 @@ import { itemEmoji } from '../lib/util'
 import { startRecording } from '../lib/recordNext'
 import { rowMenu } from '../views/ItemList'
 import { useWorkspace } from '../lib/graph'
-import { toggleLibrary } from '../lib/shell'
 
 /** The mark: an upright slab, 4 wide to 9 tall. Also the selection marker and the assistant's waiting sign (soft.css). */
 export function Logo({ size = 20 }: { size?: number }) {
@@ -97,7 +96,7 @@ export function Sidebar({ onNavigate, library }: { onNavigate?: () => void; libr
           <span>{APP_NAME}</span>
         </div>
         <div className="side-icons">
-          <button className="icon-btn" title="Close library (⌘\)" aria-label="Close library" onClick={() => toggleLibrary(false)}><PanelLeft size={17} /></button>
+          <button className="icon-btn" title="Close" aria-label="Close" onClick={() => onNavigate?.()}><PanelLeft size={17} /></button>
         </div>
       </div>
       {!library && <button className="side-search" onClick={() => (s.setUI({ paletteOpen: true }), onNavigate?.())}>
@@ -111,6 +110,7 @@ export function Sidebar({ onNavigate, library }: { onNavigate?: () => void; libr
         {!library && nav('home', 'Home', LayoutGrid)}
         {!library && <TasksNav nav={nav} />}
         {!library && nav('calendar', 'Calendar', CalendarDays)}
+        {!library && nav('vault', 'Vault', Archive)}
 
         {group('docs', 'Docs', { title: 'New doc (⌘N)', run: () => (useStore.setState({ folderId: null }), s.createItem('doc'), onNavigate?.()) })}
         {!folded.docs && <div className="side-tree"><DocTree onNavigate={onNavigate} /></div>}

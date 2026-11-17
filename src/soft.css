@@ -217,8 +217,13 @@ kbd {
   padding: 56px 24px 132px;
 }
 .app:not(.mobile) .hm {
-  width: min(100%, 1080px);
-  padding: 52px 40px 168px;
+  width: min(100%, 1320px);
+  padding: 44px 40px 116px;
+}
+/* Tasks reads as one list: a narrower column keeps each row's doc name near its text. */
+.app:not(.mobile) .sec-tasks .hm {
+  width: min(100%, 980px);
+  padding-bottom: 168px;
 }
 .hm-head h1 {
   margin: 0;
@@ -2556,9 +2561,7 @@ body {
     border-radius: 0 !important;
   }
   .side-wrap,
-  .dock,
-  .library,
-  .library-scrim,
+  .rail-slot,
   .toolbar,
   .home-dock,
   .p-dock,
@@ -2882,108 +2885,228 @@ body {
   padding-bottom: 8px;
 }
 
-/* ── Shell: the dock, the Library, the Docs page, and Home as a board ── */
-.dock {
+/* ── Shell: the sidebar (Rail.tsx), the Docs page, and Home as a board ── */
+/* The slot keeps the rail's room in the layout; the rail opens over the page from it, or beside it when kept open. */
+.rail-slot {
   flex: none;
-  align-self: center;
   position: relative;
   z-index: 42;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  width: 52px;
-  margin: 10px 0 10px 6px;
+  width: 64px;
+  transition: width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.dock-btn {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  color: var(--text-3);
-  transition: background 0.12s, color 0.12s;
+.rail-slot.pinned {
+  width: 262px;
 }
-.dock-btn:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-.dock-btn.on {
-  background: var(--hover);
-  color: var(--text);
-}
-.dock-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-/* Names appear to the right on hover or keyboard focus, so the rail can stay narrow. */
-.dock-btn::after {
-  content: attr(data-tip);
+.rail {
   position: absolute;
-  left: calc(100% + 14px);
-  top: 50%;
-  transform: translateY(-50%) translateX(-4px);
-  padding: 6px 9px;
-  border-radius: 8px;
-  background: var(--raised);
-  border: 1px solid var(--raised-edge);
-  color: var(--text);
-  font: 550 12.5px/1 var(--font);
-  white-space: pre;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.12s, transform 0.12s;
-}
-.dock-btn:hover::after,
-.dock-btn:focus-visible::after {
-  opacity: 1;
-  transform: translateY(-50%);
-  transition-delay: 0.25s;
-}
-.dock-sep {
-  width: 20px;
-  height: 1px;
-  margin: 6px 0;
-  background: var(--border-2);
-}
-/* Short windows: tighter, so the whole rail always fits without scrolling. */
-@media (max-height: 560px) {
-  .dock {
-    gap: 2px;
-    padding: 5px 0;
-  }
-  .dock-btn {
-    width: 34px;
-    height: 34px;
-  }
-  .dock-sep {
-    margin: 2px 0;
-  }
-}
-.library-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  background: rgba(0, 0, 0, 0.18);
-}
-.library {
-  position: fixed;
-  z-index: 41;
   top: 10px;
   bottom: 10px;
-  left: 70px;
-  width: min(var(--side-w), calc(100vw - 90px));
+  left: 8px;
+  width: 52px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
   border-radius: 18px;
   overflow: hidden;
-  background: var(--raised);
-  border: 1px solid var(--raised-edge);
-  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.35);
-}
-.library .sidebar {
   background: transparent;
-  box-shadow: none;
-  border-radius: 0;
+  box-shadow: 0 0 0 1px transparent;
+  transition:
+    width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    background 0.18s,
+    box-shadow 0.18s;
+}
+.rail.wide {
+  width: 246px;
+  background: var(--raised);
+  box-shadow:
+    0 0 0 1px var(--raised-edge),
+    0 18px 48px -16px rgba(0, 0, 0, 0.45);
+}
+
+/* Kept open, it's part of the page's ground, not a popup: a flat panel with no shadow. */
+.rail-slot.pinned .rail,
+:root[data-glass='on'] .rail-slot.pinned .rail {
+  background: var(--panel, var(--card));
+  box-shadow: var(--panel-edge, none);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.rl-top {
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.rl-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 10px;
+  color: var(--text);
+  font: 650 15px/1 var(--font-display);
+  letter-spacing: -0.01em;
+}
+.rl-pin {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--text-3);
+  opacity: 0;
+  transition: opacity 0.15s, background 0.12s, color 0.12s;
+}
+.rail.wide .rl-pin {
+  opacity: 1;
+}
+.rl-pin:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+/* Every row: a fixed 40px icon column, so icons never move as the rail opens and names start at one x. */
+.rl-row {
+  width: 100%;
+  min-height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px 0 0;
+  border-radius: 12px;
+  color: var(--text-2);
+  text-align: left;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+.rl-row:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+.rl-row.on {
+  background: var(--card-hover);
+  color: var(--text);
+}
+.rl-row:focus-visible,
+.rl-pin:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: -2px;
+}
+.rl-ico {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+}
+.rl-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 520 14.5px/1.2 var(--font);
+  animation: rl-in 0.16s ease 0.05s both;
+}
+@keyframes rl-in {
+  from {
+    opacity: 0;
+  }
+}
+.rl-kbd {
+  flex: none;
+  color: var(--text-3);
+  font: 500 11.5px/1 var(--font);
+  animation: rl-in 0.16s ease 0.05s both;
+}
+.rl-search {
+  margin-bottom: 8px;
+}
+.rail.wide .rl-search {
+  background: var(--raised-fill, var(--card-hover));
+}
+.rail.wide .rl-search:hover {
+  background: var(--raised-fill-2, var(--card-hover));
+}
+.rl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* Favorites and recent docs: only while open, and they scroll on their own. */
+.rl-scroll {
+  flex: 1;
+  min-height: 0;
+  margin-top: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s, visibility 0s 0.12s;
+}
+.rail.wide .rl-scroll {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.16s 0.06s, visibility 0s;
+}
+.rl-sec + .rl-sec {
+  margin-top: 16px;
+}
+.rl-sec h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding-left: 12px;
+  color: var(--text-3);
+  font: 550 12.5px/1.6 var(--font);
+}
+.rl-doc {
+  min-height: 34px;
+}
+.rl-doc .rl-ico {
+  height: 34px;
+  color: var(--text-3);
+}
+.rl-doc .rl-name {
+  font-size: 14px;
+}
+.rl-empty {
+  margin: 4px 12px;
+  color: var(--text-3);
+  font-size: 13px;
+  white-space: normal;
+}
+.rl-foot {
+  flex: none;
+  margin-top: auto;
+  padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* Short windows: tighter rows, so the closed rail always fits without scrolling. */
+@media (max-height: 560px) {
+  .rl-row,
+  .rl-ico {
+    min-height: 34px;
+    height: 34px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail,
+  .rail-slot,
+  .rl-scroll {
+    transition: none;
+  }
+  .rl-name,
+  .rl-kbd {
+    animation: none;
+  }
 }
 /* Home: a board of cards. The assistant leads; the week sits beside it. */
 .hm-head {
@@ -3035,56 +3158,208 @@ body {
   color: var(--text-3);
   font: 500 11.5px var(--font);
 }
+/* The board: two columns (the assistant and Recent; the day and Tasks). The gaps between panels are handles: drag
+   to resize, double-click to reset (Splitter in HomeView.tsx). On a computer it fills the window, and each panel
+   scrolls inside itself instead of the page growing. */
 .hm-board {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px 22px;
-  align-items: start;
+  display: flex;
+  align-items: stretch;
 }
-.app.mobile .hm-board {
-  display: block;
+.hm-col {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
-.app:not(.mobile) .hm-board > .hm-sec,
-.app:not(.mobile) .hm-board > .hm-asst {
+.app:not(.mobile) .hm-col:first-child {
+  flex: 0 0 calc(var(--hm-left, 60%) - 7px);
+}
+.app:not(.mobile) .hm-col:last-child {
+  flex: 1 1 0;
+}
+/* A column's top panel: its natural height, or the height it was dragged to. The bottom one takes the rest. */
+.app:not(.mobile) .hm-col > :first-child:not(:last-child) {
+  flex: 0 1 var(--hm-top, auto);
+  min-height: 0;
+}
+.app:not(.mobile) .hm-col > :last-child {
+  flex: 1 1 0;
+  min-height: 0;
+}
+.app:not(.mobile) .hm-col > .hm-sec.folded {
+  flex: none !important;
+}
+.hm-sec.folded > .hm-card {
+  display: none;
+}
+.app:not(.mobile) .hm-board > .hm-col > .hm-sec,
+.app:not(.mobile) .hm-board > .hm-col > .hm-asst {
   margin-top: 0;
 }
-.app:not(.mobile) .hm-board {
-  margin-top: 30px;
+.app:not(.mobile) .hm-board > .hm-col > .hm-asst {
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
-.hm-board > .hm-asst {
-  grid-column: span 2;
-  padding: 26px 28px 28px;
+.app:not(.mobile) .hm-board > .hm-col > .hm-sec {
+  display: flex;
+  flex-direction: column;
 }
-.hm-board > .hm-asst h2 {
-  font-size: 22px;
+.app:not(.mobile) .hm-board > .hm-col > .hm-sec > .hm-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
-.hm-board > .hm-cal {
-  grid-column: 3;
-  grid-row: 1;
+.app:not(.mobile) .hm-board .hm-sec > .hm-list,
+.app:not(.mobile) .hm-cal-card > .hm-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
-.hm-board > .hm-recent {
-  grid-column: span 2;
+.app:not(.mobile) .hm-cal-card > .hm-day,
+.app:not(.mobile) .hm-board .hm-list > * {
+  flex: none;
 }
-.hm-board > .hm-tasks {
-  grid-column: 3;
+/* The handles: invisible gaps that show a short bar on hover, and while dragging. */
+.hm-split {
+  flex: none;
+  position: relative;
+  border-radius: 4px;
+  outline: none;
+  touch-action: none;
 }
-@media (max-width: 1000px) {
-  .hm-board {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+.hm-split.col {
+  width: 14px;
+  cursor: col-resize;
+}
+.hm-split.row {
+  height: 14px;
+  cursor: row-resize;
+}
+.hm-split::after {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: var(--text-3);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.hm-split.col::after {
+  width: 3px;
+  height: 36px;
+}
+.hm-split.row::after {
+  width: 36px;
+  height: 3px;
+}
+.hm-split:hover::after,
+.hm-split:focus-visible::after,
+:root.resizing-col .hm-split.col::after,
+:root.resizing-row .hm-split.row::after {
+  opacity: 0.7;
+}
+:root.resizing-col,
+:root.resizing-col * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+:root.resizing-row,
+:root.resizing-row * {
+  cursor: row-resize !important;
+  user-select: none;
+}
+/* A panel's name folds it. */
+.hm-fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -4px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+}
+.hm-fold:hover {
+  color: var(--text);
+  background: var(--card-hover);
+}
+.hm-fold svg {
+  transform: rotate(90deg);
+  transition: transform 0.15s;
+  color: var(--text-3);
+}
+.hm-fold[aria-expanded='false'] svg {
+  transform: none;
+}
+.hm-fold:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: 1px;
+}
+/* Phones: one column, in this order, each list showing five. */
+.app.mobile .hm-board {
+  display: flex;
+  flex-direction: column;
+}
+.app.mobile .hm-col {
+  display: contents;
+}
+.app.mobile .hm-asst {
+  order: 0;
+}
+.app.mobile .hm-cal {
+  order: 1;
+}
+.app.mobile .hm-recent {
+  order: 2;
+}
+.app.mobile .hm-tasks {
+  order: 3;
+}
+/* Tall enough to fill the window: the page itself doesn't scroll; the panels do. */
+@media (min-height: 600px) and (min-width: 900px) {
+  .app:not(.mobile) .sec-home .home.page-scroll {
+    overflow: hidden;
   }
-  .hm-board > .hm-asst,
-  .hm-board > .hm-recent {
-    grid-column: 1 / -1;
+  .app:not(.mobile) .sec-home .hm {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
   }
-  .hm-board > .hm-cal,
-  .hm-board > .hm-tasks {
-    grid-column: auto;
-    grid-row: auto;
+  .app:not(.mobile) .hm-board {
+    flex: 1;
+    min-height: 0;
   }
+}
+/* Short or narrow windows: one column that scrolls as a page, each panel stopping at a comfortable height. */
+@media (max-height: 599px), (max-width: 899px) {
+  .app:not(.mobile) .hm-board {
+    flex-direction: column;
+    gap: 18px;
+  }
+  .app:not(.mobile) .hm-col {
+    display: contents;
+  }
+  .app:not(.mobile) .hm-split {
+    display: none;
+  }
+  .app:not(.mobile) .hm-board > .hm-col > * {
+    flex: none !important;
+  }
+  .app:not(.mobile) .hm-board .hm-sec > .hm-card {
+    max-height: 380px;
+  }
+  .app:not(.mobile) .hm-asst { order: 0; }
+  .app:not(.mobile) .hm-cal { order: 1; }
+  .app:not(.mobile) .hm-tasks { order: 2; }
+  .app:not(.mobile) .hm-recent { order: 3; }
 }
 /* Docs and Recordings: a wide page of cards */
 .lib-col {
-  width: min(100%, 1080px);
+  width: min(100%, 1320px);
   margin-inline: auto;
   padding: 52px 40px 168px;
 }
@@ -3872,4 +4147,913 @@ body {
 .hm-step:focus-visible {
   outline: 2px solid var(--text-2);
   outline-offset: 2px;
+}
+
+/* ── Desktop density: a workspace, not a poster. Smaller type, tighter rows and radii, more on screen. ── */
+.app:not(.mobile) .hm {
+  width: min(100%, 1480px);
+  padding: 26px 28px 100px;
+}
+.app:not(.mobile) .sec-tasks .hm {
+  width: min(100%, 920px);
+}
+.app:not(.mobile) .hm-head h1 {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.app:not(.mobile) .hm-head time,
+.app:not(.mobile) .hm-head p {
+  margin-top: 2px;
+  font-size: 13px;
+}
+.app:not(.mobile) .hm-quick {
+  gap: 6px;
+}
+.app:not(.mobile) .hm-quick button {
+  height: 30px;
+  padding: 0 11px;
+  gap: 6px;
+  font-size: 13px;
+}
+.app:not(.mobile) .hm-board {
+  margin-top: 18px;
+}
+.app:not(.mobile) .hm-card {
+  border-radius: 12px;
+}
+.app:not(.mobile) .hm-asst {
+  padding: 14px 16px 16px;
+  border-radius: 12px;
+}
+.app:not(.mobile) .hm-asst-top {
+  font-size: 12.5px;
+}
+.app:not(.mobile) .hm-asst h2 {
+  margin-top: 8px;
+  font-size: 16.5px;
+}
+.app:not(.mobile) .hm-asst > p {
+  font-size: 14px;
+}
+.app:not(.mobile) .hm-starters {
+  margin: 6px -6px 0;
+}
+.app:not(.mobile) .hm-starter {
+  min-height: 36px;
+  padding: 5px 10px 5px 8px;
+  gap: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.app:not(.mobile) .hm-starter > svg:first-child {
+  width: 26px;
+}
+.app:not(.mobile) .hm-label {
+  padding: 0 6px 6px;
+}
+.app:not(.mobile) .hm-label h2,
+.app:not(.mobile) .hm-label button {
+  font-size: 12.5px;
+}
+.app:not(.mobile) .hm-list {
+  padding: 4px;
+}
+.app:not(.mobile) .hm-row {
+  min-height: 34px;
+  gap: 10px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.app:not(.mobile) .hm-row small {
+  font-size: 12px;
+}
+.app:not(.mobile) .hm-ico {
+  width: 16px;
+}
+.app:not(.mobile) .hm-task {
+  padding-block: 5px;
+}
+.app:not(.mobile) .hm-bar {
+  margin: 7px 6px;
+}
+.app:not(.mobile) .hm-day {
+  padding: 6px 6px 2px;
+}
+.app:not(.mobile) .hm-day-name b {
+  font-size: 14px;
+}
+.app:not(.mobile) .hm-day-name small {
+  font-size: 12px;
+}
+.app:not(.mobile) .hm-step {
+  width: 26px;
+  height: 26px;
+}
+.app:not(.mobile) .lib-col {
+  width: min(100%, 1480px);
+  padding: 26px 28px 120px;
+}
+.app:not(.mobile) .lib-bar {
+  margin: 16px 0 14px;
+  gap: 8px;
+}
+.app:not(.mobile) .lib-search {
+  height: 32px;
+  font-size: 13.5px;
+}
+.app:not(.mobile) .lib-chips button {
+  height: 28px;
+  padding: 0 11px;
+  font-size: 12.5px;
+}
+.app:not(.mobile) .lib-grid {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.app:not(.mobile) .lib-card {
+  min-height: 128px;
+  padding: 12px 14px;
+  gap: 4px;
+  border-radius: 12px;
+}
+.app:not(.mobile) .lib-ico {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+}
+.app:not(.mobile) .lib-card b {
+  font-size: 14px;
+}
+.app:not(.mobile) .main {
+  border-radius: 16px;
+}
+/* The panel name is plain text that folds, not one of the header's pills. */
+.hm-label .hm-fold {
+  height: auto;
+  padding: 2px 6px 2px 2px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font: 550 12.5px/1.4 var(--font);
+}
+.hm-label .hm-fold:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+.app:not(.mobile) .hm-label button:not(.hm-fold) {
+  height: 24px;
+  padding: 0 6px 0 10px;
+}
+/* Folding: the card hides, and the column's other panel takes the room. */
+.app .hm-board > .hm-col > .hm-sec.folded > .hm-card {
+  display: none;
+}
+.app:not(.mobile) .hm-col:has(> .hm-sec.folded:last-child) > :first-child {
+  flex: 1 1 auto;
+}
+.hm-col:has(> .hm-sec.folded) > .hm-split.row {
+  visibility: hidden;
+  pointer-events: none;
+}
+/* Rows sit at the top of a panel that's taller than its list. */
+.hm-list {
+  align-content: start;
+}
+
+/* ═════════ Looks: a soft wash of color behind the workspace (Settings › Appearance) ═════════
+   Three colors bloom from the corners of the window. Panels stay calm surfaces on top; the color shows
+   around and faintly through them. Graphite has no color, and is the default. */
+:root {
+  --w1: transparent;
+  --w2: transparent;
+  --w3: transparent;
+  --w-a: 46%;
+  --w-b: 34%;
+  --w-c: 24%;
+  --look-accent: var(--text);
+}
+:root[data-theme='light'] {
+  --w-a: 30%;
+  --w-b: 22%;
+  --w-c: 16%;
+}
+[data-look='dusk'] { --w1: #6e56cf; --w2: #d6409f; --w3: #3e63dd; --look-accent: #9b7bff; }
+[data-look='tide'] { --w1: #0090ff; --w2: #12a594; --w3: #6e56cf; --look-accent: #4c9dff; }
+[data-look='moss'] { --w1: #30a46c; --w2: #8db654; --w3: #12a594; --look-accent: #4cc38a; }
+[data-look='ember'] { --w1: #f76b15; --w2: #e54666; --w3: #ffb224; --look-accent: #ff8a3d; }
+[data-look='bloom'] { --w1: #d6409f; --w2: #8e4ec6; --w3: #f76b15; --look-accent: #ff6bb5; }
+[data-look='aurora'] { --w1: #30a46c; --w2: #6e56cf; --w3: #0090ff; --look-accent: #5fd4a0; }
+:root[data-theme='light'][data-look='dusk'] { --look-accent: #6d4fd8; }
+:root[data-theme='light'][data-look='tide'] { --look-accent: #1d6fd6; }
+:root[data-theme='light'][data-look='moss'] { --look-accent: #1f8a52; }
+:root[data-theme='light'][data-look='ember'] { --look-accent: #c2500a; }
+:root[data-theme='light'][data-look='bloom'] { --look-accent: #c02f86; }
+:root[data-theme='light'][data-look='aurora'] { --look-accent: #1f8a52; }
+
+:root:not([data-look='graphite']) .app {
+  background:
+    radial-gradient(1200px 820px at -8% -14%, color-mix(in oklab, var(--w1) var(--w-a), transparent), transparent 64%),
+    radial-gradient(1000px 760px at 108% 112%, color-mix(in oklab, var(--w2) var(--w-b), transparent), transparent 62%),
+    radial-gradient(760px 560px at 96% -10%, color-mix(in oklab, var(--w3) var(--w-c), transparent), transparent 60%),
+    color-mix(in oklab, var(--bg) 94%, var(--w1));
+  background-attachment: fixed;
+}
+/* The page is clear so the wash reaches behind it; panels and the rail are frosted over it. */
+:root:not([data-look='graphite']) .app:not(.mobile) .main {
+  background: transparent;
+}
+:root:not([data-look='graphite']) .app :is(.hm-card, .lib-card) {
+  background: color-mix(in oklab, var(--raised) 46%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--text) 7%, transparent);
+}
+:root[data-theme='light']:not([data-look='graphite']) .app :is(.hm-card, .lib-card) {
+  background: color-mix(in oklab, #fff 70%, transparent);
+}
+:root:not([data-look='graphite']) .rail.wide {
+  background: color-mix(in oklab, var(--raised) 86%, transparent);
+  -webkit-backdrop-filter: blur(30px) saturate(1.5);
+  backdrop-filter: blur(30px) saturate(1.5);
+}
+:root:not([data-look='graphite']) .rail-slot.pinned .rail {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* ═════════ Accent: the color of buttons, the current place, today, selection and focus ═════════ */
+:root {
+  --tint: var(--text);
+  --on-tint: var(--bg);
+}
+[data-tint='look'] { --tint: var(--look-accent); }
+[data-tint='blue'] { --tint: #4c8dff; }
+[data-tint='violet'] { --tint: #9b7bff; }
+[data-tint='teal'] { --tint: #2ec4b6; }
+[data-tint='green'] { --tint: #4cc38a; }
+[data-tint='amber'] { --tint: #f5a524; }
+[data-tint='rose'] { --tint: #ff6b8b; }
+:root[data-theme='light'][data-tint='blue'] { --tint: #2563eb; }
+:root[data-theme='light'][data-tint='violet'] { --tint: #6d4fd8; }
+:root[data-theme='light'][data-tint='teal'] { --tint: #0f7f76; }
+:root[data-theme='light'][data-tint='green'] { --tint: #1f8a52; }
+:root[data-theme='light'][data-tint='amber'] { --tint: #a35f00; }
+:root[data-theme='light'][data-tint='rose'] { --tint: #d23b62; }
+/* Dark: light colors carry dark text. Light: deep colors carry white text. */
+:root[data-theme='dark']:not([data-tint='mono']) { --on-tint: #10100f; }
+:root[data-theme='light']:not([data-tint='mono']) { --on-tint: #ffffff; }
+/* Graphite with "match the look" has no color to match: it stays neutral. */
+[data-look='graphite'][data-tint='look'] { --tint: var(--text); --on-tint: var(--bg); }
+
+:root:not([data-tint='mono']) {
+  --btn-primary-grad: var(--tint);
+  --accent: var(--tint);
+  --on-accent: var(--on-tint);
+  --accent-soft: color-mix(in oklab, var(--tint) 16%, transparent);
+  --accent-text: var(--tint);
+  --focus: var(--tint);
+}
+:root:not([data-tint='mono']) :is(.btn.primary, .hm-quick button.primary, .ask-send, .modal .btn.primary, .confirm .btn.primary) {
+  color: var(--on-tint);
+}
+:root:not([data-tint='mono']) ::selection {
+  background: color-mix(in oklab, var(--tint) 32%, transparent);
+}
+:root:not([data-tint='mono']) :is(.rl-place.on, .rl-doc.on) .rl-ico {
+  color: var(--tint);
+}
+:root:not([data-tint='mono']) :is(input[type='checkbox'], input[type='radio'], progress) {
+  accent-color: var(--tint);
+}
+
+/* Settings › Appearance: looks as small washes, accents as dots. */
+.set-sub {
+  margin: 18px 0 8px;
+  font: 600 12.5px/1.3 var(--font);
+  color: var(--text-2);
+}
+.look-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+}
+.look-swatch {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--text-2);
+  font: 500 12.5px/1.2 var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+.look-swatch i {
+  display: grid;
+  place-items: center;
+  height: 58px;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--text) 10%, transparent);
+  color: #fff;
+}
+.look-swatch:hover i {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--text) 26%, transparent);
+}
+.look-swatch.on i {
+  box-shadow: 0 0 0 2px var(--text);
+}
+.look-swatch.on {
+  color: var(--text);
+}
+.tint-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tint-dot {
+  width: 30px;
+  height: 30px;
+  padding: 4px;
+  border-radius: 50%;
+  border: 0;
+  background: none;
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--text) 12%, transparent);
+  cursor: pointer;
+}
+.tint-dot i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+.tint-dot.on {
+  box-shadow: 0 0 0 2px var(--text);
+}
+/* Under a look, the page fades under the Ask bar by blurring, not by painting the plain ground over the color. */
+:root:not([data-look='graphite']) .home-dock::before {
+  background: none;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 55%);
+  mask-image: linear-gradient(to bottom, transparent, #000 55%);
+}
+
+/* ═════════ Home board: panels you hold and drag (desktop) ═════════ */
+.hm-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: minmax(200px, 1fr);
+  grid-auto-flow: row dense;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 2px 2px 96px;
+}
+.hm-grid.empty {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+}
+@media (min-height: 600px) {
+  .app:not(.mobile) .sec-home .home.page-scroll {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .app:not(.mobile) .sec-home .hm {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .app:not(.mobile) .sec-home .hm-grid {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+}
+.app:not(.mobile) .hm-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.hm-tile-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 8px 0 6px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y;
+}
+.hm-tile-head h2 {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 600 13px/1 var(--font);
+  color: var(--text-2);
+}
+.hm-grip {
+  flex: none;
+  color: var(--text-3);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.hm-tile:hover .hm-grip,
+.hm-tile.lifted .hm-grip {
+  opacity: 1;
+}
+.hm-tile-link,
+.hm-tile-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font: 550 12.5px/1 var(--font);
+  cursor: pointer;
+}
+.hm-tile-more {
+  width: 26px;
+  padding: 0;
+  justify-content: center;
+  opacity: 0;
+}
+.hm-tile:hover .hm-tile-more,
+.hm-tile-more:focus-visible {
+  opacity: 1;
+}
+.hm-tile-link:hover,
+.hm-tile-more:hover {
+  background: var(--raised-fill);
+  color: var(--text);
+}
+.hm-tile-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 10px 10px;
+}
+.hm-tile-body > .hm-list {
+  margin: 0;
+}
+.hm-tile-body .hm-day {
+  margin: 0 0 4px;
+}
+.hm-tile-body .hm-starters {
+  margin: 0;
+}
+.hm-tile-body .hm-asst-in {
+  padding: 0 6px;
+}
+.hm-asst-in h3 {
+  margin: 4px 0 0;
+  font: 600 16.5px/1.35 var(--font);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+.hm-asst-in > p {
+  margin: 4px 0 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.app.mobile .hm-asst-in h3 {
+  margin-top: 12px;
+  font-size: 19px;
+}
+/* The corner you drag to resize. */
+.hm-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.hm-resize::after {
+  content: '';
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--text-3);
+  border-bottom: 2px solid var(--text-3);
+  border-bottom-right-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.hm-tile:hover .hm-resize::after,
+.hm-tile.sizing .hm-resize::after {
+  opacity: 0.8;
+}
+/* Picked up: it floats above the others and follows the pointer; the others make room. */
+.hm-tile.lifted {
+  z-index: 5;
+  pointer-events: none;
+  box-shadow: 0 22px 48px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px color-mix(in oklab, var(--text) 14%, transparent) !important;
+  scale: 1.02;
+  transition: scale 0.15s, box-shadow 0.15s;
+}
+.hm-grid.arranging,
+.hm-grid.arranging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+.hm-grid.arranging .hm-tile:not(.lifted) {
+  opacity: 0.86;
+}
+.hm-tile.sizing {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent, var(--text)) 60%, transparent) !important;
+}
+
+/* ═════════ A doc beside the page ═════════ */
+.side-pane {
+  flex: none;
+  position: relative;
+  min-width: 0;
+  margin: 10px 10px 10px 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--content);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--text) 7%, transparent);
+  display: flex;
+  flex-direction: column;
+}
+:root:not([data-look='graphite']) .side-pane {
+  background: color-mix(in oklab, var(--raised) 72%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  backdrop-filter: blur(28px) saturate(1.4);
+}
+.side-pane > .doc-pane {
+  flex: 1;
+  min-height: 0;
+}
+.side-pane .toc,
+.side-pane .doc-toc {
+  display: none;
+}
+.app:not(.mobile):has(.side-pane) .main {
+  margin-right: 0;
+}
+.side-split {
+  flex: none;
+  width: 10px;
+  cursor: col-resize;
+  position: relative;
+}
+.side-split::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 4px;
+  height: 40px;
+  margin-top: -20px;
+  border-radius: 2px;
+  background: var(--text-3);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.side-split:hover::after,
+.side-split:focus-visible::after,
+:root.resizing-col .side-split::after {
+  opacity: 0.7;
+}
+.side-ctl {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 4px;
+}
+
+/* ═════════ Where am I: back, forward and the place, at the start of a doc's header ═════════ */
+.pane-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 6px;
+  flex: none;
+}
+.pn-step {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.pn-step:hover {
+  background: var(--raised-fill);
+  color: var(--text);
+}
+.pn-place {
+  height: 28px;
+  margin-left: 4px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font: 500 13.5px/1 var(--font);
+  cursor: pointer;
+}
+.pn-place:hover {
+  background: var(--raised-fill);
+  color: var(--text);
+}
+.pn-sep {
+  color: var(--text-3);
+  margin: 0 2px 0 0;
+}
+.app.mobile .pane-nav {
+  display: none;
+}
+
+/* ═════════ Home, Nov 17 (later): panels as tall as what they hold; open space; Recent above the Ask bar ═════════ */
+.hm-grid {
+  grid-auto-rows: auto;
+  align-items: start;
+  align-content: start;
+  padding-bottom: 8px;
+}
+@media (min-height: 600px) {
+  .app:not(.mobile) .sec-home .hm-grid {
+    flex: 0 1 auto;
+  }
+}
+.app:not(.mobile) .hm-tile .hm-tile-body {
+  flex: 1 1 auto;
+}
+/* Recent: a quiet row just above the Ask bar, the same width as the bar. No box. */
+.hm-shelf {
+  flex: none;
+  align-self: center;
+  width: min(720px, 100%);
+  position: absolute;
+  left: 50%;
+  bottom: 86px;
+  transform: translateX(-50%);
+  z-index: 19;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, #000 88%, transparent);
+  mask-image: linear-gradient(to right, #000 88%, transparent);
+}
+.hm-shelf-label {
+  flex: none;
+  margin-right: 6px;
+  color: var(--text-3);
+  font: 550 12px/1 var(--font);
+}
+.hm-shelf-item {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font: 500 13px/1 var(--font);
+  cursor: pointer;
+}
+.hm-shelf-item > span:last-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.hm-shelf-item:hover {
+  background: var(--raised-fill);
+  color: var(--text);
+}
+.hm-shelf-item.more {
+  color: var(--text-3);
+}
+.hm-shelf-ico {
+  display: inline-flex;
+  color: var(--text-3);
+  font-size: 13px;
+}
+/* Phones: Calendar (when anything is left today), Tasks, then Recent just above the Ask pill. */
+.app.mobile .hm-tasks {
+  order: 2;
+}
+.app.mobile .hm-recent {
+  order: 3;
+}
+/* The one New button opens its menu. */
+.hm-quick .new-btn {
+  gap: 5px;
+}
+
+/* ═════════ The Vault: every file, once ═════════ */
+.vault-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 12px;
+  padding-bottom: 110px;
+}
+.vault-card {
+  display: grid !important;
+  grid-template-rows: auto auto auto;
+  gap: 6px;
+  align-content: start;
+  padding: 8px 8px 12px !important;
+  text-align: left;
+}
+.vault-card b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13.5px;
+  padding: 0 4px;
+}
+.vault-card small {
+  padding: 0 4px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.vault-thumb {
+  display: grid;
+  place-items: center;
+  height: 112px;
+  border-radius: 9px;
+  background: var(--raised-fill);
+  color: var(--text-3);
+  overflow: hidden;
+}
+.vault-thumb.pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.vault-name-input {
+  width: 100%;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border-2);
+  background: var(--raised);
+  color: var(--text);
+  font: 600 13px/1 var(--font);
+}
+.vault.dropping .lib-col {
+  opacity: 0.5;
+}
+.vault-drop {
+  position: absolute;
+  inset: 16px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  border: 2px dashed color-mix(in oklab, var(--text) 30%, transparent);
+  border-radius: 16px;
+  color: var(--text);
+  font: 600 15px/1.3 var(--font);
+  pointer-events: none;
+}
+.sec-vault .page-scroll {
+  position: relative;
+}
+/* Picking a file from the Vault for a doc */
+.vault-pick {
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(560px, calc(100vh - 80px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+.vault-pick header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 !important;
+}
+.vault-pick header h2 {
+  flex: 1;
+  margin: 0;
+  font: 600 15px/1.3 var(--font);
+}
+.vault-pick-list {
+  flex: 1;
+  min-height: 120px;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+.vault-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 42px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.vault-pick-row.on {
+  background: var(--raised-fill);
+}
+.vault-pick-row b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 500 14px/1.2 var(--font);
+}
+.vault-pick-row small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.vault-pick-thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: var(--raised-fill);
+  color: var(--text-3);
+  overflow: hidden;
+}
+.vault-pick-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.app:not(.mobile) .sec-home .home {
+  position: relative;
+}
+/* Room under the panels for Recent and the Ask bar. */
+.app:not(.mobile) .sec-home .hm {
+  padding-bottom: 130px;
+}
+.vault-pick .lib-search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  height: 38px;
+  min-height: 0;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: var(--raised-fill);
+}
+.vault-pick .lib-search input {
+  flex: 1;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font: 400 14px/1 var(--font);
+  outline: none;
+}
+.vault-pick .lib-search {
+  max-width: none;
+  align-self: stretch;
+}
+.vault-pick .lib-search input,
+[data-glass='on'] .vault-pick .lib-search input {
+  background: transparent !important;
+  box-shadow: none !important;
 }
