@@ -24,6 +24,8 @@ export interface ModelInfo {
   fallback?: string
   /** Only a fallback: never listed in Settings. */
   hidden?: boolean
+  /** Fine-tuned on Monolith's action format (training/): it needs no format guide in the prompt. */
+  tuned?: boolean
 }
 
 /**
@@ -283,6 +285,9 @@ export async function chooseModel(id: string) {
   await loadModel(id)
   scheduleRelease()
 }
+
+/** True when the model that answers has been trained on Monolith's own actions, so the prompt can leave the format guide out. */
+export const isTuned = () => !!findModel(useAI.getState().loadedModel ?? resolvedModel())?.tuned
 
 /** The model id to load: the saved choice, or the Default tier if nothing has been picked. */
 export function resolvedModel() {

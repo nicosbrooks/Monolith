@@ -3247,3 +3247,73 @@ body {
   border-radius: 50%;
   background: var(--btn-grad);
 }
+
+/* Files attached to the Ask bar */
+.ask-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.ask-file {
+  height: 30px;
+  max-width: 100%;
+  padding: 0 4px 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  background: var(--raised);
+  border: 1px solid var(--raised-edge);
+  color: var(--text-2);
+  font-size: 13px;
+}
+.ask-file b {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 550;
+}
+.ask-file small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.ask-file button {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-3);
+}
+.ask-file button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.ask-attach {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-3);
+}
+.ask-attach:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.ask-bar.dropping .ask-field {
+  outline: 2px dashed var(--text-3);
+  outline-offset: 3px;
+}
+
+.ask-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  object-fit: cover;
+  flex: none;
+}

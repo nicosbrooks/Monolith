@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   ArrowUp, ArrowUpRight, CalendarPlus, ListPlus, FileText, FilePlus2, MessageCircle, AudioWaveform, StickyNote, Square, X, RefreshCw,
-  FileInput, Check, Copy, BookOpen, CalendarClock, CalendarX, CheckSquare, SquarePen, CornerDownLeft,
+  FileInput, Paperclip, Check, Copy, BookOpen, CalendarClock, CalendarX, CheckSquare, SquarePen, CornerDownLeft,
 } from 'lucide-react'
 import { useStore } from '../store'
 import { whenLabel, type ParsedEvent } from '../lib/dates'
@@ -12,7 +12,8 @@ import { toast } from './Toast'
 import { Listen } from './Listen'
 import { addTask, removeTask } from '../lib/graph'
 import { readEvent, ruleKind, readTask, readDoc, isQuestion, cleanTitle, taskPreview } from '../lib/request'
-import { useConvo, ask, openThread, reset, retry, say, stop, doCard, type Pending } from '../ai/conversation'
+import { useConvo, ask, openThread, reset, retry, say, stop, doCard, attachFiles, detachFile, type Pending } from '../ai/conversation'
+import { ACCEPT, sizeLabel } from '../ai/attach'
 import { describe, perform, verbs, visible, type Act } from '../ai/act'
 import { getActiveEditor } from '../ai/actions'
 import { MODELS, ONNX_MODELS, useAI } from '../ai/llm'
@@ -53,6 +54,10 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
   const hasThread = useConvo((s) => s.msgs.length > 0)
   const streaming = useConvo((s) => s.streaming)
   const pending = useConvo((s) => s.pending)
+  const files = useConvo((s) => s.files)
+  const filesMode = files.length > 0
+  const [dropping, setDropping] = useState(false)
+  const picker = useRef<HTMLInputElement>(null)
   const [q, setQ] = useState('')
   const [focused, setFocused] = useState(false)
   const [sel, setSel] = useState(0)
@@ -142,6 +147,8 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
 
   const run = async (r: Read) => {
     const said = r.text
+    // With files attached, everything is a question about them; the assistant offers any change as a card.
+    if (files.length) return askNow(said)
     if (r.kind === 'event' && r.event) {
       const { title, when } = r.event
       if (title && when) return addEvent(said, title, when)
@@ -181,36 +188,36 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
   const options: Option[] = []
   if (!text && !pending) {
     if (hasThread && !convoOpen) options.push({ key: 'thread', icon: MessageCircle, label: 'Back to the conversation', run: () => openThread() })
-    for (const c of ctx.chips) options.push({ key: c, icon: ArrowUpRight, label: c, run: () => (clear(), askNow(c)) })
+    for (const c of filesMode ? fileChips(files.map((f) => f.name)) : ctx.chips) options.push({ key: c, icon: ArrowUpRight, label: c, run: () => (clear(), askNow(c)) })
   } else if (text && !pending && now) {
     const ev = now.event
-    if (now.kind === 'event' && ev)
+    if (!filesMode && now.kind === 'event' && ev)
       options.push({
         key: 'event', icon: CalendarPlus,
         label: ev.title ? <>Add “{ev.title}”</> : <>New event</>,
         hint: ev.when ? whenLabel(ev.when) + (ev.title ? '' : ' · you’ll name it next') : 'you’ll pick the day next',
         run: () => (done(), void run(now)),
       })
-    if (now.kind === 'task') {
+    if (!filesMode && now.kind === 'task') {
       // The line keeps its date words ("… on tuesday"): Tasks reads the due date from them. Show it as it will be listed.
       const { name, due } = taskPreview(now.task || text)
       options.push({ key: 'task', icon: ListPlus, label: <>Add task “{name.slice(0, 60)}”</>, hint: due ? `due ${whenLabel(due)}` : undefined, run: () => (done(), void run(now)) })
     }
-    if (now.kind === 'doc') options.push({ key: 'doc', icon: FilePlus2, label: now.doc ? <>New doc “{now.doc}”</> : 'New doc', run: () => (done(), void run(now)) })
-    const findFirst = now.kind === 'find' && hits.length > 0
+    if (!filesMode && now.kind === 'doc') options.push({ key: 'doc', icon: FilePlus2, label: now.doc ? <>New doc “{now.doc}”</> : 'New doc', run: () => (done(), void run(now)) })
+    const findFirst = !filesMode && now.kind === 'find' && hits.length > 0
     const hitOpts: Option[] = hits.map((i) => ({
       key: i.id, icon: i.kind === 'lecture' ? AudioWaveform : i.kind === 'doc' ? FileText : StickyNote, emoji: itemEmoji(i) || undefined,
       label: i.title || 'Untitled', hint: i.kind === 'lecture' ? 'Recording' : 'Doc', run: () => (useStore.getState().open(i.id), done()),
     }))
     if (findFirst) options.push(...hitOpts)
-    options.push({ key: 'ask', icon: MessageCircle, label: <>Ask{page ? ` about ${(page.title || 'this').slice(0, 24)}` : ''}: “{text.slice(0, 60)}”</>, run: () => (clear(), askNow(text)) })
+    options.push({ key: 'ask', icon: MessageCircle, label: <>Ask{filesMode ? ` about ${files.length === 1 ? files[0].name.slice(0, 24) : `${files.length} files`}` : page ? ` about ${(page.title || 'this').slice(0, 24)}` : ''}: “{text.slice(0, 60)}”</>, run: () => (clear(), askNow(text)) })
     // The other readings, quieter, in case the first guess was wrong.
-    if (now.kind !== 'event' && readEvent(text).when) {
+    if (!filesMode && now.kind !== 'event' && readEvent(text).when) {
       const alt = readEvent(text)
       options.push({ key: 'alt-event', icon: CalendarPlus, label: alt.title ? <>Add “{alt.title}” to the calendar</> : 'Add to the calendar', hint: whenLabel(alt.when!), run: () => (done(), void run({ ...now, kind: 'event', event: alt })) })
     }
-    if ((now.kind === 'ask' || now.kind === 'find') && !isQuestion(text)) options.push({ key: 'alt-task', icon: ListPlus, label: <>Add as a task</>, run: () => (done(), void run({ ...now, kind: 'task', task: readTask(text) })) })
-    if (!findFirst) options.push(...hitOpts)
+    if (!filesMode && (now.kind === 'ask' || now.kind === 'find') && !isQuestion(text)) options.push({ key: 'alt-task', icon: ListPlus, label: <>Add as a task</>, run: () => (done(), void run({ ...now, kind: 'task', task: readTask(text) })) })
+    if (!findFirst && !filesMode) options.push(...hitOpts)
   }
   useEffect(() => setSel(0), [text, now?.kind])
   const pick = Math.min(sel, Math.max(0, options.length - 1))
@@ -234,11 +241,26 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
   }, [])
 
   const popOpen = focused && !convoOpen && options.length > 0
-  const placeholder = pending ? (pending.need === 'title' ? 'Name the event' : 'When is it? (e.g. “Friday 3pm”)') : convoOpen && hasThread ? 'Ask a follow-up, or add something' : ctx.hint
+  const placeholder = pending ? (pending.need === 'title' ? 'Name the event' : 'When is it? (e.g. “Friday 3pm”)') : convoOpen && hasThread ? 'Ask a follow-up, or add something' : filesMode ? `Ask about ${files.length === 1 ? `“${files[0].name.slice(0, 28)}”` : `${files.length} files`}` : ctx.hint
   const SendIcon = text && now?.kind === 'event' ? CalendarPlus : text && now?.kind === 'task' ? ListPlus : ArrowUp
 
   return (
-    <div className={`ask-bar ${phone ? 'phone' : ''} ${focused ? 'focus' : ''} ${convoOpen ? 'threaded' : ''}`}>
+    <div
+      className={`ask-bar ${phone ? 'phone' : ''} ${focused ? 'focus' : ''} ${convoOpen ? 'threaded' : ''} ${dropping ? 'dropping' : ''}`}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return
+        e.preventDefault()
+        setDropping(true)
+      }}
+      onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setDropping(false)}
+      onDrop={(e) => {
+        if (!e.dataTransfer.files.length) return
+        e.preventDefault()
+        setDropping(false)
+        void attachFiles([...e.dataTransfer.files])
+        input.current?.focus()
+      }}
+    >
       <AnimatePresence>
         {convoOpen && <Thread key="thread" page={page} />}
         {popOpen && (
@@ -263,6 +285,18 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
           </motion.div>
         )}
       </AnimatePresence>
+      {filesMode && (
+        <div className="ask-files" role="list" aria-label="Attached files">
+          {files.map((f) => (
+            <span key={f.id} role="listitem" className="ask-file" title={f.note}>
+              {f.image ? <img src={f.image} alt="" className="ask-thumb" /> : <FileText size={13} aria-hidden="true" />}
+              <b title={f.name}>{f.name}</b>
+              <small>{sizeLabel(f.size)}</small>
+              <button onClick={() => detachFile(f.id)} aria-label={`Remove ${f.name}`}><X size={12} /></button>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="ask-field">
         <MessageCircle size={16} className="ask-ico" />
         <input
@@ -270,7 +304,7 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
           value={q}
           placeholder={placeholder}
           onChange={(e) => setQ(e.target.value)}
-          onFocus={() => setFocused(true)}
+          onFocus={() => (setFocused(true), hasThread && void import('../ai/llm').then((m) => m.warmUp()))}
           onBlur={() => setFocused(false)}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown' && popOpen) (e.preventDefault(), setSel((pick + 1) % options.length))
@@ -287,7 +321,16 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
             }
           }}
           aria-label={placeholder}
+          onPaste={(e) => {
+            if (!e.clipboardData.files.length) return
+            e.preventDefault()
+            void attachFiles([...e.clipboardData.files])
+          }}
         />
+        <input ref={picker} type="file" multiple accept={ACCEPT} hidden onChange={(e) => { void attachFiles([...(e.target.files ?? [])]); e.target.value = '' }} />
+        <button className="ask-attach" onClick={() => picker.current?.click()} aria-label="Attach files" title="Attach files">
+          <Paperclip size={16} />
+        </button>
         {streaming ? (
           <button className="ask-send" onClick={stop} aria-label="Stop"><Square size={12} fill="currentColor" /></button>
         ) : (
@@ -299,6 +342,13 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
     </div>
   )
 }
+
+/** What to offer when files are attached and nothing is typed yet. */
+const fileChips = (names: string[]) => [
+  names.length === 1 ? `Summarize “${names[0].slice(0, 32)}”` : `Summarize these ${names.length} files`,
+  'Pull out the action items',
+  'What dates are in here?',
+]
 
 const ACT_ICONS = { event: CalendarPlus, move: CalendarClock, cancel: CalendarX, task: ListPlus, done: CheckSquare, note: FileInput, doc: BookOpen }
 
