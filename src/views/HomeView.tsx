@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { addDays, format, formatDistanceToNowStrict, isSameDay, isToday, startOfDay } from 'date-fns'
-import { ArrowUpRight, CalendarDays, FileText, ListChecks, MapPin, AudioWaveform, StickyNote } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, FilePlus2, FileText, ListChecks, MapPin, Mic, AudioWaveform, Search, StickyNote } from 'lucide-react'
+import { startRecording } from '../lib/recordNext'
 import { useMobile, useScrolled } from '../lib/useMobile'
 import { PhoneTitle } from '../components/Phone'
 import { useStore } from '../store'
@@ -84,7 +85,16 @@ export function HomeView() {
         <header className="hm-head">
           <h1>{greeting(now, name, away)}</h1>
           <time dateTime={format(now, 'yyyy-MM-dd')}>{format(now, 'EEEE, MMMM d')}</time>
+          {!mobile && (
+            <div className="hm-quick">
+              <button onClick={() => st.createItem('doc')}><FilePlus2 size={15} aria-hidden="true" /> New doc</button>
+              <button onClick={() => void startRecording()}><Mic size={15} aria-hidden="true" /> Record</button>
+              <button onClick={() => st.setUI({ paletteOpen: true })}><Search size={15} aria-hidden="true" /> Search <kbd>⌘K</kbd></button>
+            </div>
+          )}
         </header>
+
+        <div className="hm-board">
 
         {/* The one place the assistant speaks on Home: a question with its exact source, or a few places to start. */}
         {nudge ? (
@@ -131,7 +141,7 @@ export function HomeView() {
 
         <Week events={events} today={today} />
 
-        <section className="hm-sec" aria-labelledby="hm-tasks">
+        <section className="hm-sec hm-tasks" aria-labelledby="hm-tasks">
           <div className="hm-label">
             <h2 id="hm-tasks">Tasks</h2>
             {todos.length > 0 && <button onClick={() => st.go('tasks')}>{todos.length > SHOWN ? `See all ${todos.length}` : 'Open'}</button>}
@@ -142,7 +152,7 @@ export function HomeView() {
           </div>
         </section>
 
-        <section className="hm-sec" aria-labelledby="hm-recent">
+        <section className="hm-sec hm-recent" aria-labelledby="hm-recent">
           <div className="hm-label">
             <h2 id="hm-recent">Recent</h2>
             {recent.length > SHOWN && <button onClick={() => st.go('docs')}>See all</button>}
@@ -161,6 +171,7 @@ export function HomeView() {
             {!recent.length && <p className="hm-empty">Docs and recordings you’ve worked on show up here.</p>}
           </div>
         </section>
+        </div>
       </div>
     </div>
   )
@@ -178,7 +189,7 @@ function Week({ events, today }: { events: CalEvent[]; today: Date }) {
   const evs = on(active)
   const openDay = () => useStore.getState().openCalendarDate(active)
   return (
-    <section className="hm-sec" aria-labelledby="hm-week">
+    <section className="hm-sec hm-cal" aria-labelledby="hm-week">
       <div className="hm-label">
         <h2 id="hm-week">Calendar</h2>
         <button onClick={openDay}>Open</button>

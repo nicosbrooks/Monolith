@@ -15,6 +15,7 @@ import { itemEmoji } from '../lib/util'
 import { startRecording } from '../lib/recordNext'
 import { rowMenu } from '../views/ItemList'
 import { useWorkspace } from '../lib/graph'
+import { toggleLibrary } from '../lib/shell'
 
 /** The mark: an upright slab, 4 wide to 9 tall. Also the selection marker and the assistant's waiting sign (soft.css). */
 export function Logo({ size = 20 }: { size?: number }) {
@@ -96,7 +97,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <span>{APP_NAME}</span>
         </div>
         <div className="side-icons">
-          <button className="icon-btn" title="Collapse sidebar (⌘\)" aria-label="Collapse sidebar" onClick={() => s.setUI({ sidebarCollapsed: true })}><PanelLeft size={17} /></button>
+          <button className="icon-btn" title="Close library (⌘\)" aria-label="Close library" onClick={() => toggleLibrary(false)}><PanelLeft size={17} /></button>
         </div>
       </div>
       <button className="side-search" onClick={() => (s.setUI({ paletteOpen: true }), onNavigate?.())}>

@@ -1314,7 +1314,7 @@ a,
   /* The page itself is clear, so the ambient light shows behind the cards. Only floating layers blur. */
   [data-glass='on'] .app:not(.mobile) .main { background: transparent; }
   /* Floating layers */
-  [data-glass='on'] :is(.drop, .slash-menu, .bubble, .palette, .modal, .confirm, .sheet, .toast, .commit-box, .convo, .ask-pop) {
+  [data-glass='on'] :is(.drop, .slash-menu, .bubble, .palette, .modal, .confirm, .sheet, .toast, .commit-box, .convo, .ask-pop, .dock, .library) {
     background: var(--glass-sheen), var(--glass);
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);

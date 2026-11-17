@@ -25,7 +25,7 @@ Status of each area is in [Coverage](#coverage) at the end: not every screen fol
 Monolith is monochrome and uses the system typeface, so what makes it recognisable is the **slab** and how the app speaks.
 
 - **The mark** is an upright slab, 4 wide to 9 tall, with softly rounded corners (`Logo` in `Sidebar.tsx`, `public/favicon.svg`). Always the text colour on the page colour. Never tinted, tilted, outlined or animated into another shape.
-- **The slab marks where you are.** The current top-level row in the sidebar, and the current section in Settings, carry a 3×14px slab at their left edge on top of the soft fill. An open doc under Docs keeps only its fill, so there is one marker on screen, not two.
+- **The slab marks where you are.** The current section in Settings carries a 3×14px slab at its left edge on top of the soft fill.
 - **The slab is the waiting sign.** While the assistant works, one small slab breathes beside the words that say what it's doing (`.slab-wait`). No dots, no spinners for the assistant.
 - **Titles go through one token**, `--font-display` (page titles, doc titles, headings in docs, setup). It is set to the system sans. Changing the app's display face is one line in `src/soft.css`; don't hard-code a family on a title.
 - Names for places are plain nouns in this order everywhere: **Home, Tasks, Docs, Recordings, Calendar**.
@@ -109,7 +109,7 @@ The iPhone read as clunky when every group sat in its own card. The rules now:
 
 ### iPhone: touch, holds and feel (Nov 16)
 - **Haptics through `Haptics` only** (`apple/iOS/Haptics.swift`), never a generator made on the spot. `tap` for a choice (a star, a checkbox, a Markdown shortcut taking effect, a toolbar format), `thud` for something removed (trash, delete a line, unlink), `success` when something new works (linked a computer, finished a task from a hold menu), `warning` when a gesture can't do anything (indenting the first item). Never on scroll or on every keystroke.
-- **Hold shows what you're holding.** Docs and recordings (Home, lists, sidebar) open a preview of their first lines above the menu (`.itemMenu`), as words, never Markdown. Tasks on Home show the doc they live in, with Mark complete and Copy.
+- **Hold shows what you're holding.** Docs and recordings (Home, cards, Library) open a preview of their first lines above the menu (`.itemMenu`), as words, never Markdown. Tasks on Home show the doc they live in, with Mark complete and Copy.
 - **Hold a line's marker** (bullet, number, checkbox, quote bar, divider, picture) for Move up, Move down, Duplicate and Delete line. The same moves sit in the keyboard's Aa menu.
 - **Keyboard bar, one line:** Checklist, Bullets, Aa | Outdent, Indent, Hide keyboard. Outdent and Indent are greyed out off a list item rather than hidden, so the bar doesn't shift.
 - **Removing asks or offers Undo, never neither.** Trashing a doc or event shows the Undo pill; swiping to unlink a computer asks first, because there's nothing to undo.
@@ -133,7 +133,7 @@ After pairing, both screens show the same six digits (`checkCode`, "824 793"). T
 Added Nov 16 for the frosted-glass rework. Everything on screen sits on one of three layers, from back to front:
 
 1. **Ground.** The page colour with a faint ambient wash: a cool light at the top left and a warm one at the bottom right, no stronger than about 17% in dark and 22% in light (`.app` background in `src/theme.css`). Nothing on the ground has its own fill.
-2. **Panels.** Cards, the sidebar and the Ask bar. Translucent, top-lit, with a lit top edge and a soft shadow. Only the Ask bar blurs what scrolls beneath it; cards and the sidebar don't, because blurring a whole column costs frames for nothing visible.
+2. **Panels.** Cards and the Library. Translucent, top-lit, with a lit top edge and a soft shadow. Only the dock, Ask bar and Library blur what is beneath them; cards don't, because blurring a whole column costs frames for nothing visible.
 3. **Popups.** Menus, dialogs, the palette, the conversation and notifications. The most opaque layer (about 90%), blurred 28px with saturation 1.6, always over a scrim.
 
 Rules:
@@ -203,7 +203,7 @@ Seven equal day buttons: weekday, date, up to three event-colour dots. The selec
 One per screen: a 52px round icon, a title that names the state ("No recordings yet"), one sentence on what the place is for, and at most one primary button. When the empty state has the button, the same action is hidden from the header.
 
 ### Ask bar (`.home-dock`, `.ask-field`, `AskBar.tsx`)
-The **only** place the assistant lives: there is no chat panel or sidebar. One 48px pill at the bottom of every page; its placeholder says what it will do here ("Ask about “Title”", "Add an event or ask about your schedule"). The page fades into the background beneath it (`.home-dock::before`) so rows never collide with it. Calendar has no fade because its grid runs to the edge. The dock is one fixed width (680px max) whether or not the conversation is open, so the bar never moves.
+The **only** place the assistant lives: there is no chat panel or sidebar. One 48px pill at the bottom of every page, to the right of the dock; its placeholder says what it will do here ("Ask about “Title”", "Add an event or ask about your schedule"). The page fades into the background beneath it (`.home-dock::before`) so rows never collide with it. Calendar has no fade because its grid runs to the edge. The dock and Ask bar share one fixed width (940px max) whether or not the conversation is open, so nothing moves.
 - **It understands, then shows what Enter will do.** EmbeddingGemma reads each request as an event, a task, a new doc, something to find, or a question (`src/ai/understand.ts`, rules in `src/lib/request.ts` until it has downloaded). The first row of the popup is what Enter does, marked with ↵ ("Add “Dentist” · Fri, Nov 20 · 3:00 PM", "Add task “Email the professor”", "New doc “The trip”"); below it, quieter, the other readings (Ask, add to the calendar, add as a task, matching docs). ↑↓ moves between them.
 - **The title is the thing itself, never the request.** "Make an event for tomorrow" has no name, so the bar asks "What should I call it?" in the conversation and the next thing typed is the name. "Can you schedule a meeting with Sam on Friday at 3" is "Meeting with Sam". With a name but no day, it asks "When is “…”?".
 - **Changes happen at once, with Undo** in the toast. Questions open the conversation.
@@ -216,15 +216,13 @@ The **only** place the assistant lives: there is no chat panel or sidebar. One 4
 - Your words in a soft bubble on the right; answers as plain rendered text (never raw Markdown) on the left.
 - The app's own short replies ("What should I call it?") have no Listen/Copy/Retry row.
 
-### Sidebar
-Its own rounded surface (18px), 264px wide. **Its shape never depends on where you are**: the same rows in the same places on every page, so nothing moves when you open something. Top to bottom:
-1. The mark and name, and Collapse.
-2. **Search and commands ⌘K**, one wide quiet button (opens quick access).
-3. Home, Tasks (open count), Calendar.
-4. Groups with a small heading that folds them (remembered per browser): **Docs** (your own docs not in a folder, as a tree), **Folders** (each folder folds open to its docs; a doc shows once, in the folder of its top-level doc), **Recordings** (newest six, then "Show more"), then connected storage.
-5. At the bottom, fixed: **Recently Deleted** (with its count) and **Settings**.
-- Rows are icon + label, 38px tall (34px for sub-rows), with a soft fill for the current page. Counts sit in a fixed-width column.
-- A group's add button (+ New doc, mic Start recording, New folder) appears on hover at the right of its heading. Row buttons (Add sub-doc) float over the end of the row on hover: they never take room, so titles never rewrap and rows never change height.
+### The dock and the Library (desktop)
+**There is no sidebar on desktop.** The page is the whole window, and one floating glass bar sits at the bottom of every page: the **dock** on the left, the **Ask bar** beside it. Where you are, and the assistant, in one place.
+- **Dock** (`Dock.tsx`, a 56px pill): round 40px buttons for Home, Docs, Tasks, Calendar, Recordings; a divider; then Library (⌘\), Search (⌘K) and Settings (⌘,). The current place opens up to show its name; the others are icon-only with a tooltip and an `aria-label`. The Docs and Recordings buttons always go to their page of cards, never straight back into the last doc, so the dock doubles as "back".
+- **Library** (`Library` in `Dock.tsx`, the same rows the sidebar had): a 24px-round glass panel that opens over the left of the page on a light scrim, from the Library button or ⌘\. It holds the doc tree, folders, recordings, connected storage, Recently Deleted and Settings. Choosing anything, Esc or a click outside puts it away. It is a place to find things, not furniture: nothing on a page waits on it being open.
+- **Docs and Recordings pages** (`DocsLibrary.tsx`): a wide page of round cards (icon tile, title, first lines, time), with search, folder chips and New doc / Record. Phones keep their own lists and tab bar.
+- **Home is a board** (`.hm-board`): the assistant card leads (two columns), the week sits beside it, Tasks (two columns) and Recent fill the next row. Under 1000px it folds to two columns, on phones to one. New doc, Record and Search sit top right as pills.
+- Rows inside the Library follow the rules below: icon + label, 38px tall (34px for sub-rows), soft fill for the current page, hover buttons float over the end of the row and never take room.
 
 ### Quick access (⌘K, `.palette.qa`, `CommandPalette.tsx`)
 The fastest way to anything. One input, a row of scopes under it (All, Docs, Tasks, Events, Recordings, Commands; Tab and Shift-Tab move between them, `>` means Commands, Backspace on an empty input goes back to All), a list of fixed height (so it doesn't resize as you type), and a footer of key hints.
@@ -373,8 +371,8 @@ Three files load in order: `src/index.css` (base), `src/theme.css`, `src/soft.cs
 - Any other file is a card on the soft fill: a file icon tile, the name (one line), "PDF · 2.3 MB" in faint tabular text, then **Open** and **Download**. A file that isn't on this device says so in place of its size.
 - On iOS an attachment shows its name and "Open it on your computer".
 
-### Lists in the sidebar
-- Docs, Folders and Recordings are always listed in the sidebar (fold a group to hide it); there's no second list column anywhere.
+### Lists in the Library
+- Docs, Folders and Recordings are listed in the Library (fold a group to hide it); pages show them as cards, and there's no second list column anywhere.
 - Titles get two lines before they're cut, with the full title as the tooltip. Hover buttons take no room: they float over the end of the row.
 
 ### Nothing jumps
@@ -393,6 +391,7 @@ Three files load in order: `src/index.css` (base), `src/theme.css`, `src/soft.cs
 | Web Tasks, links and connections, Settings sections | Yes (Nov 15, 0.10): dark and light, axe-checked |
 | Web repeating events, event editor, earlier versions, reminders, export | Yes (Nov 16, 0.11): axe-checked; print checked in the print preview only |
 | Web Ask bar, conversation, quick access (⌘K), sidebar, Recently Deleted | Yes (Nov 15, 0.12): dark, desktop width, axe-checked in the e2e run. Light mode and phone width not re-checked |
+| Web shell: dock, Library, Docs page, Home board (Nov 17) | Home, Docs page, open doc and Library flyout seen on desktop in dark and light; Home seen on phone in dark. axe contrast 0 issues. Calendar, Tasks and Recordings pages not re-checked under the new dock; iOS not yet ported |
 | Web surfaces: frosted popups, panels, round buttons, ambient light | Home, sidebar, Ask bar, ⌘K palette, Settings, doc header and Calendar header seen on desktop in dark and light (Nov 16). Phone seen on Home in dark only. Light-mode popups and the conversation panel need a contrast check |
 | Web Docs, doc editor, Recordings detail, Calendar | Not yet reviewed against this file |
 | iOS Tasks, links, connections | Not built: iOS shows a link as its text, and has no Tasks screen yet |

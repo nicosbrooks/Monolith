@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
-import { FileText, Mic, PanelLeftOpen } from 'lucide-react'
+import { FileText, Mic } from 'lucide-react'
 import { AskBar, focusAsk } from './components/AskBar'
 import { useStore } from './store'
-import { Sidebar } from './components/Sidebar'
+import { Dock, Library } from './components/Dock'
+import { toggleLibrary } from './lib/shell'
+import { DocsLibrary } from './views/DocsLibrary'
 import { Toaster } from './components/Toast'
 import { Overlays } from './components/Overlays'
 import { ItemList } from './views/ItemList'
@@ -70,7 +71,6 @@ export default function App() {
   const activeId = useStore((s) => s.activeId)
   const calendarDate = useStore((s) => s.calendarDate)
   const active = useStore((s) => s.items.find((i) => i.id === s.activeId))
-  const collapsed = useStore((s) => s.sidebarCollapsed)
   const settings = useStore((s) => s.settings)
   const vault = useVault((s) => s.state)
   const setupOpen = useStore((s) => s.setupOpen)
@@ -132,7 +132,7 @@ export default function App() {
       if (mod && e.key === 'k' && !(e.target as HTMLElement).closest('.ProseMirror')) (e.preventDefault(), s.setUI({ paletteOpen: !s.paletteOpen }))
       else if (mod && e.key === 'p') (e.preventDefault(), s.setUI({ paletteOpen: true }))
       else if (mod && e.key === 'j') (e.preventDefault(), focusAsk())
-      else if (mod && e.key === '\\') (e.preventDefault(), s.setUI({ sidebarCollapsed: !s.sidebarCollapsed }))
+      else if (mod && e.key === '\\') (e.preventDefault(), toggleLibrary())
       else if (mod && e.key === ',') (e.preventDefault(), s.setUI({ settingsOpen: true }))
       else if (mod && e.key.toLowerCase() === 'n') (e.preventDefault(), s.createItem('doc'))
       else if (e.key === 'Escape') s.setUI({ paletteOpen: false, settingsOpen: false, connectOpen: false })
@@ -178,34 +178,26 @@ export default function App() {
     main =
       mobile && !hasDetail ? (
         kind === 'doc' ? <PhoneDocList /> : <ItemList kind={kind} />
+      ) : !hasDetail && (kind === 'doc' || kind === 'lecture') ? (
+        <DocsLibrary kind={kind} />
       ) : (
-        <>
-          <div className="detail">{detail}</div>
-        </>
+        <div className="detail">{detail}</div>
       )
   }
 
   return (
-    <div className={`app ${collapsed && !mobile ? 'collapsed' : ''} ${mobile ? 'mobile' : ''}`}>
-      <AnimatePresence initial={false}>
-        {!collapsed && !mobile && (
-          <motion.div className="side-wrap" initial={{ width: 0, opacity: 0 }} animate={{ width: 'var(--side-w)', opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: 'spring', duration: 0.35, bounce: 0 }}>
-            <ErrorBoundary area="the sidebar"><Sidebar /></ErrorBoundary>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div className={`app ${mobile ? 'mobile' : ''}`}>
       <main ref={mainRef} className={`main sec-${section}`} data-active={activeId || undefined}>
-        {collapsed && !mobile && (
-          <button className="icon-btn float-open" onClick={() => useStore.getState().setUI({ sidebarCollapsed: false })} title="Show sidebar (⌘\)"><PanelLeftOpen size={16} /></button>
-        )}
         <ErrorBoundary area="this page" resetKey={`${section}:${activeId}`}><Suspense fallback={<ViewFallback />}>{main}</Suspense></ErrorBoundary>
-        {/* The Ask bar is on every page, and it's where the assistant lives: there is no separate chat panel. */}
+        {/* One bar for the whole app: where you are, and the assistant. There is no separate chat panel. */}
         {!mobile && (
           <div className="home-dock">
+            <Dock />
             <AskBar />
           </div>
         )}
       </main>
+      {!mobile && <Library />}
       {mobile && atRoot && <TabBar />}
       {mobile && !atRoot && <div className="p-dock detail"><AskBar phone /></div>}
       <Suspense fallback={null}>
@@ -232,7 +224,7 @@ function Empty({ kind }: { kind?: string }) {
       <div className="empty-detail blank">
         <span className="blank-ico"><Mic size={22} strokeWidth={1.7} /></span>
         <b>{any ? 'No recording open' : 'No recordings yet'}</b>
-        <p>{any ? 'Pick one in the sidebar, or start a new one.' : 'Record a class or meeting. You get a transcript, and notes written for you.'}</p>
+        <p>{any ? 'Pick one from the Library, or start a new one.' : 'Record a class or meeting. You get a transcript, and notes written for you.'}</p>
         <button className="btn primary" onClick={() => startRecording()}><Mic size={15} /> Start recording</button>
       </div>
     )
@@ -241,7 +233,7 @@ function Empty({ kind }: { kind?: string }) {
     <div className="empty-detail blank">
       <span className="blank-ico"><FileText size={22} strokeWidth={1.7} /></span>
       <b>No doc open</b>
-      <p>Pick one in the sidebar, or start a new one.</p>
+      <p>Pick one from the Library, or start a new one.</p>
       <button className="btn primary" onClick={() => useStore.getState().createItem('doc')}>New doc <kbd>⌘N</kbd></button>
     </div>
   )

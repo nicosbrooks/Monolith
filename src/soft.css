@@ -54,17 +54,13 @@
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
 }
-/* ── layout: the panel floats on the ground with round corners ── */
-.app:not(.mobile) .main,
-.app.collapsed:not(.mobile) .main{
-  margin: 10px 10px 10px 0;
+/* ── layout: the page floats on the ground with round corners; there is no sidebar, just the dock ── */
+.app:not(.mobile) .main {
+  margin: 10px;
   border: 0;
-  border-radius: 20px;
+  border-radius: 22px;
   background: var(--content);
   overflow: hidden;
-}
-.app.collapsed:not(.mobile) .main {
-  margin-left: 10px;
 }
 .side-wrap,
 .sidebar {
@@ -207,18 +203,22 @@ kbd {
   --card-hover: rgba(0, 0, 0, 0.045);
   /* Frosted panel (glass on): a soft top-lit gradient over the page, a hairline lit edge, a long soft shadow. */
   --panel: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.64));
-  --panel-edge: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(60, 50, 30, 0.05), 0 14px 32px -20px rgba(60, 50, 30, 0.35);
+  --panel-edge: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(60, 50, 30, 0.05), 0 1px 2px rgba(60, 50, 30, 0.06), 0 22px 44px -24px rgba(60, 50, 30, 0.42);
 }
 :root[data-theme='dark'] {
   --card: #191918;
   --card-hover: rgba(255, 255, 255, 0.06);
   --panel: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
-  --panel-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.04), 0 16px 36px -22px rgba(0, 0, 0, 0.75);
+  --panel-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.4), 0 26px 50px -26px rgba(0, 0, 0, 0.85);
 }
 .hm {
   width: min(100%, 728px);
   margin-inline: auto;
   padding: 56px 24px 132px;
+}
+.app:not(.mobile) .hm {
+  width: min(100%, 1080px);
+  padding: 52px 40px 168px;
 }
 .hm-head h1 {
   margin: 0;
@@ -1089,14 +1089,10 @@ body {
   --content: #f4f3f0;
   --nav-on: #e8e7e2;
 }
-.app:not(.mobile) .main,
-.app.collapsed:not(.mobile) .main{
-  margin: 0;
-  border-radius: 0;
+.app:not(.mobile) .main {
+  margin: 10px;
+  border-radius: 22px;
   background: var(--bg);
-}
-.app.collapsed:not(.mobile) .main {
-  margin-left: 0;
 }
 /* Flush with the section rows: same highlight edge, titles in the same column (see the padding in Sidebar.tsx). */
 .side-tree {
@@ -1117,10 +1113,10 @@ body {
   bottom: 24px;
   transform: translateX(-50%);
   /* One width whether or not the conversation is open, so the bar never jumps. */
-  width: min(680px, calc(100% - 48px));
+  width: min(940px, calc(100% - 48px));
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   z-index: 20;
 }
 /* The page fades out under the bar, so rows never collide with it. */
@@ -2904,4 +2900,325 @@ body {
 .app.mobile .tr-row {
   padding-top: 8px;
   padding-bottom: 8px;
+}
+
+/* ── Shell: the dock, the Library, the Docs page, and Home as a board ── */
+.dock {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 56px;
+  /* Wide enough for the longest open label (Recordings), so the Ask bar never shifts when you change page. */
+  width: 460px;
+  justify-content: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--raised);
+  border: 1px solid var(--raised-edge);
+  box-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.5);
+}
+.dock-btn {
+  height: 40px;
+  min-width: 40px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 999px;
+  color: var(--text-2);
+  font: 550 13.5px/1 var(--font);
+  transition: background 0.15s, color 0.15s;
+}
+.dock-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.dock-btn.on {
+  background: var(--btn-grad);
+  color: var(--text);
+  box-shadow: var(--raised-edge-inset, inset 0 1px 0 rgba(255, 255, 255, 0.12));
+}
+.dock-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.dock-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--border-2);
+}
+.library-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.18);
+}
+.library {
+  position: fixed;
+  z-index: 41;
+  top: 12px;
+  bottom: 12px;
+  left: 12px;
+  width: var(--side-w);
+  border-radius: 24px;
+  overflow: hidden;
+  background: var(--raised);
+  border: 1px solid var(--raised-edge);
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.55);
+}
+.library .sidebar {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+/* Home: a board of cards. The assistant leads; the week sits beside it. */
+.hm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  column-gap: 24px;
+}
+.hm-head h1 {
+  flex: 1 1 100%;
+}
+.hm-quick {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  order: 3;
+}
+.hm-head time {
+  flex: 1;
+}
+.hm-quick button {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  background: var(--btn-grad);
+  color: var(--text);
+  font: 550 13.5px/1 var(--font);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+.hm-quick button:hover {
+  background: var(--btn-grad-hover, var(--btn-hover));
+}
+.hm-quick kbd {
+  color: var(--text-3);
+  font: 500 11.5px var(--font);
+}
+.hm-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px 22px;
+  align-items: start;
+}
+.app.mobile .hm-board {
+  display: block;
+}
+.app:not(.mobile) .hm-board > .hm-sec,
+.app:not(.mobile) .hm-board > .hm-asst {
+  margin-top: 0;
+}
+.app:not(.mobile) .hm-board {
+  margin-top: 30px;
+}
+.hm-board > .hm-asst {
+  grid-column: span 2;
+  padding: 26px 28px 28px;
+}
+.hm-board > .hm-asst h2 {
+  font-size: 22px;
+}
+.hm-board > .hm-cal {
+  grid-column: 3;
+  grid-row: 1;
+}
+.hm-board > .hm-tasks {
+  grid-column: span 2;
+}
+.hm-board > .hm-recent {
+  grid-column: 3;
+}
+@media (max-width: 1000px) {
+  .hm-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .hm-board > .hm-asst,
+  .hm-board > .hm-tasks {
+    grid-column: 1 / -1;
+  }
+  .hm-board > .hm-cal,
+  .hm-board > .hm-recent {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+/* Docs and Recordings: a wide page of cards */
+.lib-col {
+  width: min(100%, 1080px);
+  margin-inline: auto;
+  padding: 52px 40px 168px;
+}
+.lib-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.lib-head h1 {
+  margin: 0;
+  font: 650 30px/1.2 var(--font-display);
+  letter-spacing: -0.028em;
+}
+.lib-head p {
+  margin: 4px 0 0;
+  color: var(--text-2);
+  font-size: 15px;
+}
+.lib-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lib-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 26px 0 22px;
+}
+.lib-search {
+  flex: 1 1 240px;
+  max-width: 360px;
+  height: 40px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text-3);
+}
+.lib-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+}
+.lib-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lib-chips button {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text-2);
+  font: 550 13.5px/1 var(--font);
+}
+.lib-chips button:hover {
+  color: var(--text);
+}
+.lib-chips button.on {
+  background: var(--btn-grad);
+  color: var(--text);
+}
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+.lib-card {
+  min-height: 172px;
+  padding: 18px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+  border-radius: 22px;
+  background: var(--card);
+  transition: transform 0.18s, background 0.15s;
+}
+:root[data-glass='on'] .lib-card {
+  background: var(--panel);
+  box-shadow: var(--panel-edge);
+}
+.lib-card:hover {
+  transform: translateY(-2px);
+  background: var(--card-hover);
+}
+.lib-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.lib-card-top {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.lib-ico {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--btn-grad);
+  font-size: 16px;
+}
+.lib-card b {
+  font: 600 15.5px/1.3 var(--font);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.lib-card-text {
+  flex: 1;
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+.lib-card small {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.lib-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14vh 24px 0;
+  color: var(--text-3);
+  text-align: center;
+}
+.lib-empty b {
+  color: var(--text-2);
+}
+
+.lib-actions .icon-btn.round {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--btn-grad);
 }
