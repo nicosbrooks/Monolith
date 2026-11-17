@@ -202,14 +202,14 @@ kbd {
   --card: #ffffff;
   --card-hover: rgba(0, 0, 0, 0.045);
   /* Frosted panel (glass on): a soft top-lit gradient over the page, a hairline lit edge, a long soft shadow. */
-  --panel: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.64));
-  --panel-edge: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(60, 50, 30, 0.05), 0 1px 2px rgba(60, 50, 30, 0.06), 0 22px 44px -24px rgba(60, 50, 30, 0.42);
+  --panel: #ffffff;
+  --panel-edge: 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 :root[data-theme='dark'] {
   --card: #191918;
   --card-hover: rgba(255, 255, 255, 0.06);
-  --panel: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
-  --panel-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.4), 0 26px 50px -26px rgba(0, 0, 0, 0.85);
+  --panel: rgba(255, 255, 255, 0.05);
+  --panel-edge: 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 .hm {
   width: min(100%, 728px);
@@ -232,11 +232,8 @@ kbd {
   font-size: 15px;
 }
 .hm-card {
-  border-radius: 22px;
+  border-radius: 16px;
   background: var(--card);
-}
-:root[data-theme='light'] .hm-card {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 :root[data-glass='on'] .hm-card {
   background: var(--panel);
@@ -838,11 +835,11 @@ details.advanced[open] > summary::after {
   --btn: #e6e5e0;
   --btn-hover: #dad9d3;
   /* round buttons get a faint top-lit gradient and a hairline lit edge */
-  --btn-grad: linear-gradient(180deg, #f1f0ec, #e4e3de);
-  --btn-grad-hover: linear-gradient(180deg, #ebeae5, #dad9d3);
-  --btn-edge: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 1px 1px rgba(0, 0, 0, 0.05);
-  --btn-primary-grad: linear-gradient(180deg, #2c2c2a, #161615);
-  --btn-primary-edge: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 1px 2px rgba(0, 0, 0, 0.25);
+  --btn-grad: #e9e8e3;
+  --btn-grad-hover: #dedcd6;
+  --btn-edge: none;
+  --btn-primary-grad: #1c1c1a;
+  --btn-primary-edge: none;
   --scrim: rgba(20, 20, 18, 0.32);
 }
 :root[data-theme='dark'] {
@@ -852,11 +849,11 @@ details.advanced[open] > summary::after {
   --raised-fill-2: rgba(255, 255, 255, 0.12);
   --btn: #2a2a28;
   --btn-hover: #353533;
-  --btn-grad: linear-gradient(180deg, #333331, #2a2a28);
-  --btn-grad-hover: linear-gradient(180deg, #3d3d3b, #333331);
-  --btn-edge: inset 0 1px 0 rgba(255, 255, 255, 0.09);
-  --btn-primary-grad: linear-gradient(180deg, #f7f6f3, #dddbd5);
-  --btn-primary-edge: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --btn-grad: #2d2d2b;
+  --btn-grad-hover: #383836;
+  --btn-edge: none;
+  --btn-primary-grad: #f1efea;
+  --btn-primary-edge: none;
   --scrim: rgba(0, 0, 0, 0.62);
 }
 .overlay,
@@ -1408,7 +1405,6 @@ body {
   border-radius: 999px;
   background: var(--btn);
   border: 1px solid var(--raised-edge);
-  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.45);
   transition: background 0.15s, border-color 0.15s;
 }
 .ask-bar.phone .ask-field {
@@ -1424,21 +1420,18 @@ body {
 /* Light: a white field like the cards around it, not a grey slab floating over them. */
 :root[data-theme='light'] .ask-field {
   background: var(--raised);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 12px 32px -16px rgba(0, 0, 0, 0.28);
 }
 :root[data-theme='light'] .ask-bar:hover .ask-field {
   background: var(--raised);
   border-color: color-mix(in oklab, var(--text) 16%, transparent);
 }
-/* Glass on: the bar is a frosted pill, so the page scrolls blurred underneath it. */
+/* The bar is flat: a solid field with a hairline edge, no blur and no glow. */
 :root[data-glass='on'] .ask-field,
 :root[data-glass='on'] .ask-bar:hover .ask-field,
 :root[data-glass='on'] .ask-bar.focus .ask-field {
-  background: var(--glass-sheen), var(--glass);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
-  border-color: var(--glass-border);
-  box-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.5), var(--glass-edge);
+  background: var(--raised);
+  border-color: var(--raised-edge);
+  box-shadow: none;
 }
 :root[data-glass='on'] .ask-bar:hover .ask-field,
 :root[data-glass='on'] .ask-bar.focus .ask-field {
@@ -2914,14 +2907,9 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  width: 56px;
-  margin: 10px 0 10px 10px;
-  padding: 8px 0;
-  border-radius: 999px;
-  background: var(--raised);
-  border: 1px solid var(--raised-edge);
-  box-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.5);
+  gap: 2px;
+  width: 52px;
+  margin: 10px 0 10px 6px;
 }
 .dock-btn {
   position: relative;
@@ -2929,18 +2917,17 @@ body {
   height: 40px;
   display: grid;
   place-items: center;
-  border-radius: 50%;
-  color: var(--text-2);
-  transition: background 0.15s, color 0.15s;
+  border-radius: 12px;
+  color: var(--text-3);
+  transition: background 0.12s, color 0.12s;
 }
 .dock-btn:hover {
   background: var(--hover);
   color: var(--text);
 }
 .dock-btn.on {
-  background: var(--btn-grad);
+  background: var(--hover);
   color: var(--text);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 .dock-btn:focus-visible {
   outline: 2px solid var(--accent);
@@ -2953,11 +2940,10 @@ body {
   left: calc(100% + 14px);
   top: 50%;
   transform: translateY(-50%) translateX(-4px);
-  padding: 6px 10px;
-  border-radius: 999px;
+  padding: 6px 9px;
+  border-radius: 8px;
   background: var(--raised);
   border: 1px solid var(--raised-edge);
-  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.45);
   color: var(--text);
   font: 550 12.5px/1 var(--font);
   white-space: pre;
@@ -2974,7 +2960,7 @@ body {
 .dock-sep {
   width: 20px;
   height: 1px;
-  margin: 4px 0;
+  margin: 6px 0;
   background: var(--border-2);
 }
 /* Short windows: tighter, so the whole rail always fits without scrolling. */
@@ -3002,13 +2988,13 @@ body {
   z-index: 41;
   top: 10px;
   bottom: 10px;
-  left: 86px;
-  width: min(var(--side-w), calc(100vw - 106px));
-  border-radius: 24px;
+  left: 70px;
+  width: min(var(--side-w), calc(100vw - 90px));
+  border-radius: 18px;
   overflow: hidden;
   background: var(--raised);
   border: 1px solid var(--raised-edge);
-  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.35);
 }
 .library .sidebar {
   background: transparent;
@@ -3044,7 +3030,6 @@ body {
   background: var(--btn-grad);
   color: var(--text);
   font: 550 13.5px/1 var(--font);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 .hm-quick button:hover {
   background: var(--btn-grad-hover, var(--btn-hover));
@@ -3189,16 +3174,15 @@ body {
   align-items: flex-start;
   gap: 6px;
   text-align: left;
-  border-radius: 22px;
+  border-radius: 16px;
   background: var(--card);
-  transition: transform 0.18s, background 0.15s;
+  transition: background 0.12s;
 }
 :root[data-glass='on'] .lib-card {
   background: var(--panel);
   box-shadow: var(--panel-edge);
 }
 .lib-card:hover {
-  transform: translateY(-2px);
   background: var(--card-hover);
 }
 .lib-card:focus-visible {

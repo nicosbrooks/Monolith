@@ -48,8 +48,8 @@ Web tokens are CSS variables; the current values are set in `src/soft.css` (it l
 | Faint text (times, sources) | `--text-3` | `#94938e` | `#8a8983` | |
 | Status | `--ok` `--info` `--danger` | `#7fd69e` `#86b3ff` `#ff7a70` | `#2f9e62` `#2f6fdb` `#d4483f` | `Theme.local`, `Theme.time` |
 
-- Primary buttons are the text colour with the page colour as the label (white on dark, near-black on light), with a faint top-lit gradient (`--btn-primary-grad`).
-- Anything that pops up (menu, dialog, palette, Ask bar options, conversation, notification) uses the frosted `--glass` layer: about 90% opaque in both themes, blurred, with a lit top edge, a hairline edge and a real shadow, over a dark scrim. It is always the most opaque layer on screen, so text on it keeps full contrast. With glass off (the `glass` setting, or the OS asks for reduced transparency) it falls back to the solid `--raised` surface.
+- Primary buttons are the text colour with the page colour as the label (white on dark, near-black on light), as a flat fill (`--btn-primary-grad` is a solid colour).
+- Anything that pops up (menu, dialog, palette, Ask bar options, conversation, notification) uses the frosted `--glass` layer: about 90% opaque in both themes, blurred, with a hairline edge and one soft shadow, over a dark scrim. It is always the most opaque layer on screen, so text on it keeps full contrast. With glass off (the `glass` setting, or the OS asks for reduced transparency) it falls back to the solid `--raised` surface.
 - Glass tokens (`--glass`, `--glass-sheen`, `--glass-filter`, `--ambient-a/b`) live in `src/theme.css`; panel and button tokens (`--panel`, `--panel-edge`, `--btn-grad`, `--btn-edge`) live in `src/soft.css`.
 
 ## Type
@@ -83,7 +83,7 @@ No uppercase labels and no mono labels.
 | Content column | 728px max, centred, 24px side padding (14px on phones) |
 | Bottom clearance for the Ask bar | 132px (110px on phones) |
 
-Cards have no border. With glass on, a card is a frosted panel: a soft top-lit gradient, a lit top edge and a long soft shadow (`--panel`, `--panel-edge`). With glass off, the flat `--card` fill is used. Toolbar actions in a page header (listen, favourite, ···) are 34px round chips on `--btn-grad`.
+Cards have no border. A card is a flat fill with a hairline edge (`--panel`, `--panel-edge`): no gradient, no shadow, no lift on hover. Toolbar actions in a page header (listen, favourite, ···) are 34px round chips on `--btn-grad`.
 
 ### iOS spacing (`Space` in `apple/iOS/Theme.swift`)
 iPhone screens felt cramped at web sizes, so iOS runs a little roomier. Use the tokens, not new numbers.
@@ -133,7 +133,7 @@ After pairing, both screens show the same six digits (`checkCode`, "824 793"). T
 Added Nov 16 for the frosted-glass rework. Everything on screen sits on one of three layers, from back to front:
 
 1. **Ground.** The page colour with a faint ambient wash: a cool light at the top left and a warm one at the bottom right, no stronger than about 17% in dark and 22% in light (`.app` background in `src/theme.css`). Nothing on the ground has its own fill.
-2. **Panels.** Cards and the Library. Translucent, top-lit, with a lit top edge and a soft shadow. Only the dock, Ask bar and Library blur what is beneath them; cards don't, because blurring a whole column costs frames for nothing visible.
+2. **Panels.** Cards and the Library. Flat fills with a hairline edge, no shadow. Only popups and the Library are frosted; cards, the rail and the Ask bar are flat, because depth belongs to what floats, not to what sits on the page.
 3. **Popups.** Menus, dialogs, the palette, the conversation and notifications. The most opaque layer (about 90%), blurred 28px with saturation 1.6, always over a scrim.
 
 Rules:
@@ -187,7 +187,7 @@ Seven equal day buttons: weekday, date, up to three event-colour dots. The selec
 
 ### Buttons
 - `.btn.primary`: one per card or dialog, for the action we expect.
-- `.btn`: the alternative, a pill on a faint top-lit gradient (`--btn-grad`). Inside a popup it sits on the flat `--raised-fill-2` instead, so it never fights the glass.
+- `.btn`: the alternative, a pill on a flat fill (`--btn-grad`). Inside a popup it sits on the flat `--raised-fill-2` instead, so it never fights the glass.
 - In cards and empty states they are 38px tall with 18px side padding. Labels are verbs: "Add to calendar", "Start recording".
 - `.icon-btn`: round, for toolbar actions. Always has a `title` and `aria-label`.
 
@@ -218,8 +218,8 @@ The **only** place the assistant lives: there is no chat panel or sidebar. One 4
 
 ### The dock and the Library (desktop)
 **There is no sidebar on desktop.** A slim glass rail floats on the left, vertically centred, in its own gutter (it never overlaps a page), and the **Ask bar** sits at the bottom centre of every page.
-- **Dock** (`Dock.tsx`, a 56px-wide pill, outside `.main`): round 40px buttons for Home, Docs, Tasks, Calendar, Recordings; a divider; then Library (⌘\\), Search (⌘K) and Settings (⌘,). Icons only: the name and shortcut appear beside the button on hover or keyboard focus (`data-tip`), and every button has an `aria-label`. The current place is the filled button. Under 560px tall the buttons shrink to 34px, so the whole rail always fits and never scrolls. The Docs and Recordings buttons always go to their page of cards, never straight back into the last doc, so they double as "back".
-- **Library** (`Library` in `Dock.tsx`, the sidebar's rows without Home, Tasks, Calendar and Search, which the dock has): a 24px-round glass panel that opens beside the rail on a light scrim, from the Library button or ⌘\\. It holds the doc tree, folders, recordings, connected storage, Recently Deleted and Settings. Choosing anything, Esc or a click outside puts it away. The rail stays above the scrim. Nothing on a page waits on it being open.
+- **Dock** (`Dock.tsx`, a bare 52px rail with no container, outside `.main`): 40px rounded-square buttons for Home, Docs, Tasks, Calendar, Recordings; a divider; then Library (⌘\\), Search (⌘K) and Settings (⌘,). Icons only: the name and shortcut appear beside the button on hover or keyboard focus (`data-tip`), and every button has an `aria-label`. The current place is the one with a soft fill. Under 560px tall the buttons shrink to 34px, so the whole rail always fits and never scrolls. The Docs and Recordings buttons always go to their page of cards, never straight back into the last doc, so they double as "back".
+- **Library** (`Library` in `Dock.tsx`, the sidebar's rows without Home, Tasks, Calendar and Search, which the dock has): an 18px-round panel that opens beside the rail on a light scrim, from the Library button or ⌘\\. It holds the doc tree, folders, recordings, connected storage, Recently Deleted and Settings. Choosing anything, Esc or a click outside puts it away. The rail stays above the scrim. Nothing on a page waits on it being open.
 - **Docs and Recordings pages** (`DocsLibrary.tsx`): a wide page of round cards (icon tile, title, first lines, time), with search, folder chips and New doc / Record. Phones keep their own lists and tab bar.
 - **Home is a board** (`.hm-board`): the assistant card leads (two columns), the week sits beside it, Tasks (two columns) and Recent fill the next row. Under 1000px it folds to two columns, on phones to one. New doc, Record and Search sit top right as pills.
 - Rows inside the Library follow the rules below: icon + label, 38px tall (34px for sub-rows), soft fill for the current page, hover buttons float over the end of the row and never take room.
