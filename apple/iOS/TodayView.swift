@@ -1,12 +1,13 @@
 import SwiftUI
 import SwiftData
 
-/// Schedule, open tasks, and recent work above the floating Ask bar.
+/// Schedule, open tasks (tasks of their own, not lines in docs), and recent work above the floating Ask bar.
 struct TodayView: View {
     @Environment(\.modelContext) private var ctx
     @Environment(Router.self) private var router
     @Query(filter: #Predicate<Item> { $0.deletedAt == nil }, sort: \Item.updatedAt, order: .reverse) private var items: [Item]
     @Query(sort: \Event.start) private var events: [Event]
+    @Query private var todos: [Todo]
     @State private var path: [Item] = []
     /// Dismissed and accepted suggestions, kept across launches so nothing is offered twice.
     @AppStorage("dismissedSuggestions") private var dismissedRaw = ""
@@ -26,8 +27,6 @@ struct TodayView: View {
     private var compact: Bool { size == .compact }
     private var integrations: Integrations { .shared }
     @State private var allTasksShown = false
-    /// Tasks just ticked, waiting a moment before they leave the list.
-    @State private var checking: Set<String> = []
     /// Starting points for a conversation, built from what's actually on today. Each one opens chat with
     /// the question asked, so the person can take it anywhere from there. Never a fixed plan.
     /// "Start from here" on the first day; after that, what the starting points are about.
@@ -45,7 +44,7 @@ struct TodayView: View {
         if derived.taskCount > 1 {
             out.append(("checkmark.square", "Which of my \(derived.taskCount) tasks should I do first?"))
         } else if let t = tasks.first {
-            out.append(("checkmark.square", "Help me with \u{201C}\(MD.plain(t.line))\u{201D}"))
+            out.append(("checkmark.square", "Help me with \u{201C}\(t.title)\u{201D}"))
         }
         if let doc = items.first(where: { $0.kind == .doc && !$0.body.isEmpty }) {
             out.append(("doc.text", "Summarize \u{201C}\(doc.displayTitle)\u{201D}"))
@@ -60,23 +59,23 @@ struct TodayView: View {
     /// scanning notes for dates and tasks is the costliest thing this screen does.
     private struct Derived {
         var todays: [AgendaItem] = []
-        var tasks: [(item: Item, line: String)] = []
+        var tasks: [Todo] = []
         var taskCount = 0
         var nudge: Suggestion?
     }
     @State private var derived = Derived()
     @State private var derivedOnce = false
     private var todays: [AgendaItem] { derived.todays }
-    private var tasks: [(item: Item, line: String)] { derived.tasks }
+    private var tasks: [Todo] { derived.tasks }
     private var nudge: Suggestion? { derived.nudge }
     /// Changes when anything this screen derives from changes.
     private var stamp: String {
         let ev = events.reduce(0) { $0 ^ $1.start.hashValue ^ $1.end.hashValue ^ $1.title.hashValue }
-        return "\(items.count)|\(items.first?.updatedAt.timeIntervalSince1970 ?? 0)|\(events.count)|\(ev)|\(DeviceCalendars.shared.version)|\(dismissedRaw.count)|\(Calendar.current.startOfDay(for: .now).timeIntervalSince1970)"
+        return "\(items.count)|\(items.first?.updatedAt.timeIntervalSince1970 ?? 0)|\(events.count)|\(ev)|\(DeviceCalendars.shared.version)|\(todos.count)|\(todos.map(\.updatedAt).max()?.timeIntervalSince1970 ?? 0)|\(dismissedRaw.count)|\(Calendar.current.startOfDay(for: .now).timeIntervalSince1970)"
     }
     private func rederive() {
         let all = allTasks
-        derived = Derived(todays: computeTodays, tasks: Array(all.prefix(6)), taskCount: all.count,
+        derived = Derived(todays: computeTodays, tasks: Array(all.prefix(8)), taskCount: all.count,
                           nudge: Suggestion.dates(in: items.lazy.filter { $0.kind == .doc }.prefix(30), existing: events).first { !dismissed.contains($0.id) })
     }
 
@@ -92,9 +91,7 @@ struct TodayView: View {
         let end = calendar.date(byAdding: .day, value: 7, to: today) ?? start
         return Array(agenda(events, from: start, to: end).filter { $0.start >= start }.prefix(4))
     }
-    private var allTasks: [(item: Item, line: String)] {
-        items.filter { $0.kind != .lecture }.flatMap { i in Tasks.open(in: i.body).map { (i, $0) } }
-    }
+    private var allTasks: [Todo] { Todos.open(todos) }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -207,15 +204,15 @@ struct TodayView: View {
             }
         }
 
-        if !visibleTasks.isEmpty {
+        if !tasks.isEmpty {
             section("Tasks") {
-                ForEach(Array(visibleTasks.prefix(allTasksShown ? 8 : 3).enumerated()), id: \.offset) { _, task in
-                    taskRow(task)
-                }
-                if !allTasksShown && visibleTasks.count > 3 {
-                    Button { withAnimation(.snappy) { allTasksShown = true } } label: {
-                        row { Image(systemName: "chevron.down").font(.footnote).foregroundStyle(.secondary) }
-                            title: { Text("\(visibleTasks.count - 3) more").foregroundStyle(.secondary) } trailing: { EmptyView() }
+                ForEach(tasks.prefix(3)) { TodoRow(todo: $0) }
+                if derived.taskCount > 3 {
+                    Button { router.showTasks = true } label: {
+                        row { Image(systemName: "checklist").font(.subheadline).foregroundStyle(.secondary) }
+                            title: { Text("All \(derived.taskCount) tasks").foregroundStyle(.secondary) } trailing: {
+                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                            }
                     }
                     .buttonStyle(.row)
                 }
@@ -252,12 +249,6 @@ struct TodayView: View {
     // MARK: Assistant card: the one place the assistant speaks on Home.
 
     private var showsAssistant: Bool { nudge != nil || !starters.isEmpty }
-
-    /// Tasks, minus the one the assistant is already asking about (no saying the same thing twice).
-    private var visibleTasks: [(item: Item, line: String)] {
-        guard let n = nudge else { return tasks }
-        return tasks.filter { !($0.item.id == n.itemID && MD.plain($0.line) == n.line) }
-    }
 
     @ViewBuilder private var assistantCard: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -402,50 +393,6 @@ struct TodayView: View {
         }
     }
 
-    /// Tap the circle to check a task off. It stays a moment, struck through, so a mis-tap can be taken back.
-    /// Tap the words to open the doc it lives in.
-    private func taskRow(_ task: (item: Item, line: String)) -> some View {
-        let key = "\(task.item.id)|\(task.line)"
-        let done = checking.contains(key)
-        return HStack(spacing: 14) {
-            Button {
-                Haptics.tap()
-                if done { withAnimation(.snappy) { _ = checking.remove(key) }; return }
-                withAnimation(.snappy) { _ = checking.insert(key) }
-                Task {
-                    try? await Task.sleep(for: .seconds(1.5))
-                    guard checking.contains(key) else { return }
-                    withAnimation(.snappy) {
-                        task.item.body = Tasks.check(task.line, in: task.item.body); task.item.touch()
-                        checking.remove(key); rederive()
-                    }
-                }
-            } label: {
-                Image(systemName: done ? "checkmark.square.fill" : "square").font(.body)
-                    .foregroundStyle(done ? .primary : .secondary)
-                    .frame(width: 22, height: Space.row).contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(done ? "Undo" : "Mark complete")
-            ItemLink(item: task.item) {
-                HStack {
-                    Text(MD.inline(task.line)).lineLimit(1).strikethrough(done).foregroundStyle(done ? .secondary : .primary)
-                    Spacer(minLength: 0)
-                }
-                .frame(minHeight: Space.row).contentShape(.rect)
-            }
-            .buttonStyle(.row)
-        }
-        // Hold: finish it now, or copy it, with where it lives shown above.
-        .contextMenu {
-            Button("Mark complete", systemImage: "checkmark.square") {
-                Haptics.success()
-                withAnimation(.snappy) { task.item.body = Tasks.check(task.line, in: task.item.body); task.item.touch(); rederive() }
-            }
-            Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = MD.plain(task.line); Toaster.shared.show("Copied") }
-        } preview: { ItemPeek(item: task.item) }
-    }
-
     private func quiet(_ t: String) -> some View {
         Text(t).font(.subheadline).foregroundStyle(.tertiary).frame(minHeight: 44, alignment: .leading).padding(.leading, 36)
     }
@@ -477,31 +424,13 @@ struct TodayView: View {
     }
 
     @ViewBuilder private var taskRows: some View {
-        if tasks.isEmpty { Text("No open tasks.").font(.subheadline).foregroundStyle(.secondary) }
-        ForEach(Array(tasks.prefix(compact && !allTasksShown ? 3 : 6).enumerated()), id: \.offset) { _, task in
-            Button {
-                withAnimation(.snappy) { task.item.body = Tasks.check(task.line, in: task.item.body); task.item.touch(); rederive() }
-                Haptics.tap()
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "square").foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(MD.inline(task.line)).multilineTextAlignment(.leading)
-                        if !compact { Text(task.item.displayTitle).font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
-                    }
-                    Spacer(minLength: 0)
-                }
-                .frame(minHeight: 44)
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("Mark complete")
-        }
+        if tasks.isEmpty { Text("Nothing to do. Add one from Tasks.").font(.subheadline).foregroundStyle(.secondary) }
+        ForEach(tasks.prefix(compact && !allTasksShown ? 3 : 6)) { TodoRow(todo: $0) }
     }
 
     @ViewBuilder private var moreTasks: some View {
-        if compact && !allTasksShown && derived.taskCount > 3 {
-            Button("Show all \(derived.taskCount)") { withAnimation(.snappy) { allTasksShown = true } }
+        if derived.taskCount > 6 || (compact && !allTasksShown && derived.taskCount > 3) {
+            Button("All \(derived.taskCount) tasks") { router.showTasks = true }
                 .font(.subheadline).foregroundStyle(.secondary).frame(minHeight: 44)
         }
     }

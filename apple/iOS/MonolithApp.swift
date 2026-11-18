@@ -14,6 +14,8 @@ struct MonolithApp: App {
         Storage.seedIfEmpty(Storage.container.mainContext)
         Storage.mergeNotesIntoDocs(Storage.container.mainContext)
         Storage.dropBlankDocs(Storage.container.mainContext)
+        Todos.moveInboxDoc(Storage.container.mainContext)
+        Todos.pruneDone(Storage.container.mainContext)
         PhoneLink.shared.start(context: Storage.container.mainContext)
         Linker.shared.start(context: Storage.container.mainContext)
     }
@@ -140,6 +142,7 @@ private struct BottomBar: ViewModifier {
             Button { create(.doc) } label: { Text("Doc"); Image(systemName: "doc.text") }
             Button { record() } label: { Text("Record"); Image(systemName: "mic") }
                 .disabled(recorder.isRecording)
+            Button { router.newTask() } label: { Text("Task"); Image(systemName: "checklist") }
             Button { router.createEvent() } label: { Text("Event"); Image(systemName: "calendar.badge.plus") }
         } label: {
             Image(systemName: "plus").font(.title3.weight(.medium)).foregroundStyle(.primary)
@@ -182,12 +185,21 @@ private struct BottomBar: ViewModifier {
                                 action: ("Undo", { [ctx] in ctx.delete(e); PhoneLink.shared.sendAgenda() }))
             return
         }
+        // On Tasks, "essay draft by friday" is a task; a question still goes to chat.
+        if router.onTasks, !Self.isQuestion(t), let task = Todos.make(t) {
+            withAnimation(.snappy) { ctx.insert(task) }
+            Haptics.success()
+            Toaster.shared.show("Added to Tasks", detail: task.due == nil ? nil : Todos.label(task),
+                                action: ("Undo", { [ctx] in withAnimation(.snappy) { ctx.delete(task) } }))
+            return
+        }
         chat = ChatStart(text: t, about: router.reading)
     }
 
     /// Says what the bar will do here, like the web app's "Ask about “Study system”".
     private var placeholder: String {
         if router.onCalendar { return "Add an event or ask" }
+        if router.onTasks { return "Add a task or ask" }
         if let d = router.reading { return "Ask about \u{201C}\(d.displayTitle)\u{201D}" }
         return "Ask Monolith"
     }
@@ -219,6 +231,12 @@ final class Router {
     var calendarDay: Date?
     /// True while the calendar is on screen: the bottom bar then adds events as well as answering.
     var onCalendar = false
+    /// True while Tasks is on screen: the bottom bar then adds tasks as well as answering.
+    var onTasks = false
+    /// Set to go to Tasks (the + menu's Task, Siri, a notification).
+    var showTasks = false
+    /// Set to go to a section (a folder just made or renamed, or Docs after deleting the folder you were in).
+    var showSection: PadSection?
     /// Set to open the new-event form on the calendar.
     var newEvent = false
     /// The doc on screen, if any: the bottom bar asks about it.
@@ -232,6 +250,12 @@ final class Router {
 
     func openCalendar(_ day: Date) {
         calendarDay = day
+    }
+
+    /// Go to Tasks with the bar ready to type one.
+    func newTask() {
+        showTasks = true
+        focusAsk = true
     }
 
     func createEvent() {
@@ -315,7 +339,8 @@ struct PhoneRoot: View {
     @State private var settings = false
     @State private var allRecents = false
 
-    private var folders: [String] { Array(Set(items.compactMap(\.folder))).sorted() }
+    @AppStorage(Folders.key) private var emptyFolders = ""
+    private var folders: [String] { Folders.all(items, emptyFolders) }
 
     var body: some View {
         // A sidebar that sits beside the page: opening it slides the page over, the page stays in view.
@@ -353,6 +378,8 @@ struct PhoneRoot: View {
             }
         }
         .onChange(of: router.calendarDay) { if router.calendarDay != nil { section = .calendar } }
+        .onChange(of: router.showTasks) { if router.showTasks { router.showTasks = false; section = .tasks; close() } }
+        .onChange(of: router.showSection) { if let s = router.showSection { router.showSection = nil; section = s; close() } }
         // Something new to open: go to its list, which pushes it (see `opensPending`).
         .onChange(of: router.pending?.id) {
             guard let p = router.pending else { return }
@@ -371,6 +398,7 @@ struct PhoneRoot: View {
     @ViewBuilder private var screen: some View {
         switch section {
         case .today: TodayView()
+        case .tasks: TasksScreen()
         case .folder(let f): DocsView(folder: f)
         case .lectures: ItemListView(kind: .lecture)
         case .docs: DocsView()
@@ -399,6 +427,7 @@ struct PhoneRoot: View {
                 }
                 .padding(.leading, 12).padding(.bottom, 20)
                 row("Home", "square.grid.2x2", .today)
+                row("Tasks", "checklist", .tasks)
                 row("Docs", "doc.text", .docs)
                 row("Recordings", "mic", .lectures)
                 row("Calendar", "calendar", .calendar)

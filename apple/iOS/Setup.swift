@@ -212,7 +212,7 @@ struct SetupView: View {
     private var nameStep: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Welcome to Monolith").font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
-            Text("Notes, docs, recordings and your calendar in one place, with an assistant that runs on this iPhone.")
+            Text("Notes, docs, recordings and your calendar in one place, with an assistant that runs on this \(Linker.deviceName).")
                 .font(.body).foregroundStyle(.secondary).padding(.bottom, 22)
             Text("What should we call you?").font(.headline)
             TextField("Your first name", text: $name)
@@ -228,14 +228,14 @@ struct SetupView: View {
     private var storageStep: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Where your work lives").font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
-            Text("Everything stays on this iPhone. Link a computer later in Settings to work on both.")
+            Text("Everything stays on this \(Linker.deviceName). Link a computer later in Settings to work on both.")
                 .font(.body).foregroundStyle(.secondary).padding(.bottom, 22)
 
             VStack(spacing: 0) {
                 HStack(spacing: 14) {
                     Image(systemName: "iphone").font(.title3).foregroundStyle(.secondary).frame(width: 28)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("On this iPhone").font(.body.weight(.semibold))
+                        Text("On this \(Linker.deviceName)").font(.body.weight(.semibold))
                         Text("Encrypted by iOS with your device passcode.").font(.footnote).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 8)
@@ -248,7 +248,7 @@ struct SetupView: View {
                     Image(systemName: AppLock.symbol).font(.title3).foregroundStyle(.secondary).frame(width: 28)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Lock with \(method ?? "Face ID")").font(.body.weight(.semibold))
-                        Text(method == nil ? "Set a passcode for this iPhone in Settings to use this." : "Asked each time you open Monolith. Hidden in the app switcher.")
+                        Text(method == nil ? "Set a passcode for this \(Linker.deviceName) in Settings to use this." : "Asked each time you open Monolith. Hidden in the app switcher.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 8)
@@ -300,7 +300,7 @@ struct YouSection: View {
         } header: {
             Text("You").sectionTitle()
         } footer: {
-            Text(method == nil ? "Set a passcode for this iPhone to use the lock." : "Your name is used in greetings. With the lock on, Monolith asks for \(method!) each time you open it.")
+            Text(method == nil ? "Set a passcode for this \(Linker.deviceName) to use the lock." : "Your name is used in greetings. With the lock on, Monolith asks for \(method!) each time you open it.")
         }
     }
 }

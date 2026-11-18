@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Recordings: one plain list, newest first, pinned on top.
+/// Recordings: one plain list, newest first.
 struct ItemListView: View {
     let kind: ItemKind
     @Environment(\.modelContext) private var ctx
@@ -24,7 +24,7 @@ struct ItemListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            List { rows(filtered.filter(\.pinned) + filtered.filter { !$0.pinned }) }
+            List { rows(filtered) }
                 .compactList()
                 .overlay {
                     if filtered.isEmpty {
@@ -39,7 +39,7 @@ struct ItemListView: View {
                 .drawerButton()
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Menu { Button("Recently Deleted", systemImage: "trash") { showDeleted = true } } label: { Image(systemName: "ellipsis") }
+                        Menu { Button("Recently Deleted", systemImage: "trash") { showDeleted = true } } label: { Icon.more }
                     }
                     ToolbarSpacer(.fixed, placement: .topBarTrailing)
                     ToolbarItem(placement: .topBarTrailing) {
@@ -61,9 +61,6 @@ struct ItemListView: View {
     @ViewBuilder private func rows(_ list: [Item]) -> some View {
         ForEach(list) { item in
             ItemLink(item: item) { ItemRow(item: item) }
-                .swipeActions(edge: .leading) {
-                    Button { item.toggleFavorite() } label: { Image(systemName: item.pinSymbol) }.tint(.orange)
-                }
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) { item.trash() } label: { Image(systemName: "trash") }
                 }
@@ -84,28 +81,21 @@ extension View {
     }
 }
 
-/// Same symbols and words as the web app: docs are favourites (a star), recordings pin to the top.
-extension Item {
-    var pinSymbol: String { kind == .lecture ? (pinned ? "pin.slash" : "pin") : (pinned ? "star.slash" : "star") }
-    var pinLabel: String { kind == .lecture ? (pinned ? "Unpin" : "Pin to top") : (pinned ? "Remove from favorites" : "Add to favorites") }
-}
-
 struct ItemMenu: View {
     var item: Item
     var folders: [String] = []
     /// Called after Delete, so an open editor can step back.
     var onDelete: (() -> Void)? = nil
-    /// Editor-only options (emoji, sketch, checklist), placed after favorites like the web's ··· menu.
+    /// Editor-only options (emoji, sketch, checklist), placed after Add sub-doc like the web's ··· menu.
     var extra: AnyView? = nil
-    /// Off in the editor, where the star sits in the header (as on the web).
-    var showFavorite = true
     @Environment(\.modelContext) private var ctx
     @Environment(Router.self) private var router
     @Query(filter: #Predicate<Item> { $0.deletedAt == nil && $0.folder != nil }) private var filed: [Item]
 
-    private var allFolders: [String] { Array(Set(folders + filed.compactMap(\.folder))).sorted() }
+    @AppStorage(Folders.key) private var emptyFolders = ""
+    private var allFolders: [String] { Array(Set(folders + Folders.all(filed, emptyFolders))).sorted() }
 
-    /// The web app's doc menu, in its order: Add sub-doc, favorites, Move to, then Delete.
+    /// The web app's doc menu, in its order: Add sub-doc, Move to, then Delete.
     var body: some View {
         if item.kind == .doc {
             Button("Add sub-doc", systemImage: "doc.badge.plus") {
@@ -113,7 +103,6 @@ struct ItemMenu: View {
                 ctx.insert(d); router.open(d)
             }
         }
-        if showFavorite { Button(item.pinLabel, systemImage: item.pinSymbol) { item.toggleFavorite() } }
         if let extra { extra }
         if item.kind == .doc && !allFolders.isEmpty {
             Menu {
@@ -145,7 +134,7 @@ struct ItemRow: View {
         HStack(spacing: 14) {
             Group {
                 if let e = item.displayEmoji { Text(e) }
-                else { Image(systemName: item.pinned ? (item.kind == .lecture ? "pin" : "star") : item.kind.symbol).foregroundStyle(.secondary) }
+                else { Image(systemName: item.kind.symbol).foregroundStyle(.secondary) }
             }
             .font(.body).frame(width: 22)
             Text(item.displayTitle).lineLimit(1)
@@ -177,6 +166,7 @@ struct NoteEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var ctx
     @Environment(Router.self) private var router
+    @Environment(LectureRecorder.self) private var recorder
     @State private var sketching = false
     @State private var picking = false
     @FocusState private var titleFocused: Bool
@@ -191,7 +181,7 @@ struct NoteEditor: View {
                         .font(.title.bold())
                         .focused($titleFocused)
                         .submitLabel(.next)
-                    BlockEditor(markdown: $item.body, placeholder: "Start writing", focusRequest: bodyFocus)
+                    BlockEditor(markdown: $item.body, placeholder: "Start writing", focusRequest: bodyFocus, record: recordHere)
                 }
                 .frame(maxWidth: 720, alignment: .leading)
                 .padding(.horizontal, 20)
@@ -221,11 +211,11 @@ struct NoteEditor: View {
             if router.reading?.id == item.id { router.reading = nil }
             // A doc left blank isn't kept, so trying "New doc" never leaves an "Untitled" behind.
             if item.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && item.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && item.drawing == nil && item.deletedAt == nil && !item.pinned && (item.children ?? []).isEmpty {
+                && item.drawing == nil && item.deletedAt == nil && (item.children ?? []).isEmpty {
                 ctx.delete(item)
             }
         }
-        // Two buttons: favorite, and ··· for the rest (Listen is in there). While it reads aloud, a stop button
+        // One button, ··· for everything (Listen is in there). While it reads aloud, a stop button
         // takes Listen's place up here, so it can be stopped in one tap.
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -233,22 +223,41 @@ struct NoteEditor: View {
                     Button { Speaker.shared.toggle(item) } label: { Image(systemName: "stop.fill") }
                         .accessibilityLabel("Stop reading")
                 }
-                Button { item.toggleFavorite() } label: { Image(systemName: item.pinned ? "star.fill" : "star") }
-                    .accessibilityLabel(item.pinLabel)
                 Menu {
                     ItemMenu(item: item, onDelete: { dismiss() }, extra: AnyView(Group {
-                        Button("Listen", systemImage: "speaker.wave.2") { Speaker.shared.toggle(item) }
+                        Button("Record into this doc", systemImage: "mic") { recordAtEnd() }.disabled(recorder.isRecording)
+                        Button { Speaker.shared.toggle(item) } label: { Label { Text("Listen") } icon: { Icon.listen } }
                         Button(item.displayEmoji == nil ? "Add emoji" : "Change emoji", systemImage: "face.smiling") { picking = true }
                         Button(sketching ? "Close sketch" : "Sketch", systemImage: "pencil.line") { withAnimation(.snappy) { sketching.toggle() } }
                         if item.body.contains("- [x] ") {
                             Button("Move checked to bottom", systemImage: "line.3.horizontal.decrease") { item.body = MD.checkedLast(item.body) }
                             Button("Uncheck all", systemImage: "checkmark.square") { item.body = item.body.replacingOccurrences(of: "- [x] ", with: "- [ ] ") }
                         }
-                    }), showFavorite: false)
-                } label: { Image(systemName: "ellipsis") }
+                    }))
+                } label: { Icon.more }
                 .accessibilityLabel("More options")
             }
         }
+    }
+
+    /// /record (or Record into this doc): a recording that starts now, linked from this doc so the doc keeps it. You
+    /// stay in the doc and keep writing; the recording shows above the bar until it's stopped.
+    private func recordHere() -> (title: String, url: URL)? {
+        guard !recorder.isRecording else { Toaster.shared.show("Already recording"); return nil }
+        let l = Item(.lecture, title: "\(item.displayTitle) · Recording \(Date.now.formatted(.dateTime.month(.abbreviated).day()))")
+        ctx.insert(l)
+        recorder.start(l)
+        Haptics.success()
+        Toaster.shared.show("Recording", detail: "Linked in this doc")
+        guard let url = URL(string: "#doc/\(l.recID)") else { return nil }
+        return (l.displayTitle, url)
+    }
+
+    private func recordAtEnd() {
+        guard let (title, url) = recordHere() else { return }
+        let link = "[\(title.replacingOccurrences(of: "]", with: "\\]"))](\(url.absoluteString))"
+        let body = item.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        item.body = body.isEmpty ? link : body + "\n\n" + link
     }
 
     /// Return in the title moves on to the body instead of starting a second title line.
@@ -514,9 +523,10 @@ struct ChatView: View {
         let schedule = agenda(events, from: start, to: end).prefix(16).map {
             "- \(Assistant.day($0.start))\($0.allDay ? " all day" : " " + $0.start.formatted(date: .omitted, time: .shortened) + "–" + $0.end.formatted(date: .omitted, time: .shortened)): \($0.title)\(($0.location ?? "").isEmpty ? "" : " @ " + ($0.location ?? ""))"
         }.joined(separator: "\n")
-        let tasks = items.filter { $0.kind != .lecture }
-            .flatMap { i in Tasks.open(in: i.body).map { "- \(MD.plain($0)) (in \(i.displayTitle))" } }
-            .prefix(12).joined(separator: "\n")
+        let allTodos = (try? Storage.container.mainContext.fetch(FetchDescriptor<Todo>(predicate: #Predicate { !$0.done }))) ?? []
+        let tasks = Todos.open(allTodos).prefix(12).map { t in
+            "- \(t.title)" + (t.due == nil ? "" : " (due \(Todos.label(t)))") + (t.docID.flatMap { id in items.first { $0.recID == id } }.map { " (for \($0.displayTitle))" } ?? "")
+        }.joined(separator: "\n")
         let open = about.map { "Open doc, \($0.displayTitle):\n\(String($0.body.prefix(2400)))" }
         // What the turned-on integrations know (place, weather, travel time, recent places).
         let device = Integrations.shared.context

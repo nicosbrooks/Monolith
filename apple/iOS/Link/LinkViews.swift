@@ -152,7 +152,7 @@ private struct ComputerRow: View {
             Menu {
                 if let check { Section("Check code \(check)") {} }
                 Button("Unlink", systemImage: "link.badge.minus", role: .destructive) { confirming = true }
-            } label: { Image(systemName: "ellipsis").foregroundStyle(.secondary).frame(width: 30, height: 30) }
+            } label: { Icon.more.foregroundStyle(.secondary).frame(width: 30, height: 30) }
         }
         .swipeActions { Button("Unlink", systemImage: "link.badge.minus") { Haptics.tap(); confirming = true }.tint(.red) }
         .confirmationDialog("Unlink \(pairing.name)?", isPresented: $confirming, titleVisibility: .visible) {

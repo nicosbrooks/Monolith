@@ -85,6 +85,8 @@ targets:
         WKRunsIndependentlyOfCompanionApp: false
         WKApplication: true
         NSMicrophoneUsageDescription: Record from your wrist; it's transcribed on your iPhone.
+        # Keeps recording with your wrist down, like a voice memo.
+        WKBackgroundModes: [audio]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.socratic.app.watchkitapp

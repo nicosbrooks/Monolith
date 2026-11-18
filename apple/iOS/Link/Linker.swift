@@ -53,7 +53,8 @@ struct PairRequest: Identifiable, Hashable {
     var onLocalNetwork: Bool { relay.hasPrefix("ws://") }
 }
 
-/// One note, doc, lecture or event as it travels between devices. Same shape as `Rec` in src/link/link.ts.
+/// One note, doc, lecture, event or task as it travels between devices. Same shape as `Rec` in src/link/link.ts.
+/// A task uses `title`, `start` (when it's due), `allDay`, `body` (its notes), `done`, `doneAt` and `docId`.
 struct Rec: Codable {
     struct Line: Codable { var start: Double; var text: String }
     var id: String
@@ -73,6 +74,9 @@ struct Rec: Codable {
     var allDay: Bool?
     var location: String?
     var color: String?
+    var done: Bool?
+    var doneAt: Double?
+    var docId: String?
 }
 
 /// One turn of a conversation a computer asks this phone's model to answer.
@@ -558,6 +562,11 @@ final class Linker {
             allDay: e.allDay, location: e.location, color: e.color)
     }
 
+    private func rec(_ t: Todo) -> Rec {
+        Rec(id: t.recID, kind: "task", updatedAt: t.updatedAt.ms, title: t.title, body: t.notes, start: t.due?.ms,
+            allDay: t.due == nil ? nil : t.allDay, done: t.done, doneAt: t.doneAt?.ms, docId: t.docID)
+    }
+
     /// A record that only says "this was deleted for good".
     private func gone(_ id: String, _ t: Memory.Tomb) -> Rec { Rec(id: id, kind: t.kind, updatedAt: t.at, deletedAt: t.at) }
 
@@ -577,8 +586,9 @@ final class Linker {
     }
 
     private func snapshot() -> [Rec] {
-        guard let ctx, let items = try? ctx.fetch(FetchDescriptor<Item>()), let events = try? ctx.fetch(FetchDescriptor<Event>()) else { return [] }
-        return items.map(rec) + events.map(rec) + memory.tombs.map(gone)
+        guard let ctx, let items = try? ctx.fetch(FetchDescriptor<Item>()), let events = try? ctx.fetch(FetchDescriptor<Event>()),
+              let todos = try? ctx.fetch(FetchDescriptor<Todo>()) else { return [] }
+        return items.map(rec) + events.map(rec) + todos.map(rec) + memory.tombs.map(gone)
     }
 
     private func forget(_ id: String) {
@@ -593,7 +603,7 @@ final class Linker {
     private func scan() {
         // If the library can't be read, do nothing. An empty answer here would look like everything was deleted.
         guard !pairings.isEmpty, let ctx, let items = try? ctx.fetch(FetchDescriptor<Item>()),
-              let events = try? ctx.fetch(FetchDescriptor<Event>()) else { return }
+              let events = try? ctx.fetch(FetchDescriptor<Event>()), let todos = try? ctx.fetch(FetchDescriptor<Todo>()) else { return }
         var out: [Rec] = []
         var seen = Set<String>()
         let now = Date.now
@@ -626,6 +636,18 @@ final class Linker {
             memory.tombs[id] = nil
             out.append(rec(e))
         }
+        for t in todos {
+            let id = t.recID
+            seen.insert(id)
+            var r = rec(t)
+            let s = sig(r)
+            guard memory.sigs[id] != s else { continue }
+            if memory.sigs[id] != nil, now.timeIntervalSince(t.updatedAt) > 5 { t.updatedAt = now; r.updatedAt = now.ms }
+            memory.sigs[id] = s
+            memory.kinds[id] = "task"
+            memory.tombs[id] = nil
+            out.append(r)
+        }
         // Deleted for good here: remember it, and tell the computers.
         let missing = memory.kinds.filter { !seen.contains($0.key) }
         for (id, kind) in missing {
@@ -650,7 +672,9 @@ final class Linker {
     /// Merge records from a computer. Newest edit wins.
     private func apply(_ recs: [Rec]) {
         guard let ctx, !recs.isEmpty, let items = try? ctx.fetch(FetchDescriptor<Item>()),
-              let events = try? ctx.fetch(FetchDescriptor<Event>()) else { return }
+              let events = try? ctx.fetch(FetchDescriptor<Event>()), let todos = try? ctx.fetch(FetchDescriptor<Todo>()) else { return }
+        var todoByID: [String: Todo] = [:]
+        for t in todos { todoByID[t.recID] = t }
         var byID: [String: Item] = [:]
         for i in items { byID[i.recID] = i }
         var evByID: [String: Event] = [:]
@@ -664,6 +688,40 @@ final class Linker {
             if let t = memory.tombs[r.id] {
                 if t.at >= stamp { continue } // deleted here after that edit
                 memory.tombs[r.id] = nil      // edited somewhere else since, so it comes back
+            }
+            if r.kind == "task" {
+                let cur = todoByID[r.id]
+                if let cur, cur.updatedAt.ms >= stamp { continue }
+                if r.deletedAt != nil {
+                    if let cur {
+                        ctx.delete(cur)
+                        todoByID[r.id] = nil
+                        forget(r.id)
+                        changed = true
+                    }
+                    memory.tombs[r.id] = .init(kind: "task", at: stamp)
+                    continue
+                }
+                let t = cur ?? {
+                    let n = Todo(title: "")
+                    n.syncID = r.id
+                    n.createdAt = Date(ms: r.updatedAt)
+                    ctx.insert(n)
+                    todoByID[r.id] = n
+                    return n
+                }()
+                t.title = r.title ?? ""
+                t.done = r.done ?? false
+                t.doneAt = r.doneAt.map { Date(ms: $0) }
+                t.due = r.start.map { Date(ms: $0) }
+                t.allDay = r.allDay ?? false
+                t.notes = (r.body ?? "").isEmpty ? nil : r.body
+                t.docID = r.docId
+                t.updatedAt = Date(ms: r.updatedAt)
+                memory.sigs[r.id] = sig(rec(t))
+                memory.kinds[r.id] = "task"
+                changed = true
+                continue
             }
             if r.kind == "event" {
                 let cur = evByID[r.id]

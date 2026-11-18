@@ -42,7 +42,6 @@ export function HomeView() {
   const leftToday = events.some((e) => (e.allDay ? e.start < addDays(today, 1).getTime() && e.end > now.getTime() : isSameDay(e.start, today) && e.end > now.getTime()))
   const SHOWN = mobile ? PHONE_SHOWN : DESK_SHOWN
   const tasks = todos.slice(0, SHOWN)
-  const favorites = live.filter((i) => i.pinned && i.kind !== 'note').sort((a, b) => b.updatedAt - a.updatedAt)
   const [dayOffset, setDayOffset] = useState(0)
   const openDay = () => useStore.getState().openCalendarDate(addDays(today, dayOffset))
   const [board, setBoard] = useBoard()
@@ -83,15 +82,6 @@ export function HomeView() {
           {/* The panel scrolls on a computer, so it holds them all; a phone shows the first few. */}
           {(mobile ? tasks : todos).map((t) => <TaskRow key={t.id} task={t} />)}
           {!todos.length && <p className="hm-empty">Nothing to do. Type a task in the bar below.</p>}
-        </div>
-      ),
-    },
-    favorites: {
-      label: 'Favorites',
-      body: (
-        <div className="hm-list">
-          {favorites.slice(0, SHOWN).map((r) => docRow(r, false))}
-          {!favorites.length && <p className="hm-empty">Star a doc to keep it here.</p>}
         </div>
       ),
     },
@@ -160,8 +150,8 @@ export function HomeView() {
   )
 }
 
-type PanelId = 'calendar' | 'tasks' | 'recent' | 'favorites'
-const PANEL_IDS: PanelId[] = ['calendar', 'tasks', 'recent', 'favorites']
+type PanelId = 'calendar' | 'tasks' | 'recent'
+const PANEL_IDS: PanelId[] = ['calendar', 'tasks', 'recent']
 interface Panel {
   label: string
   action?: { label: string; run: () => void }

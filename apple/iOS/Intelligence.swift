@@ -190,22 +190,6 @@ enum Assistant {
     }
 }
 
-/// Markdown checklist helpers: `- [ ] task` / `- [x] task`.
-enum Tasks {
-    static func open(in body: String) -> [String] {
-        body.split(whereSeparator: \.isNewline).compactMap { line in
-            let t = line.trimmingCharacters(in: .whitespaces)
-            return t.hasPrefix("- [ ] ") ? String(t.dropFirst(6)) : nil
-        }
-    }
-
-    static func check(_ task: String, in body: String) -> String {
-        // Only the first match: the same task can appear twice in a note.
-        guard let r = body.range(of: "- [ ] \(task)") else { return body }
-        return body.replacingCharacters(in: r, with: "- [x] \(task)")
-    }
-}
-
 /// Dates spotted in your writing ("essay due Nov 14") that aren't on the calendar yet.
 struct Suggestion: Identifiable {
     var id: String

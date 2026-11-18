@@ -9,6 +9,11 @@ nonisolated enum Link {
     /// transferFile metadata keys for a recording made on the watch
     static let title = "title"
     static let duration = "duration"
+    /// The recording's id on the watch, and when it started (seconds since 1970).
+    static let id = "id"
+    static let start = "start"
+    /// transferUserInfo key, phone → watch: the id of a recording the phone has saved. Until then the watch keeps it.
+    static let received = "received"
 }
 
 struct AgendaEvent: Codable, Hashable, Identifiable {

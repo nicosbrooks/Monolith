@@ -3045,7 +3045,7 @@ body {
   flex-direction: column;
   gap: 2px;
 }
-/* Favorites and recent docs: only while open, and they scroll on their own. */
+/* Recent docs: only while open, and they scroll on their own. */
 .rl-scroll {
   flex: 1;
   min-height: 0;
@@ -3425,6 +3425,33 @@ body {
 }
 .lib-chips button.on {
   background: var(--btn-grad);
+  color: var(--text);
+}
+.lib-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--btn-grad);
+}
+.lib-chips .lib-chip button {
+  height: 34px;
+  background: none;
+  color: var(--text);
+}
+.lib-chips .lib-chip > button:first-child {
+  padding-right: 6px;
+}
+.lib-chips .lib-chip .lib-chip-more {
+  width: 30px;
+  padding: 0;
+  margin-left: -2px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  border-radius: 0 999px 999px 0;
+}
+.lib-chips .lib-chip .lib-chip-more:hover {
   color: var(--text);
 }
 .lib-chips input {

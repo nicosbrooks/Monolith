@@ -1,5 +1,4 @@
 import { Extension, InputRule } from '@tiptap/core'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { Editor } from '@tiptap/core'
 
 /**
@@ -11,7 +10,8 @@ import type { Editor } from '@tiptap/core'
  *    it onto the line above.
  *  - **Typing a marker at the start of a line changes the list**: `1. ` in a bulleted list numbers it, `- ` turns a
  *    numbered one back to bullets, `[] ` makes it a checklist. (Before, each nested a new list inside the line.)
- *  - **Pasting plain text** whose lines start with `- `, `* `, `1. ` or `[ ] ` makes a real list, nested by indent.
+ *  - **Pasting plain text** whose lines start with `- `, `* `, `1. ` or `[ ] ` makes a real list, nested by indent
+ *    (see markdownInput.ts, which reads the paste).
  */
 
 const ITEMS = ['listItem', 'taskItem'] as const
@@ -132,26 +132,6 @@ export const ListSmarts = Extension.create({
       retype(/^(\d+)[.)]\s$/, 'orderedList'),
       retype(/^[-*+•]\s$/, 'bulletList'),
       retype(/^\[( |x)?\]\s$/, 'taskList'),
-    ]
-  },
-
-  addProseMirrorPlugins() {
-    const editor = this.editor
-    return [
-      new Plugin({
-        key: new PluginKey('listPaste'),
-        props: {
-          handlePaste: (_view, e) => {
-            const cd = e.clipboardData
-            // Rich content (from a web page or another doc) brings its own lists.
-            if (!cd || cd.files.length || cd.getData('text/html')) return false
-            const html = textToListHtml(cd.getData('text/plain'))
-            if (!html) return false
-            editor.chain().focus().insertContent(html).run()
-            return true
-          },
-        },
-      }),
     ]
   },
 })

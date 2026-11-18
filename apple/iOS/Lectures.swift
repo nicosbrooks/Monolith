@@ -560,7 +560,7 @@ struct LectureView: View {
                             Button("Upload audio", systemImage: "square.and.arrow.up") { importing = true }
                         }
                     }))
-                } label: { Image(systemName: "ellipsis") }
+                } label: { Icon.more }
                 .accessibilityLabel("More options")
             }
         }

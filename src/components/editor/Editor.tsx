@@ -22,6 +22,8 @@ interface Props {
   className?: string
   /** Block ids to hide from the slash menu (e.g. sketch in Markdown-backed docs) */
   exclude?: string[]
+  /** The doc being edited, when it's a doc: /record links a new recording from it. */
+  docId?: string
 }
 
 const HL = [
@@ -32,7 +34,7 @@ const HL = [
   { c: '#ddd6fe', n: 'Purple' },
 ]
 
-export function Editor({ html, onChange, placeholder, autofocus, onReady, className, exclude }: Props) {
+export function Editor({ html, onChange, placeholder, autofocus, onReady, className, exclude, docId }: Props) {
   const [slash, setSlash] = useState<{ q: string; from: number; x: number; y: number } | null>(null)
   const [sel, setSel] = useState(0)
   const slashRef = useRef(slash)
@@ -46,8 +48,8 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
   const filtered = useMemo(() => {
     if (!slash) return []
     const q = slash.q.toLowerCase().trim()
-    return BLOCKS.filter((b) => !exclude?.includes(b.id)).filter((b) => !q || b.label.toLowerCase().includes(q) || b.keywords.includes(q))
-  }, [slash, exclude])
+    return BLOCKS.filter((b) => !exclude?.includes(b.id) && (b.id !== 'record' || docId)).filter((b) => !q || b.label.toLowerCase().includes(q) || b.keywords.includes(q))
+  }, [slash, exclude, docId])
   const filteredRef = useRef(filtered)
   filteredRef.current = filtered
 
@@ -90,11 +92,26 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
       .run()
   }
 
+  /** /record: a recording that starts now, with a link to it where the cursor is. */
+  const record = async (editor: TEditor) => {
+    if (!docId) return
+    const { recordForDoc } = await import('../../lib/recordNext')
+    const { item, beside } = recordForDoc(docId)
+    editor
+      .chain()
+      .focus()
+      .insertContent([{ type: 'text', text: item.title, marks: [{ type: 'link', attrs: { href: linkHref(item.id) } }] }, { type: 'text', text: ' ' }])
+      .run()
+    if (beside) openBeside(item.id)
+    else useStore.getState().open(item.id)
+  }
+
   const runBlock = (editor: TEditor, b: Block) => {
     const s = slashRef.current
     if (s) editor.chain().focus().deleteRange({ from: s.from, to: editor.state.selection.from }).run()
     setSlash(null)
     if (b.ai) runAIBlock(editor, b.id)
+    else if (b.id === 'record') void record(editor)
     else b.run(editor)
   }
 

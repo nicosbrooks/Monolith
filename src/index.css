@@ -733,10 +733,6 @@ kbd {
   align-items: center;
   gap: 5px;
 }
-.row-title .pin {
-  color: var(--warn);
-  flex-shrink: 0;
-}
 .row-sub {
   display: flex;
   gap: 7px;

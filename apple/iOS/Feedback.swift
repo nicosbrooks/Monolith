@@ -65,11 +65,6 @@ extension Item {
         let what = kind == .lecture ? "Recording" : "Doc"
         Toaster.shared.show("\(what) moved to Recently Deleted", action: ("Undo", { [weak self] in self?.deletedAt = nil }))
     }
-
-    @MainActor func toggleFavorite() {
-        pinned.toggle()
-        Haptics.tap()
-    }
 }
 
 /// Reads a doc aloud (the web app's Listen button).

@@ -67,7 +67,7 @@ struct CreateCommands: Commands {
 // MARK: - iPad root
 
 enum PadSection: Hashable {
-    case today, folder(String), lectures, docs, calendar, search, integrations
+    case today, tasks, folder(String), lectures, docs, calendar, search, integrations
 }
 
 /// iPad and wide windows: sidebar, then a list, then the editor.
@@ -85,13 +85,15 @@ struct PadRoot: View {
     @Environment(Router.self) private var router
     @Environment(\.horizontalSizeClass) private var size
 
-    private var folders: [String] { Array(Set(items.compactMap(\.folder))).sorted() }
+    @AppStorage(Folders.key) private var emptyFolders = ""
+    private var folders: [String] { Folders.all(items, emptyFolders) }
 
     var body: some View {
         NavigationSplitView(columnVisibility: $visibility, preferredCompactColumn: $compactColumn) {
             List(selection: $section) {
                 Section {
                     Label("Home", systemImage: "square.grid.2x2").tag(PadSection.today).sideRow(size)
+                    Label("Tasks", systemImage: "checklist").tag(PadSection.tasks).sideRow(size)
                     Label("Docs", systemImage: "doc.text").tag(PadSection.docs).sideRow(size)
                     Label("Recordings", systemImage: "mic").tag(PadSection.lectures).sideRow(size)
                     Label("Calendar", systemImage: "calendar").tag(PadSection.calendar).sideRow(size)
@@ -114,6 +116,7 @@ struct PadRoot: View {
                     Menu {
                         Button { create(.doc) } label: { Text("Doc"); Image(systemName: "doc.text") }
                         Button { create(.lecture) } label: { Text("Record"); Image(systemName: "mic") }.disabled(recorder.isRecording)
+                        Button { router.newTask() } label: { Text("Task"); Image(systemName: "checklist") }
                         Button { newEvent = true } label: { Text("Event"); Image(systemName: "calendar.badge.plus") }
                     } label: { Image(systemName: "plus") }
                     .accessibilityLabel("Create")
@@ -124,6 +127,7 @@ struct PadRoot: View {
             Group {
                 switch section ?? .today {
                 case .today: TodayView()
+                case .tasks: TasksScreen()
                 case .folder(let f): DocsView(folder: f)
                 case .lectures: ItemListView(kind: .lecture)
                 case .docs: DocsView()
@@ -147,6 +151,8 @@ struct PadRoot: View {
         .environment(\.selectedItemID, selection?.id)
         .onChange(of: section) { if section != .search { selection = nil } }
         .onChange(of: router.calendarDay) { if router.calendarDay != nil { section = .calendar } }
+        .onChange(of: router.showTasks) { if router.showTasks { router.showTasks = false; section = .tasks } }
+        .onChange(of: router.showSection) { if let s = router.showSection { router.showSection = nil; section = s } }
         // "Open this" from anywhere (quick capture, a new recording, a notification): go to its section and select it.
         .task(id: router.pending?.id) {
             guard let item = router.pending else { return }

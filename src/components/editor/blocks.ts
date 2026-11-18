@@ -1,8 +1,8 @@
 import type { Editor } from '@tiptap/core'
 import {
-  CheckSquare, Code2, Link2, Heading1, Heading2, Heading3, ImageIcon, List, ListOrdered, Minus, PenTool, Quote, PenLine, Paperclip, Table, Type, Wand2, ListChecks, Vault,
-  type LucideIcon,
+  CheckSquare, Code2, Link2, Heading1, Heading2, Heading3, ImageIcon, List, ListOrdered, Minus, PenTool, Quote, PenLine, Paperclip, Table, Type, Wand2, ListChecks, Mic,
 } from 'lucide-react'
+import { VaultIcon, type AnyIcon } from '../icons'
 import { addFile, refOf } from '../../lib/files'
 import { pickFromVault } from '../VaultPicker'
 import { toast, toastError } from '../Toast'
@@ -11,7 +11,7 @@ export interface Block {
   id: string
   label: string
   hint: string
-  icon: LucideIcon
+  icon: AnyIcon
   keywords: string
   run: (e: Editor) => void
   ai?: boolean
@@ -87,7 +87,8 @@ export const BLOCKS: Block[] = [
   { id: 'sketch', label: 'Sketch', hint: 'Draw with pen or finger', icon: PenTool, keywords: 'draw sketch canvas pen handwriting scratch', run: (e) => e.chain().focus().insertSketch().run() },
   { id: 'img', label: 'Image', hint: 'Add a picture', icon: ImageIcon, keywords: 'image photo picture', run: (e) => pickFiles(e, 'image/*') },
   { id: 'file', label: 'File', hint: 'Attach any file', icon: Paperclip, keywords: 'file attachment attach pdf document upload', run: (e) => pickFiles(e) },
-  { id: 'vault', label: 'From the Vault', hint: 'Link a file you already have', icon: Vault, keywords: 'vault file link existing attachment picture pdf', run: (e) => void linkFromVault(e) },
+  { id: 'vault', label: 'From the Vault', hint: 'Link a file you already have', icon: VaultIcon, keywords: 'vault file link existing attachment picture pdf', run: (e) => void linkFromVault(e) },
+  { id: 'record', label: 'Record', hint: 'Record audio into this doc', icon: Mic, keywords: 'record recording audio voice mic microphone meeting lecture transcribe', run: () => {} },
   { id: 'link', label: 'Link to a doc', hint: 'Or type [[', icon: Link2, keywords: 'link doc page mention reference backlink wiki connect', run: (e) => e.chain().focus().insertContent('[[').run() },
   { id: 'quote', label: 'Quote', hint: 'Block quote', icon: Quote, keywords: 'quote blockquote', run: (e) => e.chain().focus().toggleBlockquote().run() },
   { id: 'code', label: 'Monospaced', hint: 'Code block', icon: Code2, keywords: 'code mono monospaced', run: (e) => e.chain().focus().toggleCodeBlock().run() },

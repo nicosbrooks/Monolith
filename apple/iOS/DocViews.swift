@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// All writing in one place (notes were merged into docs): pinned first, then top-level docs, newest first,
+/// All writing in one place (notes were merged into docs): top-level docs, newest first,
 /// with sub-docs folded under their parent. A folder shows just its docs.
 struct DocsView: View {
     var folder: String? = nil
@@ -12,9 +12,12 @@ struct DocsView: View {
     @State private var showDeleted = false
     @State private var naming = false
     @State private var folderName = ""
+    @State private var renaming = false
+    @AppStorage(Folders.key) private var emptyFolders = ""
     @Environment(\.openItem) private var openItem
+    @Environment(Router.self) private var router
 
-    private var folders: [String] { Array(Set(docs.compactMap(\.folder))).sorted() }
+    private var folders: [String] { Folders.all(docs, emptyFolders) }
     private var searching: Bool { !query.isEmpty }
     private var shown: [Item] {
         docs.filter { (folder == nil || $0.folder == folder)
@@ -27,8 +30,7 @@ struct DocsView: View {
                 if folder != nil || searching {
                     ForEach(shown) { row($0) }
                 } else {
-                    ForEach(shown.filter(\.pinned)) { row($0) }
-                    ForEach(shown.filter { !$0.pinned && $0.parent == nil }) { DocNode(doc: $0, all: docs, folders: folders) }
+                    ForEach(shown.filter { $0.parent == nil }) { DocNode(doc: $0, all: docs, folders: folders) }
                 }
             }
             .compactList()
@@ -47,9 +49,18 @@ struct DocsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button("New folder", systemImage: "folder.badge.plus") { folderName = ""; naming = true }
-                        Button("Recently Deleted", systemImage: "trash") { showDeleted = true }
-                    } label: { Image(systemName: "ellipsis") }
+                        if let folder {
+                            Button("Rename folder", systemImage: "pencil") { folderName = folder; renaming = true }
+                            Button("Delete folder", systemImage: "trash", role: .destructive) {
+                                Folders.delete(folder, in: ctx)
+                                router.showSection = .docs
+                            }
+                        } else {
+                            Button("New folder", systemImage: "folder.badge.plus") { folderName = ""; naming = true }
+                            Button("Recently Deleted", systemImage: "trash") { showDeleted = true }
+                        }
+                    } label: { Icon.more }
+                    .accessibilityLabel(folder == nil ? "More" : "Folder options")
                 }
                 ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 ToolbarItem(placement: .topBarTrailing) {
@@ -61,19 +72,19 @@ struct DocsView: View {
                 TextField("Name", text: $folderName)
                 Button("Cancel", role: .cancel) {}
                 Button("Create") {
-                    // A folder exists once something is in it, so start it with a doc.
                     let name = folderName.trimmingCharacters(in: .whitespaces)
                     guard !name.isEmpty else { return }
-                    let d = Item(.doc); d.folder = name; open(d)
+                    Folders.create(name)
+                    router.showSection = .folder(name)
                 }
                 .disabled(folderName.trimmingCharacters(in: .whitespaces).isEmpty)
-            } message: { Text("Opens a first doc inside it. Move others in from their ··· menu.") }
+            }
+            .folderRename(folder ?? "", isPresented: $renaming, text: $folderName)
         }
     }
 
     private func row(_ d: Item) -> some View {
         ItemLink(item: d) { ItemRow(item: d) }
-            .swipeActions(edge: .leading) { Button { d.toggleFavorite() } label: { Image(systemName: d.pinSymbol) }.tint(.orange) }
             .swipeActions(edge: .trailing) { Button(role: .destructive) { d.trash() } label: { Image(systemName: "trash") } }
             .itemMenu(d, folders: folders)
     }
@@ -105,7 +116,6 @@ private struct DocNode: View {
     private var row: some View {
         ItemLink(item: doc) { ItemRow(item: doc) }
         .itemMenu(doc, folders: folders)
-        .swipeActions(edge: .leading) { Button { doc.toggleFavorite() } label: { Image(systemName: doc.pinSymbol) }.tint(.orange) }
         .swipeActions(edge: .trailing) { Button(role: .destructive) { doc.trash() } label: { Image(systemName: "trash") } }
         .listRowBackground(Color.clear)
     }
@@ -182,37 +192,4 @@ struct MarkdownBlocks: View {
         case .text: text
         }
     }
-}
-
-
-/// The web app's folder menu: a new doc in this folder, or delete the folder (its docs stay in Docs).
-private struct FolderActions: ViewModifier {
-    var name: String
-    var onNewDoc: (Item) -> Void
-    @Environment(\.modelContext) private var ctx
-    @Query(filter: #Predicate<Item> { $0.folder != nil }) private var filed: [Item]
-    @State private var confirming = false
-    private var inside: [Item] { filed.filter { $0.folder == name } }
-
-    func body(content: Content) -> some View {
-        content
-            .contextMenu {
-                Button("New doc", systemImage: "doc.badge.plus") { let d = Item(.doc); d.folder = name; ctx.insert(d); onNewDoc(d) }
-                Section { Button("Delete folder", systemImage: "trash", role: .destructive) { confirming = true } }
-            }
-            .confirmationDialog("Delete “\(name)”?", isPresented: $confirming, titleVisibility: .visible) {
-                Button("Delete folder", role: .destructive) {
-                    let docs = inside
-                    docs.forEach { $0.folder = nil }
-                    Toaster.shared.show("Folder deleted", action: ("Undo", { docs.forEach { $0.folder = name } }))
-                }
-            } message: {
-                let n = inside.filter { $0.deletedAt == nil }.count
-                Text(n == 0 ? "Nothing is deleted." : "Its \(n) doc\(n == 1 ? "" : "s") stay in Docs. Nothing is deleted.")
-            }
-    }
-}
-
-extension View {
-    func folderActions(_ name: String, onNewDoc: @escaping (Item) -> Void) -> some View { modifier(FolderActions(name: name, onNewDoc: onNewDoc)) }
 }

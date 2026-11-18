@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { AudioWaveform, CalendarDays, FileText, LayoutGrid, ListChecks, PanelLeftClose, PanelLeftOpen, Search, Settings, StickyNote, Trash2 } from 'lucide-react'
-import { StarIcon, VaultIcon, type AnyIcon } from './icons'
+import { VaultIcon, type AnyIcon } from './icons'
 import { setSidebar, toggleSidebar, useShell } from '../lib/shell'
 import { useStore } from '../store'
 import { itemEmoji } from '../lib/util'
@@ -23,7 +23,7 @@ const CLOSE_DELAY = 260
 
 /**
  * The desktop sidebar. A slim rail of icons that opens in place when you rest the pointer on it (or tab into it),
- * showing the places by name, your favorites and your recent docs. ⌘\ keeps it open beside the page.
+ * showing the places by name and your recent docs. ⌘\ keeps it open beside the page.
  */
 export function Rail() {
   const { open, pinned } = useShell()
@@ -33,13 +33,10 @@ export function Rail() {
   const items = useStore((s) => s.items)
   const timer = useRef<number | undefined>(undefined)
 
-  const { favorites, recent } = useMemo(() => {
-    if (!wide) return { favorites: [], recent: [] }
-    const live = items.filter((i) => !i.deletedAt && !i.file?.dir)
-    const favorites = live.filter((i) => i.pinned).sort((a, b) => b.updatedAt - a.updatedAt)
-    const recent = live.filter((i) => !i.pinned).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 30)
-    return { favorites, recent }
-  }, [items, wide])
+  const recent = useMemo(
+    () => (wide ? items.filter((i) => !i.deletedAt && !i.file?.dir).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 30) : []),
+    [items, wide],
+  )
 
   const later = (fn: () => void, ms: number) => {
     window.clearTimeout(timer.current)
@@ -129,16 +126,10 @@ export function Rail() {
         <div className="rl-scroll">
           {wide && (
             <>
-          {favorites.length > 0 && (
-            <section className="rl-sec" aria-label="Favorites">
-              <h3><StarIcon size={12} strokeWidth={2} aria-hidden="true" /> Favorites</h3>
-              {favorites.map(row)}
-            </section>
-          )}
           <section className="rl-sec" aria-label="Recent">
             <h3>Recent</h3>
             {recent.map(row)}
-            {!recent.length && !favorites.length && <p className="rl-empty">Docs and recordings you open show up here.</p>}
+            {!recent.length && <p className="rl-empty">Docs and recordings you open show up here.</p>}
           </section>
             </>
           )}

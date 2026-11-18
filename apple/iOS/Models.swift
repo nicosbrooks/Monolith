@@ -126,9 +126,18 @@ enum Storage {
     }()
 
     static let container: ModelContainer = {
-        do { return try ModelContainer(for: Item.self, Event.self) }
+        do { return try ModelContainer(for: Item.self, Event.self, Todo.self) }
         catch { fatalError("Couldn't open the database: \(error)") }
     }()
+
+    /// The doc or recording a `#doc/<id>` link points at (the web's link format), if it's here and not deleted.
+    static func linked(_ url: URL) -> Item? {
+        let s = url.absoluteString
+        guard let r = s.range(of: "#doc/") else { return nil }
+        let id = String(s[r.upperBound...]).removingPercentEncoding ?? String(s[r.upperBound...])
+        guard !id.isEmpty, let items = try? container.mainContext.fetch(FetchDescriptor<Item>(predicate: #Predicate { $0.deletedAt == nil })) else { return nil }
+        return items.first { $0.recID == id }
+    }
 
     /// Notes and docs are one thing now: turn any remaining notes into docs (once; cheap when there are none).
     /// Blank docs (no title, no text, no sketch, no sub-docs) are dropped at launch, so a tap on "New doc" never leaves clutter.
@@ -137,7 +146,7 @@ enum Storage {
         guard let docs = try? ctx.fetch(FetchDescriptor<Item>(predicate: #Predicate { $0.kindRaw == raw && $0.deletedAt == nil })) else { return }
         var changed = false
         for d in docs where d.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && d.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && d.drawing == nil && !d.pinned && (d.children ?? []).isEmpty {
+            && d.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && d.drawing == nil && (d.children ?? []).isEmpty {
             ctx.delete(d); changed = true
         }
         if changed { try? ctx.save() }
@@ -156,11 +165,8 @@ enum Storage {
         let welcome = Item(.doc, title: "Welcome to Monolith", body: """
         Notes, docs, lectures and your calendar in one place. The assistant runs on this device.
 
-        - [ ] Record a class or meeting and get notes written for you
-        - [ ] Problem set due Friday at 5pm
-        - [ ] Try the watch app: tap record on your wrist
+        Tasks are their own list: type one in the bar at the bottom of Tasks, with a date if it has one.
         """)
-        welcome.pinned = true
         // Same ids as the web app's starter content, so linking a computer merges them instead of duplicating.
         welcome.syncID = "welcome"
         let doc = Item(.doc, title: "Study system", body: """
@@ -173,6 +179,7 @@ enum Storage {
         doc.syncID = "doc-guide"
         ctx.insert(welcome)
         ctx.insert(doc)
+        Todos.seed(ctx)
         let cal = Calendar.current
         let ten = cal.date(bySettingHour: 10, minute: 0, second: 0, of: .now)!
         let lecture = Event(title: "Linear Algebra lecture", start: ten, end: ten.addingTimeInterval(5400), location: "Hall B")

@@ -106,6 +106,19 @@ struct LineField: UIViewRepresentable {
             if at == 0 { v.typingAttributes = LineText.attributes([], link: nil, kind: kind, mode: parent.mode) }
         }
 
+        /// A link to a doc or recording in this app (`#doc/<id>`, as the web writes them) opens it here; anything
+        /// else opens as usual. Tap a link, or hold it for its menu.
+        func textView(_ v: UITextView, primaryActionFor item: UITextItem, defaultAction: UIAction) -> UIAction? {
+            guard case .link(let url) = item.content, let target = Storage.linked(url) else { return defaultAction }
+            return UIAction(title: "Open \(target.displayTitle)") { _ in Router.shared.open(target) }
+        }
+
+        func textView(_ v: UITextView, menuConfigurationFor item: UITextItem, defaultMenu: UIMenu) -> UITextItem.MenuConfiguration? {
+            guard case .link(let url) = item.content, let target = Storage.linked(url) else { return .init(menu: defaultMenu) }
+            let open = UIAction(title: "Open \(target.displayTitle)", image: UIImage(systemName: target.kind == .lecture ? "mic" : "doc.text")) { _ in Router.shared.open(target) }
+            return .init(menu: UIMenu(children: [open]))
+        }
+
         func textViewDidBeginEditing(_ v: UITextView) {
             if parent.focus != parent.id { parent.focus = parent.id }
             if let v = v as? LineTextView { placeCursor(v) }
@@ -119,8 +132,18 @@ struct LineField: UIViewRepresentable {
             // Return (or pasting several lines) splits the line, which the editor does. The text view never holds a
             // line break.
             guard parent.mode == .rich, text.contains(where: \.isNewline) else { return true }
-            let next = NSMutableAttributedString(attributedString: v.attributedText)
             let insert = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+            // Several lines pasted: read as Markdown, so "# Notes", "- milk" and "**due**" arrive formatted, never as
+            // symbols. Return on its own is still just a new line.
+            if insert != "\n" {
+                let all = LineText.attributed(v.attributedText)
+                let from = LineText.characters(v.text, range.location), to = LineText.characters(v.text, range.location + range.length)
+                let head = AttributedString(all[all.startIndex..<all.index(all.startIndex, offsetByCharacters: from)])
+                let tail = AttributedString(all[all.index(all.startIndex, offsetByCharacters: to)...])
+                parent.events.paste(parent.id, head, insert, tail)
+                return false
+            }
+            let next = NSMutableAttributedString(attributedString: v.attributedText)
             next.replaceCharacters(in: range, with: NSAttributedString(string: insert, attributes: v.typingAttributes))
             let cursor = LineText.characters(next.string, range.location + (insert as NSString).length)
             parent.events.split(parent.id, LineText.attributed(next), cursor)
@@ -143,11 +166,18 @@ struct LineField: UIViewRepresentable {
                 case .none:
                     break
                 }
-                let content = LineText.attributed(v.attributedText)
-                let cursor = LineText.characters(v.text, v.selectedRange.location)
-                if let (out, at, typing) = Rich.inlineShortcut(content, cursor: cursor) {
-                    v.attributedText = LineText.ns(out, kind: kind, mode: parent.mode)
-                    v.selectedRange = NSRange(location: LineText.utf16(v.text, at), length: 0)
+                // Every pair of marks in the line, not just the first: a pasted "**due** Friday, *not* Monday" too.
+                var content = LineText.attributed(v.attributedText)
+                var cursor = LineText.characters(v.text, v.selectedRange.location)
+                var typing: Marks?
+                var changed = false
+                for _ in 0..<12 {
+                    guard let (out, at, t) = Rich.inlineShortcut(content, cursor: cursor) else { break }
+                    content = out; cursor = at; typing = t; changed = true
+                }
+                if changed {
+                    v.attributedText = LineText.ns(content, kind: kind, mode: parent.mode)
+                    v.selectedRange = NSRange(location: LineText.utf16(v.text, cursor), length: 0)
                     if let typing { v.typingAttributes = LineText.attributes(typing, link: nil, kind: kind, mode: parent.mode) }
                 }
             }
@@ -215,6 +245,8 @@ struct LineEvents {
     enum Shortcut { case none, strip(Int), replaced }
 
     var split: (UUID, AttributedString, Int) -> Void
+    /// Several lines pasted: the words before and after the cursor, and the pasted text (read as Markdown).
+    var paste: (UUID, AttributedString, String, AttributedString) -> Void
     var deleteAtStart: (UUID) -> Void
     /// Called with the line's words after each edit: a Markdown shortcut at the start becomes what it means.
     var shortcut: (UUID, String) -> Shortcut

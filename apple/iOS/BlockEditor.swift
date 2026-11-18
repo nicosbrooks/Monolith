@@ -238,6 +238,8 @@ struct BlockEditor: View {
     var placeholder = "Start writing"
     /// Bump to put the cursor at the top of the text (Return in the title does this).
     var focusRequest = 0
+    /// Set in docs: starts a recording linked from the doc (/record, or Insert › Recording) and gives its link.
+    var record: (() -> (title: String, url: URL)?)? = nil
     @State private var blocks: [Block] = []
     /// The line being edited.
     @State private var focus: UUID?
@@ -390,6 +392,7 @@ struct BlockEditor: View {
     private var events: LineEvents {
         LineEvents(
             split: split,
+            paste: paste,
             deleteAtStart: joinUp,
             shortcut: shortcut,
             kind: { id in index(id).map { blocks[$0].kind } },
@@ -412,6 +415,11 @@ struct BlockEditor: View {
         guard let i = index(id) else { return .none }
         switch blocks[i].kind {
         case .text:
+            // "/record" then a space: a recording starts, and this line becomes a link to it.
+            if record != nil, ["/record ", "/rec "].contains(plain.lowercased()) {
+                recordInto(i)
+                return .replaced
+            }
             if plain == "---" {
                 let divider = Block(kind: .divider)
                 blocks[i] = divider
@@ -477,6 +485,53 @@ struct BlockEditor: View {
             lines.cursor[last.id] = max(0, length - behind)
             focus = last.id
         }
+    }
+
+    /// A new recording, linked on line `i`: in place of what was typed ("/record"), or after the line (`keep`).
+    private func recordInto(_ i: Int, keep: Bool = false) {
+        guard let record, let (title, url) = record() else { return }
+        var words = AttributedString(title)
+        words.link = url
+        let line = Block(kind: .text, rich: words + AttributedString(" "))
+        if keep && !blocks[i].isEmpty { blocks.insert(line, at: i + 1) } else { blocks[i] = line }
+        lines.cursor[line.id] = line.content.characters.count
+        focus = line.id
+    }
+
+    /// Lines pasted into a line: read as Markdown and turned into blocks at the cursor. The first pasted line joins the
+    /// words before the cursor when both are plain text; the words after the cursor follow the last pasted line.
+    private func paste(_ id: UUID, _ head: AttributedString, _ md: String, _ tail: AttributedString) {
+        guard let i = index(id) else { return }
+        var head = head
+        if head.characters.first == Block.mark { head.characters.removeFirst() }
+        var parsed = Block.parse(md)
+        guard !parsed.isEmpty else { return }
+        var replaceCurrent = false
+        if head.characters.isEmpty {
+            // An empty line takes the first pasted block's kind (a heading, a list); a line already in a list keeps
+            // pasted plain lines in it.
+            if parsed[0].kind == .text, blocks[i].isListItem { parsed[0].kind = blocks[i].kind; parsed[0].lead = blocks[i].lead }
+            replaceCurrent = true
+        } else {
+            blocks[i].content = head
+            if parsed[0].kind == .text {
+                blocks[i].content = head + parsed[0].content
+                parsed.removeFirst()
+            }
+        }
+        if !tail.characters.isEmpty {
+            if let last = parsed.indices.last, parsed[last].isLine { parsed[last].content = parsed[last].content + tail }
+            else if parsed.isEmpty { blocks[i].content = blocks[i].content + tail }
+            else { parsed.append(Block(kind: .text, rich: tail)) }
+        }
+        if replaceCurrent { blocks.replaceSubrange(i...i, with: parsed) }
+        else { blocks.insert(contentsOf: parsed, at: i + 1) }
+        let landing = parsed.last ?? blocks[i]
+        if landing.isLine {
+            lines.cursor[landing.id] = max(0, landing.content.characters.count - tail.characters.count)
+            focus = landing.id
+        }
+        Haptics.tap()
     }
 
     /// Delete at the very start of a line.
@@ -597,7 +652,7 @@ struct BlockEditor: View {
         out.append(UIMenu(title: "Insert", image: UIImage(systemName: "plus"), children: [
             action("Table", "tablecells") { insert(Block(kind: .table, text: "|  |  |\n| --- | --- |\n|  |  |")) },
             action("Divider", "minus") { insert(Block(kind: .divider)) },
-        ]))
+        ] + (record == nil ? [] : [action("Recording", "mic") { if let i = focused { recordInto(i, keep: true) } }])))
         return out
     }
 

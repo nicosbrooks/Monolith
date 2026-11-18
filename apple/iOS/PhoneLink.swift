@@ -2,7 +2,8 @@ import Foundation
 import SwiftData
 import WatchConnectivity
 
-/// Phone side of the watch connection: sends today's agenda, receives recordings and quick notes.
+/// Phone side of the watch connection: sends today's agenda, receives recordings and quick notes. Each recording is
+/// saved once (by the watch's id for it) and confirmed, so the watch can delete its copy.
 final class PhoneLink: NSObject, WCSessionDelegate {
     static let shared = PhoneLink()
     private var ctx: ModelContext?
@@ -44,15 +45,35 @@ final class PhoneLink: NSObject, WCSessionDelegate {
         let name = "\(UUID().uuidString).\(file.fileURL.pathExtension)"
         let dest = Storage.audio.appending(path: name)
         guard (try? FileManager.default.moveItem(at: file.fileURL, to: dest)) != nil else { return }
-        let title = file.metadata?[Link.title] as? String
-        let duration = file.metadata?[Link.duration] as? Double ?? 0
+        let meta = file.metadata ?? [:]
+        let watchID = (meta[Link.id] as? String).flatMap(UUID.init(uuidString:))
+        let title = meta[Link.title] as? String
+        let duration = meta[Link.duration] as? Double ?? 0
+        let start = (meta[Link.start] as? Double).map { Date(timeIntervalSince1970: $0) }
         Task { @MainActor in
+            // Sent twice (the watch didn't hear back the first time): keep the one already here, and say so again.
+            if let watchID, let ctx = self.ctx, ((try? ctx.fetchCount(FetchDescriptor<Item>(predicate: #Predicate { $0.id == watchID }))) ?? 0) > 0 {
+                try? FileManager.default.removeItem(at: dest)
+                self.confirm(watchID)
+                return
+            }
             let item = Item(.lecture, title: title ?? "Watch recording · \(Date.now.formatted(.dateTime.month(.abbreviated).day()))")
+            if let watchID { item.id = watchID }
+            if let start { item.createdAt = start }
             item.audioFile = name
             item.duration = duration
             self.ctx?.insert(item)
+            try? self.ctx?.save()
+            // Saved: the watch can let go of its copy.
+            if let watchID { self.confirm(watchID) }
             item.transcript = await LectureRecorder.transcribe(dest)
             item.touch()
         }
+    }
+
+    /// Tells the watch a recording is safely on the phone.
+    private func confirm(_ id: UUID) {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        WCSession.default.transferUserInfo([Link.received: id.uuidString])
     }
 }

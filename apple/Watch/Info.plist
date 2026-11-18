@@ -24,6 +24,10 @@
 	<string>Record from your wrist; it's transcribed on your iPhone.</string>
 	<key>WKApplication</key>
 	<true/>
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.socratic.app</string>
 	<key>WKRunsIndependentlyOfCompanionApp</key>

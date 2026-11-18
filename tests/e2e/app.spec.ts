@@ -310,6 +310,70 @@ test('lists: Tab nests and stays in the doc, a typed marker changes the list, Ba
   await expect(pm.locator('ul ul li', { hasText: 'brown' })).toHaveCount(1)
 })
 
+test('Markdown is never needed, but typed or pasted it arrives formatted; /record records into the doc', async ({ page }) => {
+  await start(page)
+  await newDoc(page, 'Markdown test')
+  const pm = page.locator('main .ProseMirror')
+  // A link typed out by hand becomes a link as the ")" goes in.
+  await page.keyboard.type('see [the site](example.com) ')
+  await expect(pm.locator('a[href="https://example.com"]', { hasText: 'the site' })).toHaveCount(1)
+  await expect(pm).not.toContainText('](')
+  // Pasted Markdown: headings, marks, links and lists, with no symbols left on the page.
+  await page.keyboard.press('Enter')
+  await page.evaluate(() => {
+    const dt = new DataTransfer()
+    dt.setData('text/plain', '## Plan\n\nRead **chapter 4** and _skim_ [notes](https://example.org)\n\n1. first\n2. second')
+    document.querySelector('main .ProseMirror')!.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+  })
+  await expect(pm.locator('h2', { hasText: 'Plan' })).toHaveCount(1)
+  await expect(pm.locator('strong', { hasText: 'chapter 4' })).toHaveCount(1)
+  await expect(pm.locator('em', { hasText: 'skim' })).toHaveCount(1)
+  await expect(pm.locator('a[href="https://example.org"]')).toHaveCount(1)
+  await expect(pm.locator('ol > li')).toHaveCount(2)
+  await expect(pm).not.toContainText('**')
+  await expect(pm).not.toContainText('## ')
+  // /record: a recording starts beside the doc, and the doc links to it.
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('/record')
+  await expect(page.locator('.slash-menu')).toContainText('Record')
+  await page.keyboard.press('Enter')
+  await expect(pm.locator('a[href^="#doc/"]', { hasText: 'Markdown test · Recording' })).toHaveCount(1)
+  await expect(page.locator('.side-pane')).toContainText('Markdown test · Recording')
+})
+
+test('folders: made, renamed and deleted from the Docs page; their docs stay', async ({ page }) => {
+  await start(page)
+  await place(page, 'Docs')
+  await page.locator('.hm-quick button', { hasText: 'New folder' }).click()
+  await page.locator('.lib-chips input').fill('Biology')
+  await page.keyboard.press('Enter')
+  const chip = page.locator('.lib-chips button', { hasText: 'Biology' })
+  await expect(chip).toHaveCount(1)
+  // A doc made while the folder is chosen goes in it.
+  await chip.click()
+  await page.locator('.hm-quick button', { hasText: 'New doc' }).click()
+  await page.fill('.doc-title', 'Cell notes')
+  await place(page, 'Docs')
+  await page.locator('.lib-chips button', { hasText: 'Biology' }).first().click()
+  await expect(page.locator('.lib-card', { hasText: 'Cell notes' })).toHaveCount(1)
+  // The chosen folder's chip has the menu: Rename, then Delete.
+  await page.getByRole('button', { name: 'Biology options' }).click()
+  await page.getByRole('menuitem', { name: 'Rename' }).click()
+  await page.locator('.lib-chips input').fill('Bio 101')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.lib-chips button', { hasText: 'Bio 101' })).toHaveCount(1)
+  await page.getByRole('button', { name: 'Bio 101 options' }).click()
+  await page.getByRole('menuitem', { name: 'Delete folder' }).click()
+  await expect(page.locator('.toast')).toContainText('Deleted “Bio 101”. Its doc stays in Docs')
+  await expect(page.locator('.lib-chips button', { hasText: 'Bio 101' })).toHaveCount(0)
+  await expect(page.locator('.lib-card', { hasText: 'Cell notes' })).toHaveCount(1)
+  // Undo brings it back with its doc.
+  await page.locator('.toast button', { hasText: 'Undo' }).click()
+  await page.locator('.lib-chips button', { hasText: 'Bio 101' }).first().click()
+  await expect(page.locator('.lib-card', { hasText: 'Cell notes' })).toHaveCount(1)
+})
+
 test('Tasks are their own list: added in the bar, sorted by date, edited in place; doc checklists stay in docs', async ({ page }) => {
   await start(page)
   await newDoc(page, 'Week plan')
@@ -474,7 +538,7 @@ test('a workspace of 2,000 docs opens, lists and searches without stalling', asy
     await new Promise<void>((ok) => { const t = db.transaction('keyval', 'readwrite'); t.objectStore('keyval').put(JSON.stringify(saved), 'socratic-v1'); t.oncomplete = () => ok() })
   })
   await page.reload()
-  // The sidebar lists only your favorites and most recent docs; the Docs page holds the rest.
+  // The sidebar lists only your most recent docs; the Docs page holds the rest.
   await expect((await library(page)).locator('.rl-doc').first()).toBeVisible()
   expect(await (await library(page)).locator('.rl-doc').count()).toBeLessThanOrEqual(32)
   // A word that's in one doc out of two thousand is found as it's typed.

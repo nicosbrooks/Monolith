@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { isToday, isYesterday, differenceInDays, format } from 'date-fns'
 import { LayoutGrid, List, Search, SquarePen, Mic, Upload, Hash, X, Trash2, RotateCcw, FolderInput, Inbox, FolderPlus, Settings, ChevronLeft } from 'lucide-react'
-import { MoreIcon, StarIcon } from '../components/icons'
+import { MoreIcon } from '../components/icons'
 import { motion } from 'motion/react'
 import { useStore } from '../store'
 import type { Item, ItemKind } from '../types'
@@ -47,8 +47,7 @@ export function ItemList({ kind, trash }: { kind?: ItemKind; trash?: boolean }) 
       .sort((a, b) => (trash ? b.deletedAt! - a.deletedAt! : b.updatedAt - a.updatedAt))
   }, [items, kind, trash, folderId, tag, q])
 
-  const pinned = list.filter((i) => i.pinned && !trash)
-  const rest = list.filter((i) => !i.pinned || trash)
+  const rest = list
   const groups = new Map<string, Item[]>()
   rest.forEach((i) => {
     const g = trash ? 'Deleted items are removed after you empty them' : group(i.updatedAt)
@@ -61,12 +60,6 @@ export function ItemList({ kind, trash }: { kind?: ItemKind; trash?: boolean }) 
 
   const body = (
     <>
-        {pinned.length > 0 && (
-        <>
-          <div className="list-group">Pinned</div>
-          <div className="cards">{pinned.map((i) => <Row key={i.id} item={i} on={i.id === activeId} grid={grid} />)}</div>
-        </>
-      )}
       {[...groups.entries()].map(([g, its]) => (
         <div key={g}>
           <div className="list-group">{g}</div>
@@ -187,7 +180,6 @@ export function rowMenu(item: Item): MenuItem[] {
     ? ['sep', { heading: 'Move to' }, { label: 'All Notes', icon: Inbox, checked: !item.folderId, run: () => st.updateItem(item.id, { folderId: null }) }, ...st.folders.map((f): MenuItem => ({ label: f.name, icon: FolderInput, checked: item.folderId === f.id, run: () => st.updateItem(item.id, { folderId: f.id }) }))]
     : []
   return [
-    { label: item.pinned ? 'Remove from favorites' : 'Add to favorites', icon: StarIcon, run: () => st.updateItem(item.id, { pinned: !item.pinned }) },
     ...folders,
     'sep',
     { label: 'Delete', icon: Trash2, danger: true, run: () => (st.trashItem(item.id), toast(`${what[0].toUpperCase() + what.slice(1)} moved to Recently Deleted`, { action: { label: 'Undo', run: () => st.restoreItem(item.id) } })) },
@@ -215,7 +207,6 @@ function Row({ item, on, grid }: { item: Item; on: boolean; grid: boolean }) {
         </div>
       )}
       <div className="row-title">
-        {item.pinned && <StarIcon size={11} fill="currentColor" className="pin" />}
         {item.title || (item.kind === 'lecture' ? 'Untitled lecture' : 'New Note')}
       </div>
       <div className="row-sub">

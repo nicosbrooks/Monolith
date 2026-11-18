@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Editor as TEditor } from '@tiptap/react'
 import { formatDistanceToNow } from 'date-fns'
 import { History, Printer, ArrowDownWideNarrow, CheckSquare, ChevronRight, Download, FilePlus2, FolderInput, Trash2, Upload, Copy, RotateCcw, Folder, Check, CircleAlert, Loader2, GitCommitHorizontal, FileText, SmilePlus } from 'lucide-react'
-import { MoreIcon, StarIcon } from '../components/icons'
+import { MoreIcon } from '../components/icons'
 import { useStore } from '../store'
 import { MobileBack } from '../components/MobileBack'
 import { PaneNav, SideControls } from '../components/PaneNav'
@@ -149,8 +149,6 @@ export function DocView({ item }: { item: Item }) {
               !isDir && <span className="muted small hide-sm">Edited {formatDistanceToNow(item.updatedAt, { addSuffix: true })} · {words} words</span>
             )}
             {!isDir && <Listen id={item.id} text={() => `${item.title}. ${htmlToText(useStore.getState().items.find((i) => i.id === item.id)?.content ?? '')}`} />}
-            {/* A filled star means it's a favorite (a struck-out star read as "not a favorite"). */}
-            <button className={`tb ${item.pinned ? 'on' : ''}`} onClick={() => st.updateItem(item.id, { pinned: !item.pinned })} title={item.pinned ? 'Remove from favorites' : 'Add to favorites'} aria-pressed={item.pinned}><StarIcon size={17} fill={item.pinned ? 'currentColor' : 'none'} /></button>
             <div className="drop-wrap">
               <button className="tb" aria-label="More options" aria-expanded={more} onClick={() => setMore(!more)}><MoreIcon size={17} /></button>
               {more && (
@@ -248,6 +246,7 @@ export function DocView({ item }: { item: Item }) {
             <Editor
               key={`${item.id}:${item.file?.pulls ?? 0}`}
               exclude={source ? (source.kind === 'folder' ? FOLDER_EXCLUDE : NO_SKETCH) : undefined}
+              docId={item.id}
               html={item.content}
               placeholder="Type / for blocks…"
               onReady={(e) => (setEd(e), buildToc(e))}

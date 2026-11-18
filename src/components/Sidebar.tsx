@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { LayoutGrid, CalendarDays, FileText, Mic, Trash2, Plus, Folder, Settings, ChevronRight, PanelLeft, FolderPlus, AudioWaveform, RefreshCw, Search, ListChecks, GitCommitHorizontal, CircleAlert, Pencil, StarOff, FilePlus2, Unplug, Inbox } from 'lucide-react'
-import { StarIcon, VaultIcon, type AnyIcon } from './icons'
+import { LayoutGrid, CalendarDays, FileText, Mic, Trash2, Plus, Folder, Settings, ChevronRight, PanelLeft, FolderPlus, AudioWaveform, RefreshCw, Search, ListChecks, GitCommitHorizontal, CircleAlert, Pencil, FilePlus2, Unplug, Inbox } from 'lucide-react'
+import { VaultIcon, type AnyIcon } from './icons'
 import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
 import type { Item, Section } from '../types'
@@ -12,6 +12,7 @@ import { APP_NAME } from '../brand'
 import { itemEmoji } from '../lib/util'
 import { startRecording } from '../lib/recordNext'
 import { rowMenu } from '../views/ItemList'
+import { removeFolder } from '../lib/folders'
 
 /** The mark: an upright slab, 4 wide to 9 tall. Also the selection marker and the assistant's waiting sign (soft.css). */
 export function Logo({ size = 20 }: { size?: number }) {
@@ -57,10 +58,6 @@ export function Sidebar({ onNavigate, library }: { onNavigate?: () => void; libr
   const [newFolder, setNewFolder] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
   const [folded, toggle] = useFolded()
-  const deleteFolder = async (id: string, name: string) => {
-    const n = useStore.getState().items.filter((i) => i.folderId === id && !i.deletedAt).length
-    if (await confirmDialog({ title: `Delete “${name}”?`, body: n ? `Its ${n} doc${n > 1 ? 's' : ''} stay in Docs. Nothing is deleted.` : undefined, confirm: 'Delete folder' })) s.deleteFolder(id)
-  }
 
   const nav = (id: Section, label: string, Icon: AnyIcon, n?: number) => (
     <button className={`nav ${s.section === id ? 'on' : ''}`} onClick={() => (s.go(id), onNavigate?.())}>
@@ -137,7 +134,7 @@ export function Sidebar({ onNavigate, library }: { onNavigate?: () => void; libr
                     { label: 'New doc here', icon: FilePlus2, run: () => s.createItem('doc', { folderId: f.id }) },
                     { label: 'Rename', icon: Pencil, run: () => setRenaming({ id: f.id, name: f.name }) },
                     'sep',
-                    { label: 'Delete folder', icon: Trash2, danger: true, run: () => deleteFolder(f.id, f.name) },
+                    { label: 'Delete folder', icon: Trash2, danger: true, run: () => removeFolder(f.id) },
                   ])
                 }
               >
@@ -277,9 +274,9 @@ function Tree({ docs, depth = 0, parent = null, groups, onNavigate }: { docs: It
   )
 }
 
-/** Docs order: sources keep folders-then-name; your own docs are favourites first, then most recently edited. */
+/** Docs order: sources keep folders-then-name; your own docs are most recently edited first. */
 export const docOrder = (a: Item, b: Item) =>
-  a.sourceId ? Number(!!b.file?.dir) - Number(!!a.file?.dir) || a.title.localeCompare(b.title) : Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt
+  a.sourceId ? Number(!!b.file?.dir) - Number(!!a.file?.dir) || a.title.localeCompare(b.title) : b.updatedAt - a.updatedAt
 
 export function docMenu(d: Item): MenuItem[] {
   const st = useStore.getState()
@@ -290,7 +287,6 @@ export function docMenu(d: Item): MenuItem[] {
   if (d.file?.dir) return [newHere]
   return [
     newHere,
-    { label: d.pinned ? 'Remove from favorites' : 'Add to favorites', icon: d.pinned ? StarOff : StarIcon, run: () => st.updateItem(d.id, { pinned: !d.pinned }) },
     ...(local && st.folders.length ? [{ heading: 'Move to' }, { label: 'No folder', icon: Inbox, checked: !d.folderId, run: () => st.updateItem(d.id, { folderId: null }) }, ...st.folders.map((f): MenuItem => ({ label: f.name, icon: Folder, checked: d.folderId === f.id, run: () => st.updateItem(d.id, { folderId: f.id }) }))] : []),
     'sep',
     { label: 'Delete', icon: Trash2, danger: true, run: () => (st.trashItem(d.id), toast('Doc moved to Recently Deleted', { action: { label: 'Undo', run: () => st.restoreItem(d.id) } })) },
@@ -318,12 +314,12 @@ function DocTree({ folderId = null, onNavigate }: { folderId?: string | null; on
   return <Tree docs={docs} onNavigate={onNavigate} />
 }
 
-/** Recordings, newest first (pinned on top), the latest few until you ask for more. Only re-renders when a recording changes. */
+/** Recordings, newest first, the latest few until you ask for more. Only re-renders when a recording changes. */
 function RecordingList() {
   const recs = useStore(useShallow((s) => s.items.filter((i) => i.kind === 'lecture' && !i.deletedAt)))
   const activeId = useStore((s) => s.activeId)
   const [shown, setShown] = useState(6)
-  const sorted = [...recs].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt - a.createdAt)
+  const sorted = [...recs].sort((a, b) => b.createdAt - a.createdAt)
   if (!sorted.length) return <div className="side-empty">No recordings yet</div>
   // The open recording is always in view, even past the cut.
   const at = sorted.findIndex((r) => r.id === activeId)

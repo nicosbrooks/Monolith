@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 
-// The desktop shell: a sidebar rail (Rail.tsx) that opens on hover, with the places, Favorites, Recent docs and
+// The desktop shell: a sidebar rail (Rail.tsx) that opens on hover, with the places, Recent docs and
 // Recently Deleted.
 
 /** Goes to a place in the sidebar: Home, Docs, Tasks, Calendar or Recordings. */
