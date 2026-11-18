@@ -1,14 +1,15 @@
 import { useCallback, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { addDays, format, formatDistanceToNowStrict, isSameDay, startOfDay } from 'date-fns'
-import { ChevronLeft, ChevronRight, FileText, GripVertical, LayoutGrid, MapPin, MoreHorizontal, AudioWaveform, Search, StickyNote } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText, GripVertical, LayoutGrid, MapPin, AudioWaveform, Search, StickyNote } from 'lucide-react'
+import { MoreIcon } from '../components/icons'
 import { openDoc } from '../lib/panes'
 import { NewMenu } from '../components/NewMenu'
 import { useMobile, useScrolled } from '../lib/useMobile'
 import { PhoneTitle } from '../components/Phone'
 import { useStore } from '../store'
 import { itemEmoji } from '../lib/util'
-import { useWorkspace } from '../lib/graph'
-import { TaskRow, TasksByDoc } from './TasksView'
+import { TaskRow } from './TasksView'
+import { useOpenTasks } from '../lib/tasks'
 import { Card } from './DocsLibrary'
 import { useEvents } from '../lib/events'
 import { COLORS } from '../lib/colors'
@@ -29,7 +30,6 @@ export function HomeView() {
   const st = useStore.getState()
   const mobile = useMobile()
   const [scrolled, onScroll] = useScrolled()
-  const ws = useWorkspace()
   const name = useStore((s) => s.settings.name)
   const [away] = useState(() => awayFor(new Date()))
 
@@ -37,7 +37,7 @@ export function HomeView() {
   const today = startOfDay(now)
   const live = items.filter((i) => !i.deletedAt)
   const recent = live.filter((i) => !i.file?.dir).sort((a, b) => b.updatedAt - a.updatedAt)
-  const todos = ws.tasks
+  const todos = useOpenTasks()
   // Is anything left today? With nothing left, Calendar steps aside until there is.
   const leftToday = events.some((e) => (e.allDay ? e.start < addDays(today, 1).getTime() && e.end > now.getTime() : isSameDay(e.start, today) && e.end > now.getTime()))
   const SHOWN = mobile ? PHONE_SHOWN : DESK_SHOWN
@@ -80,10 +80,9 @@ export function HomeView() {
       action: todos.length ? { label: todos.length > SHOWN ? `See all ${todos.length}` : 'Open', run: () => st.go('tasks') } : undefined,
       body: (
         <div className="hm-list">
-          {mobile
-            ? tasks.map((t, i) => <TaskRow key={`${t.itemId}:${t.n}`} task={t} docTitle={i > 0 && tasks[i - 1].itemId === t.itemId ? '' : live.find((x) => x.id === t.itemId)?.title || 'Untitled'} />)
-            : <TasksByDoc tasks={todos} />}
-          {!todos.length && <p className="hm-empty">Nothing to do. Checklist items from your docs show up here.</p>}
+          {/* The panel scrolls on a computer, so it holds them all; a phone shows the first few. */}
+          {(mobile ? tasks : todos).map((t) => <TaskRow key={t.id} task={t} />)}
+          {!todos.length && <p className="hm-empty">Nothing to do. Type a task in the bar below.</p>}
         </div>
       ),
     },
@@ -443,7 +442,7 @@ function Board({ tiles, allTiles, setTiles: saveAll, panels }: { tiles: Tile[]; 
               <span className="grow" />
               {p.action && <button className="hm-tile-link" onClick={p.action.run}>{p.action.label}<ChevronRight size={14} aria-hidden="true" /></button>}
               <button className="hm-tile-more" onClick={(e) => tileMenu(e, t)} aria-label={`${p.label} panel options`} title="Size, order, hide">
-                <MoreHorizontal size={16} />
+                <MoreIcon size={16} />
               </button>
             </header>
             <div className="hm-tile-body">{p.body}</div>

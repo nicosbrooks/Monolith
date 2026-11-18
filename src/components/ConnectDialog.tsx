@@ -18,7 +18,7 @@ export function ConnectDialog() {
   return (
     <AnimatePresence>
       {open && (
-        <motion.div className="overlay" onMouseDown={close} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div className="overlay" onMouseDown={close} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, pointerEvents: 'none' }}>
           <motion.div className="modal connect" role="dialog" aria-modal="true" aria-label="Connect storage" onMouseDown={(e) => e.stopPropagation()} initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}>
             <Flow onDone={close} />
           </motion.div>

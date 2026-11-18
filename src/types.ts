@@ -99,6 +99,26 @@ export interface Repeat {
   until?: number
 }
 
+/**
+ * A to-do. Tasks are their own records, not lines pulled out of docs: a checklist in a doc stays part of that doc.
+ * A task can name a doc it belongs with (`docId`); the doc opens from it, and it doesn't change the doc.
+ */
+export interface Task {
+  id: string
+  title: string
+  done: boolean
+  /** Start of the day (all-day) or the exact time it's due. */
+  due?: number
+  allDay?: boolean
+  /** A few lines of detail, plain text. */
+  notes?: string
+  docId?: string
+  createdAt: number
+  updatedAt: number
+  /** When it was checked off. */
+  doneAt?: number
+}
+
 export type Section = 'home' | 'tasks' | 'docs' | 'lectures' | 'calendar' | 'vault' | 'trash'
 
 export interface Suggestion {

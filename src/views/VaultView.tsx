@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatDistanceToNowStrict } from 'date-fns'
-import { Archive, FileSpreadsheet, FileText, MoreHorizontal, Music, Film, Search, Upload, X } from 'lucide-react'
+import { FileSpreadsheet, FileText, Music, Film, Search, Upload, X } from 'lucide-react'
+import { MoreIcon, VaultIcon } from '../components/icons'
 import { useStore } from '../store'
 import { FILE_ARRIVED, VAULT_CHANGED, deleteFile, fileUrl, formatSize, listFiles, refOf, refsIn, renameFile, uploadToVault, type VaultFile } from '../lib/files'
 import { confirmDialog, openMenu } from '../components/Overlays'
@@ -109,9 +110,12 @@ export function VaultView() {
         <header className="hm-head">
           <h1>Vault</h1>
           <p>{files === null ? ' ' : files.length ? `${files.length} ${files.length === 1 ? 'file' : 'files'} · ${formatSize(total)}` : 'Nothing here yet'}</p>
-          <div className="hm-quick">
-            <button className="primary" onClick={uploadFiles}><Upload size={15} aria-hidden="true" /> Upload</button>
-          </div>
+          {/* With nothing here yet, the empty state has the Upload button; the header doesn't repeat it. */}
+          {!!files?.length && (
+            <div className="hm-quick">
+              <button className="primary" onClick={uploadFiles}><Upload size={15} aria-hidden="true" /> Upload</button>
+            </div>
+          )}
         </header>
 
         {!!files?.length && (
@@ -134,7 +138,7 @@ export function VaultView() {
         ) : (
           files !== null && (
             <div className="lib-empty">
-              <span className="blank-ico"><Archive size={22} strokeWidth={1.7} /></span>
+              <span className="blank-ico"><VaultIcon size={22} strokeWidth={1.7} /></span>
               <b>{q || filter !== 'all' ? 'No files match' : 'Your files live here'}</b>
               {!q && filter === 'all' && <p>Upload files, or drop them here. Docs link to them, so each one is stored once.</p>}
               {!q && filter === 'all' && <button className="btn primary" onClick={uploadFiles}><Upload size={15} /> Upload files</button>}
@@ -155,7 +159,7 @@ function FileCard({ f, used }: { f: VaultFile; used: { id: string; title: string
   useEffect(() => {
     if (kind === 'image') void fileUrl(f.hash).then(setThumb)
   }, [f.hash, kind])
-  const Icon = kind === 'pdf' || kind === 'text' || kind === 'markdown' ? FileText : kind === 'csv' ? FileSpreadsheet : kind === 'audio' ? Music : kind === 'video' ? Film : Archive
+  const Icon = kind === 'pdf' || kind === 'text' || kind === 'markdown' ? FileText : kind === 'csv' ? FileSpreadsheet : kind === 'audio' ? Music : kind === 'video' ? Film : VaultIcon
   const open = () => openViewer({ hash: f.hash, name: f.name, type: f.type, size: f.size })
   const download = async () => {
     const url = await fileUrl(f.hash)
@@ -221,7 +225,7 @@ function FileCard({ f, used }: { f: VaultFile; used: { id: string; title: string
           {used.length > 0 && ` · in ${used.length === 1 ? '1 doc' : `${used.length} docs`}`}
         </small>
       </button>
-      <button className="lib-more" aria-label={`More for ${f.name}`} title="More" onClick={menu}><MoreHorizontal size={16} /></button>
+      <button className="lib-more" aria-label={`More for ${f.name}`} title="More" onClick={menu}><MoreIcon size={16} /></button>
     </div>
   )
 }

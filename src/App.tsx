@@ -24,7 +24,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { checkVault, useVault } from './lib/vault'
 import { useHistory } from './lib/history'
 import { holdKey } from './lib/typeahead'
-import { applyLook } from './lib/looks'
+import { applyLook, applySurface } from './lib/looks'
 import { PaneContext, SIDE_MIN, closeBeside, setSideWidth, sideMax, useSidePane } from './lib/panes'
 
 void checkVault()
@@ -99,7 +99,8 @@ export default function App() {
     void import('./lib/safekeeping').then((m) => m.startSafekeeping())
     void import('./lib/history').then((m) => m.startHistory())
     void import('./lib/reminders').then((m) => m.startReminders())
-    void import('./lib/completed').then((m) => m.startCompleted())
+    // Checked-off tasks stay 30 days under Done, then go.
+    void import('./lib/tasks').then((m) => m.pruneDone())
     // System 1 (EmbeddingGemma): small, always on; quietly downloads once, then indexes when the browser is idle.
     void import('./ai/system1').then((m) => m.startSystem1())
     // Load every screen's code in the background, so switching never shows a placeholder first.
@@ -120,6 +121,7 @@ export default function App() {
     return () => mq.removeEventListener('change', apply)
   }, [settings.theme])
   useEffect(() => applyLook(settings.look, settings.tint), [settings.look, settings.tint])
+  useEffect(() => applySurface(settings.surface), [settings.surface])
 
   // frosted glass, unless it's switched off or the OS asks for reduced transparency
   useEffect(() => {

@@ -5,7 +5,7 @@ import { useStore } from '../store'
 import { chooseModel, deleteModel, fits, modelForTier, models, refreshCache, resolvedModel, useAI } from '../ai/llm'
 import { STT_MODELS, sttModel } from '../ai/stt'
 import { StorageSettings } from './StorageSettings'
-import { LOOKS, TINTS, lookOf, tintOf } from '../lib/looks'
+import { LOOKS, SURFACES, TINTS, lookOf, surfaceOf, surfacePreset, tintOf, type Surface } from '../lib/looks'
 import { About } from './About'
 import { toast } from './Toast'
 import { openLink } from './LinkDialog'
@@ -38,7 +38,7 @@ export function SettingsModal() {
   return (
     <AnimatePresence>
       {open && (
-        <motion.div className="overlay" onMouseDown={close} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div className="overlay" onMouseDown={close} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, pointerEvents: 'none' }}>
           <motion.div className="modal settings" role="dialog" aria-modal="true" aria-label="Settings" onMouseDown={(e) => e.stopPropagation()} initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}>
             {/* Sections on the left, one at a time on the right: nothing to scroll past to find a setting. */}
             <div className="set-nav">
@@ -109,6 +109,7 @@ export function SettingsModal() {
                     )
                   })}
                 </div>
+                <SurfaceSettings />
               </section>
 
               <Reminders />
@@ -453,5 +454,38 @@ function Integrations() {
       ))}
       {status && <p className="small muted integ-status">{status}</p>}
     </section>
+  )
+}
+
+/** Settings › Appearance › Surface: three starting points, then four sliders to make it your own. */
+function SurfaceSettings() {
+  const raw = useStore((s) => s.settings.surface)
+  const v = surfaceOf(raw)
+  const preset = surfacePreset(raw)
+  const graphite = useStore((s) => lookOf(s.settings.look).id === 'graphite')
+  const set = (patch: Partial<Surface>) => useStore.getState().setSettings({ surface: { ...v, ...patch } })
+  const slider = (key: keyof Surface, label: string, min: number, max: number, unit: string, off?: boolean) => (
+    <label className={`surf-slider ${off ? 'off' : ''}`}>
+      <span>{label}</span>
+      <input type="range" min={min} max={max} value={v[key]} onChange={(e) => set({ [key]: Number(e.target.value) })} aria-valuetext={`${v[key]}${unit}`} />
+      <output>{v[key]}{unit}</output>
+    </label>
+  )
+  return (
+    <>
+      <h4 className="set-sub" id="set-surface">Surface</h4>
+      <div className="seg surf-presets" role="radiogroup" aria-labelledby="set-surface">
+        {SURFACES.map((p) => (
+          <button key={p.id} role="radio" aria-checked={preset === p.id} className={preset === p.id ? 'on' : ''} onClick={() => set({ ...p.s, radius: v.radius })}>{p.name}</button>
+        ))}
+      </div>
+      <div className="surf-sliders">
+        {slider('fill', 'Fill', 10, 100, '%', graphite)}
+        {slider('blur', 'Frost', 0, 48, 'px', graphite)}
+        {slider('edge', 'Edge', 0, 24, '%')}
+        {slider('radius', 'Corners', 4, 28, 'px')}
+      </div>
+      <p className="muted small">{graphite ? 'Fill and frost show over a look with color, like Dusk or Tide.' : 'Panels, cards and the doc beside the page all use this.'}{' '}{raw && <button className="link" onClick={() => useStore.getState().setSettings({ surface: undefined })}>Reset</button>}</p>
+    </>
   )
 }

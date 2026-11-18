@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { AudioWaveform, CalendarDays, FileText, LayoutGrid, ListChecks, PanelLeftClose, PanelLeftOpen, Search, Settings, Star, StickyNote, Trash2, Archive } from 'lucide-react'
+import { AudioWaveform, CalendarDays, FileText, LayoutGrid, ListChecks, PanelLeftClose, PanelLeftOpen, Search, Settings, StickyNote, Trash2 } from 'lucide-react'
+import { StarIcon, VaultIcon, type AnyIcon } from './icons'
 import { setSidebar, toggleSidebar, useShell } from '../lib/shell'
 import { useStore } from '../store'
 import { itemEmoji } from '../lib/util'
@@ -7,13 +8,13 @@ import type { Item, Section } from '../types'
 import { Logo, docMenu } from './Sidebar'
 import { openMenu } from './Overlays'
 
-const PLACES: { id: Section; label: string; Icon: typeof FileText }[] = [
+const PLACES: { id: Section; label: string; Icon: AnyIcon }[] = [
   { id: 'home', label: 'Home', Icon: LayoutGrid },
   { id: 'tasks', label: 'Tasks', Icon: ListChecks },
   { id: 'docs', label: 'Docs', Icon: FileText },
   { id: 'lectures', label: 'Recordings', Icon: AudioWaveform },
   { id: 'calendar', label: 'Calendar', Icon: CalendarDays },
-  { id: 'vault', label: 'Vault', Icon: Archive },
+  { id: 'vault', label: 'Vault', Icon: VaultIcon },
 ]
 
 /** How long the pointer rests on the rail before it opens, and lingers off it before it closes. */
@@ -130,7 +131,7 @@ export function Rail() {
             <>
           {favorites.length > 0 && (
             <section className="rl-sec" aria-label="Favorites">
-              <h3><Star size={12} strokeWidth={2} aria-hidden="true" /> Favorites</h3>
+              <h3><StarIcon size={12} strokeWidth={2} aria-hidden="true" /> Favorites</h3>
               {favorites.map(row)}
             </section>
           )}

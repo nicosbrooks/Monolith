@@ -8,6 +8,7 @@ import { TextAlign } from '@tiptap/extension-text-align'
 import { Typography } from '@tiptap/extension-typography'
 import { Markdown } from '@tiptap/markdown'
 import { FileImage } from './FileNode'
+import { ListSmarts } from './lists'
 import { DOMSerializer } from '@tiptap/pm/model'
 
 // Tiptap's getHTML() (run on every save) builds HTML in the page's own document unless told otherwise, so the browser
@@ -38,4 +39,6 @@ export const baseExtensions = (live = false) => [
   TextAlign.configure({ types: ['heading', 'paragraph'] }),
   Typography,
   Markdown,
+  // Keys, typing and paste only: no change to what's saved, so the headless converter doesn't need it.
+  ...(live ? [ListSmarts] : []),
 ]

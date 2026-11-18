@@ -4,6 +4,7 @@ import { APP_NAME } from '../brand'
 import { fileBlob, fileMeta, FILE_SCHEME } from './files'
 import { htmlToMarkdown } from './markdown'
 import { formatDuration } from './util'
+import { doneTasks, openTasks } from './tasks'
 
 /**
  * Everything, in formats any other app can open: a zip of Markdown files laid out like the sidebar (folders, then
@@ -148,7 +149,7 @@ export function toIcs(events: CalEvent[], now = Date.now()): string {
 
 // ─── Putting it together ───
 
-export interface Exported { blob: Blob; name: string; docs: number; recordings: number; files: number; events: number }
+export interface Exported { blob: Blob; name: string; docs: number; recordings: number; files: number; events: number; tasks: number }
 
 export async function exportAll(): Promise<Exported> {
   const st = useStore.getState()
@@ -194,6 +195,17 @@ export async function exportAll(): Promise<Exported> {
   }
   const own = st.events.filter((e) => !e.calId)
   if (own.length) out.push({ path: 'Calendar.ics', data: enc.encode(toIcs(own)) })
+  // Tasks as one checklist, open ones first, each with its date and the doc it goes with.
+  const tasks = [...openTasks(st.tasks), ...doneTasks(st.tasks)]
+  if (tasks.length) {
+    const line = (t: (typeof tasks)[number]) => {
+      const doc = t.docId && paths.get(t.docId)
+      const bits = [t.due !== undefined && `due ${new Date(t.due).toISOString().slice(0, t.allDay ? 10 : 16).replace('T', ' ')}`, doc && `[${st.items.find((i) => i.id === t.docId)?.title || 'Untitled'}](${relative('Tasks.md', doc)})`].filter(Boolean)
+      const notes = t.notes ? `\n${t.notes.split('\n').map((l) => `  ${l}`).join('\n')}` : ''
+      return `- [${t.done ? 'x' : ' '}] ${t.title}${bits.length ? ` (${bits.join(', ')})` : ''}${notes}`
+    }
+    out.push({ path: 'Tasks.md', data: enc.encode(`# Tasks\n\n${tasks.map(line).join('\n')}\n`) })
+  }
   const d = new Date()
   return {
     blob: zip(out.map((f) => ({ ...f, path: `${APP_NAME}/${f.path}` }))),
@@ -202,5 +214,6 @@ export async function exportAll(): Promise<Exported> {
     recordings: live.filter((i) => i.kind === 'lecture').length,
     files: assets.size,
     events: own.length,
+    tasks: tasks.length,
   }
 }

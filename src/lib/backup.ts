@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import { keys } from 'idb-keyval'
 import { loadAudio, saveAudio, saveNow, useStore, type Settings } from '../store'
 import { random } from '../link/crypto'
-import type { CalEvent, Folder, Item } from '../types'
+import type { CalEvent, Folder, Item, Task } from '../types'
+import { fromInboxDoc } from './tasks'
 import { APP_NAME } from '../brand'
 import { exportFiles, importFiles, type FileMeta } from './files'
 
@@ -25,7 +26,7 @@ const B = (u: Uint8Array) => u as Uint8Array<ArrayBuffer>
 export const BACKUP_MIN = 8
 export const BACKUP_EXT = '.monolith'
 
-export interface Counts { docs: number; recordings: number; events: number }
+export interface Counts { docs: number; recordings: number; events: number; tasks?: number }
 interface Header { kdf: 'PBKDF2-SHA256'; iter: number; salt: string; iv: string; created: number; counts: Counts }
 interface Payload {
   app: string
@@ -33,6 +34,8 @@ interface Payload {
   items: Item[]
   folders: Folder[]
   events: CalEvent[]
+  /** Missing in backups from before tasks were their own records: they come from the old Tasks doc then. */
+  tasks?: Task[]
   settings: Partial<Settings>
   dismissed: string[]
   audio: Record<string, { type: string; data: string }>
@@ -62,9 +65,9 @@ async function key(password: string, salt: Uint8Array, iter: number) {
 const pipe = async (data: Uint8Array, t: CompressionStream | DecompressionStream) =>
   new Uint8Array(await new Response(new Blob([B(data)]).stream().pipeThrough(t)).arrayBuffer())
 
-function countsOf(items: Item[], events: CalEvent[]): Counts {
+function countsOf(items: Item[], events: CalEvent[], tasks: Task[] = []): Counts {
   const live = items.filter((i) => !i.deletedAt && !i.file?.dir)
-  return { docs: live.filter((i) => i.kind !== 'lecture').length, recordings: live.filter((i) => i.kind === 'lecture').length, events: events.length }
+  return { docs: live.filter((i) => i.kind !== 'lecture').length, recordings: live.filter((i) => i.kind === 'lecture').length, events: events.length, tasks: tasks.filter((t) => !t.done).length }
 }
 
 /** Everything in this browser as an encrypted file. */
@@ -82,14 +85,14 @@ export async function exportWorkspace(password: string): Promise<Blob> {
   }
   const { home: _h, setupAt: _a, ...settings } = s.settings
   const files = await exportFiles(items.map((i) => i.content), b64.encode)
-  const payload: Payload = { app: APP_NAME, version: 1, items, folders: s.folders, events: s.events, settings, dismissed: s.dismissed, audio, files }
+  const payload: Payload = { app: APP_NAME, version: 1, items, folders: s.folders, events: s.events, tasks: s.tasks, settings, dismissed: s.dismissed, audio, files }
 
   const salt = random(16)
   const iv = random(12)
   const k = await key(password, salt, ITER)
   const packed = await pipe(enc.encode(JSON.stringify(payload)), new CompressionStream('gzip'))
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, B(packed)))
-  const header: Header = { kdf: 'PBKDF2-SHA256', iter: ITER, salt: b64.encode(salt), iv: b64.encode(iv), created: Date.now(), counts: countsOf(items, s.events) }
+  const header: Header = { kdf: 'PBKDF2-SHA256', iter: ITER, salt: b64.encode(salt), iv: b64.encode(iv), created: Date.now(), counts: countsOf(items, s.events, s.tasks) }
   return new Blob([MAGIC, JSON.stringify(header), '\n', B(ct)], { type: 'application/octet-stream' })
 }
 
@@ -138,8 +141,10 @@ export async function restore({ payload }: Opened) {
   // Docs from a source that's still connected stay as they are; their copies in the backup are skipped, not doubled.
   const fromSources = s.items.filter((i) => i.sourceId)
   const connected = new Set(fromSources.map((i) => i.id))
+  const moved = payload.tasks ? { items: payload.items, tasks: payload.tasks } : fromInboxDoc(payload.items)
   useStore.setState({
-    items: [...payload.items.filter((i) => !connected.has(i.id)), ...fromSources],
+    items: [...moved.items.filter((i) => !connected.has(i.id)), ...fromSources],
+    tasks: moved.tasks,
     folders: payload.folders ?? [],
     events: payload.events ?? [],
     dismissed: payload.dismissed ?? [],

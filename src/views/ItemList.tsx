@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { isToday, isYesterday, differenceInDays, format } from 'date-fns'
-import { LayoutGrid, List, Pin, PinOff, Search, SquarePen, Mic, Upload, Hash, X, Trash2, RotateCcw, FolderInput, Inbox, Ellipsis, FolderPlus, Settings, ChevronLeft } from 'lucide-react'
+import { LayoutGrid, List, Search, SquarePen, Mic, Upload, Hash, X, Trash2, RotateCcw, FolderInput, Inbox, FolderPlus, Settings, ChevronLeft } from 'lucide-react'
+import { MoreIcon, StarIcon } from '../components/icons'
 import { motion } from 'motion/react'
 import { useStore } from '../store'
 import type { Item, ItemKind } from '../types'
@@ -106,7 +107,7 @@ export function ItemList({ kind, trash }: { kind?: ItemKind; trash?: boolean }) 
           title={title}
           scrolled={scrolled}
           lead={trash ? <button className="icon-btn back" onClick={() => st.go('docs')} aria-label="Back"><ChevronLeft size={22} /></button> : undefined}
-          actions={!trash && <button className="icon-btn" onClick={more} aria-label="More"><Ellipsis size={20} /></button>}
+          actions={!trash && <button className="icon-btn" onClick={more} aria-label="More"><MoreIcon size={20} /></button>}
         />
         {/* Recordings on a phone: the same two ways in as on the computer, right under the title. */}
         {kind === 'lecture' && !trash && list.length > 0 && (
@@ -151,7 +152,7 @@ export function ItemList({ kind, trash }: { kind?: ItemKind; trash?: boolean }) 
                 ])
               }
             >
-              <Ellipsis size={16} />
+              <MoreIcon size={16} />
             </button>
           )}
           {!trash && list.length > 0 && (
@@ -186,7 +187,7 @@ export function rowMenu(item: Item): MenuItem[] {
     ? ['sep', { heading: 'Move to' }, { label: 'All Notes', icon: Inbox, checked: !item.folderId, run: () => st.updateItem(item.id, { folderId: null }) }, ...st.folders.map((f): MenuItem => ({ label: f.name, icon: FolderInput, checked: item.folderId === f.id, run: () => st.updateItem(item.id, { folderId: f.id }) }))]
     : []
   return [
-    { label: item.pinned ? 'Unpin' : 'Pin to top', icon: item.pinned ? PinOff : Pin, run: () => st.updateItem(item.id, { pinned: !item.pinned }) },
+    { label: item.pinned ? 'Remove from favorites' : 'Add to favorites', icon: StarIcon, run: () => st.updateItem(item.id, { pinned: !item.pinned }) },
     ...folders,
     'sep',
     { label: 'Delete', icon: Trash2, danger: true, run: () => (st.trashItem(item.id), toast(`${what[0].toUpperCase() + what.slice(1)} moved to Recently Deleted`, { action: { label: 'Undo', run: () => st.restoreItem(item.id) } })) },
@@ -214,7 +215,7 @@ function Row({ item, on, grid }: { item: Item; on: boolean; grid: boolean }) {
         </div>
       )}
       <div className="row-title">
-        {item.pinned && <Pin size={11} className="pin" />}
+        {item.pinned && <StarIcon size={11} fill="currentColor" className="pin" />}
         {item.title || (item.kind === 'lecture' ? 'Untitled lecture' : 'New Note')}
       </div>
       <div className="row-sub">

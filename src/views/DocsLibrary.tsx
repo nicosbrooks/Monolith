@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { formatDistanceToNowStrict } from 'date-fns'
-import { AudioWaveform, FilePlus2, FileText, FolderPlus, Mic, MoreHorizontal, Pin, Search, Upload, X } from 'lucide-react'
+import { AudioWaveform, FilePlus2, FileText, FolderPlus, Mic, Search, Upload, X } from 'lucide-react'
+import { StarIcon } from '../components/icons'
+import { MoreIcon } from '../components/icons'
 import { useStore } from '../store'
 import { openDoc, useSidePane } from '../lib/panes'
 import { formatDuration, itemEmoji, preview } from '../lib/util'
@@ -114,13 +116,13 @@ export function Card({ item }: { item: Item }) {
     <button className={`lib-card ${beside ? 'on' : ''}`} aria-current={beside ? 'true' : undefined} onClick={(e) => openDoc(item.id, e)} onContextMenu={(e) => openMenu(e, rec ? rowMenu(item) : docMenu(item))}>
       <span className="lib-card-top">
         <span className="lib-ico">{emoji || (rec ? <AudioWaveform size={16} strokeWidth={1.8} /> : <FileText size={16} strokeWidth={1.8} />)}</span>
-        {item.pinned && <Pin size={12} className="pin" aria-label="Favorite" />}
+        {item.pinned && <StarIcon size={12} fill="currentColor" className="pin" aria-label="Favorite" role="img" aria-hidden={undefined} />}
       </span>
       <b>{item.title || (rec ? 'Untitled recording' : 'Untitled')}</b>
       <span className="lib-card-text">{text || 'No additional text'}</span>
       <small>{Date.now() - item.updatedAt < 60_000 ? 'Just now' : formatDistanceToNowStrict(item.updatedAt, { addSuffix: true })}</small>
     </button>
-    <button className="lib-more" aria-label="More" title="More" onClick={(e) => openMenu(e, rec ? rowMenu(item) : docMenu(item))}><MoreHorizontal size={16} /></button>
+    <button className="lib-more" aria-label="More" title="More" onClick={(e) => openMenu(e, rec ? rowMenu(item) : docMenu(item))}><MoreIcon size={16} /></button>
     </div>
   )
 }

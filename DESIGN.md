@@ -18,7 +18,7 @@ Status of each area is in [Coverage](#coverage) at the end: not every screen fol
 10. **No "AI" decoration.** No sparkles (✨) anywhere. The assistant is labelled with words, and actions get an icon for what they do: a speech bubble to ask, a pen to write notes, a lightbulb for insights.
 11. **Same product on every device.** iOS uses the web's icons, menu order and wording, done the native way.
 
-12. **One connected workspace.** Docs, tasks, recordings and the calendar are views of the same things, tied together by links. A task is a checklist line in a doc, not a separate object; a link is an ordinary link. Nothing is copied into a second place.
+12. **One connected workspace.** Docs, tasks, recordings and the calendar are views of the same things, tied together by links. A task is its own record (it can name a doc it goes with); a checklist in a doc is part of that doc and stays there. A link is an ordinary link. Nothing is copied into a second place.
 
 ## Identity
 
@@ -229,8 +229,14 @@ Desktop is a workspace, not a poster: dense, and arranged by the person. The **A
 - **A doc beside the page** (`lib/panes.ts`, `.side-pane`): from Home, Tasks and Calendar, a doc opens **beside** the page instead of replacing it; ⌘ or Ctrl-click does that from anywhere. Its header ends with **Open as the page** and **Close** (Esc). The edge between them drags to resize (double-click resets). Remembered in this browser.
 - **One page header** (`.hm-head`, and `.cal-head` on Calendar): title (22px) over one quiet line, actions as 30px pills on the right, centred on both lines. Every page starts at the same left edge and the header is the same height with or without actions, so moving between pages nothing jumps. Tasks keeps its rows within 920px but sits where every other page does.
 - **Current page in the sidebar**: a firmer fill, a heavier name and a short bar at the rail's edge (accent color when there is one). Hover is only the light fill, so where you are and where the pointer is never look alike.
-- **Tasks are bundled by doc** (`TasksByDoc` in `TasksView.tsx`, `.tk-*`): each doc's tasks sit under its name, with a chevron that folds them away (remembered in this browser), the doc's icon and name (opens it) and a count ("2 late · 5"). Checkboxes line up under the doc's icon. Docs with the soonest due task come first, then the most recently edited. Home's Tasks panel always shows them this way; the Tasks page has **By doc** (the default) and **By date** in its header, remembered. In By date, a row names its doc only when the row above is from a different doc.
+- **A link in a doc opens beside it** (Nov 17): clicking a `[[` link on a computer opens that doc beside the one you're in, so you keep your place; **⌘ or Ctrl-click** makes it the page. Clicking a link inside the doc beside replaces what's beside. Narrow windows open it as the page.
 - **Where am I**: a doc's or recording's header starts with **back** and **forward** and its **place** ("Docs /", "Recordings /", "Recently Deleted /"), which goes to that page.
+
+### Surface (Settings › Appearance › Surface, `lib/looks.ts`, `--mat-*` in `soft.css`)
+What panels, cards and the doc beside are made of. Three starting points, **Clear**, **Frosted** (the default) and **Solid**, then four sliders: **Fill** (how much panel color covers the look, 10–100%), **Frost** (blur, 0–48px), **Edge** (outline strength, 0–24%) and **Corners** (4–28px). Fill and frost only show over a look with color; on Graphite their sliders are dimmed and one line says why. Reset returns to Frosted. Popups keep their own fixed glass, so they always outrank panels.
+
+### Own icons (`src/components/icons.tsx`)
+Four icons are drawn for Monolith instead of taken from lucide, because the stock ones read as generic: the **Vault** (a small safe with a dial), **Listen** (lines of text with sound coming off them), the **favorite star** (soft, rounded points; filled when on) and the **menu** (three solid dots, which hold up at small sizes). Same 24-unit grid, 1.8 stroke and round ends as lucide, and the same props, so they sit beside it without a seam. A favorite is always a star, never a pin; menus say "Add to favorites" / "Remove from favorites".
 
 ### Looks and accent (Settings › Appearance, `lib/looks.ts`)
 Dark is the default; light and System are there too. On top of either:
@@ -289,10 +295,8 @@ Location and Weather, as switches with one line each saying what they give the a
 - Under each answer: Listen, Copy, Add to doc (when a doc is open), and Retry on the last one. No copy of these anywhere else.
 - The Ask bar is always usable; asking before the model is ready starts it ("Getting the assistant ready…") and answers when it can.
 
-### Recently Deleted (`TrashView.tsx`, `src/lib/completed.ts`)
-One page, like Tasks, with two sections:
-- **Docs and recordings**: newest first, "Doc · deleted 5 minutes ago", a **Restore** button on every row, Delete forever in the row's ··· menu (always confirmed). Clicking the title previews it, with Back and Restore in its header. "Empty" next to the heading deletes them all forever, after asking.
-- **Completed**: checklist lines you've checked off, anywhere (editor, Home, Tasks, ⌘K, the assistant), newest first with "checked 2 minutes ago". Restore unchecks it; Remove from doc (in ···, confirmed, with Undo) takes the line out. A checked line stays in its doc, so nothing is lost by checking it.
+### Recently Deleted (`TrashView.tsx`)
+One page, like Tasks: **Docs and recordings**, newest first, "Doc · deleted 5 minutes ago", a **Restore** button on every row, Delete forever in the row's ··· menu (always confirmed). Clicking the title previews it, with Back and Restore in its header. "Empty" next to the heading deletes them all forever, after asking. Checked-off tasks are not here: they fold under Tasks › Done.
 
 ### First-time setup (`.su-*`, `src/components/Setup.tsx`; iOS `SetupView` in `Setup.swift`)
 Two short steps on one calm card (web) or full screen (iOS), with a step indicator of two short bars and a back button on step 2.
@@ -313,8 +317,8 @@ Two short steps on one calm card (web) or full screen (iOS), with a step indicat
 A lock icon in a soft circle, "Monolith is locked", one line, a password field (web) and one full-width Unlock button. A wrong passcode clears the field and says "That passcode isn't right." On iOS it asks for Face ID as soon as the app is in front, and covers the app in the app switcher.
 
 ### Links between docs (`src/lib/graph.ts`, `Editor.tsx`)
-- Typing `[[` in a doc opens a short list titled "Link to": matching docs and recordings (most recent first), then "New doc “…”" when nothing has that exact name. Enter or Tab picks; Escape closes. `/` › "Link to a doc" does the same.
-- A link shows as the doc's name on a soft fill (`--card-hover`), 550 weight, no underline: it reads as a name, not a web address. Clicking it opens the doc. Web links keep the underline.
+- Typing `[[` in a doc opens a short list titled "Link to" (only while typing: putting the cursor into old text that contains `[[`, or into code, never opens it; the same goes for `/`): matching docs and recordings (most recent first), then "New doc “…”" when nothing has that exact name. Enter or Tab picks; Escape closes. `/` › "Link to a doc" does the same.
+- A link shows as the doc's name on a soft fill (`--card-hover`), 550 weight, no underline: it reads as a name, not a web address. Clicking it opens the doc beside this one (⌘-click: as the page). Web links keep the underline.
 - A link is stored as an ordinary link to `#doc/<id>`, so Markdown files, backups and phone sync carry it unchanged. Renaming a doc renames the links that still show its old name.
 - Picking a name that doesn't exist makes the doc and stays where you are.
 
@@ -323,12 +327,13 @@ Under a doc's or recording's text, only when there is something to show, in this
 
 **Mentioned in** sits between Linked from and On your calendar: docs that say this doc's name in plain words without linking to it (titles of four letters or more, whole phrase, any case; at most five). Each row has one small **Link** button, which turns the first mention into a link, with Undo.
 
-### Tasks (`TasksView.tsx`, `.hm-due`)
-- A page in the Home column: the title "Tasks", one line saying how many and from how many docs, then a card per time group in this order: **Overdue, Today, Next 7 days, Later, No date**. Empty groups aren't shown.
-- A row is the Home task row: checkbox, the task, the doc it's in, and when it's due on the right in faint tabular text ("Today", "Tomorrow", "Fri", "Nov 28", with a time if the line gave one). The date turns `--danger` only once it's late.
-- The date comes from the line itself ("essay draft by Friday"), read by the same parser as quick add; the title shown is the line without its date words.
-- Adding is the Ask bar's job on this page ("Add a task or ask what to do first"): anything that isn't a question becomes a task in a doc called "Tasks", made the first time. The option and the toast show the task as it will be listed, its name without the date words and when it's due ("Added “Renew library books” · due Tomorrow"), with Undo. ⌘K's Do row does the same.
-- Home shows the first five of the same list, with "See all N" or "Open" as its one link.
+### Tasks (`TasksView.tsx`, `src/lib/tasks.ts`, `.tk-*`, `.hm-due`)
+Tasks are **their own list** (Nov 17), stored as records of their own (`tasks` in the store), backed up, exported as `Tasks.md` and synced to the phone as `task` records. A checklist in a doc is part of that doc and is **not** pulled into Tasks. The "Tasks" doc older versions kept was moved into the list once, on update.
+- A page in the Home column: the title "Tasks", one line ("3 things to do, 1 late"), then a card per time group in this order: **Overdue, Today, Next 7 days, Later, No date**. Empty groups aren't shown. At the bottom, **Done ›** folds open the checked-off ones (remembered), newest first; unchecking one puts it back. Done tasks go after 30 days.
+- A row: checkbox, the task, a small chip with the doc it goes with (if any; opens it beside), and when it's due on the right in faint tabular text ("Today", "Tomorrow", "Fri", "Nov 28", with a time if it has one). The date turns `--danger` only once it's late.
+- **Clicking a task opens it in place**: its name becomes a text field on the row, and under it, aligned with the words, sit Due (date, and Time once there's a date), a clear ×, **Doc** (which doc it goes with), Notes, then Delete (with Undo) and Done. No second box: the row keeps its hover fill and the fields sit on the card. Enter or Esc closes. From Home, ⌘K or Calendar, clicking a task opens it this way on the Tasks page.
+- Adding is the Ask bar's job ("Add a task or ask what to do first"). The date words are read once, when it's made ("essay draft by Friday" → "Essay draft", due Friday); after that the date is the task's own. Asked from inside a doc, the task goes with that doc. The option and the toast show it as it will be listed ("Added “Renew library books” · due Tomorrow"; never "due Due …"), with Undo. ⌘K's Do row and the assistant's `@task` do the same.
+- Home's Tasks panel shows the same rows (all of them, scrolling, on a computer; the first five on a phone), with "See all N" or "Open" as its one link.
 - Checkboxes in docs are the same 20px rounded square as Home and Tasks, inside a 24px target.
 
 ### Settings (`.modal.settings`, `SettingsModal.tsx`)
@@ -357,7 +362,7 @@ Sections on the left (General, Assistant, Storage and files, Devices, About), on
 - The assistant moves or removes one date at a time.
 
 ### Tasks on the calendar (`.chip.task`)
-A task with a date sits in the all-day row of its day (and at the top of its day in the month view): a small empty box and its words on the neutral soft fill, never an event colour. The box checks it off (with Undo); the words open its doc.
+A task with a date sits in the all-day row of its day (and at the top of its day in the month view): a small empty box and its words on the neutral soft fill, never an event colour. The box checks it off (with Undo); the words open it on the Tasks page.
 
 ### Earlier versions (`HistoryDialog.tsx`, `src/lib/history.ts`)
 Doc ··· › "Earlier versions". Versions on the left ("Today · 3:42 PM", word count), the page as it was on the right, read-only, and one primary button, "Restore this version", beside the line "Restoring keeps today’s version too." Restoring says "Restored the version from …" with Undo. With no versions yet it is an empty state, not an empty list.
@@ -365,13 +370,20 @@ Doc ··· › "Earlier versions". Versions on the left ("Today · 3:42 PM", wor
 ### Reminders (`src/lib/reminders.ts`)
 One switch in Settings › General, off by default; turning it on is when the browser asks for permission. The line under it says exactly when reminders arrive and that Monolith must be open or installed. If notifications are blocked, it says so and that reminders still appear inside the app. Inside the app a reminder is an ordinary notification pill: "Standup · In 10 min · 9:00 AM".
 
+### Storage and files (`StorageSettings.tsx`, `.st-status`)
+Settings › Storage and files answers three questions, in order:
+1. **Is my work safe?** One status line at the top: a green tick and "Your work is kept" (the browser promised to keep it, or there's a backup from the last two weeks), or an amber alert and "Your work has no copy yet" with one **Back up now** button. Its second line says what the browser promised and when the last backup was.
+2. **Where it’s saved**: This browser (docs, recordings, open tasks, events, and space used), each connected folder, GitHub or Drive with its sync state, then Connect storage. One line under it: tasks, events, recordings and settings always stay in this browser, and backups and exports include all of it.
+3. **Keep a copy**: **Backup file** (encrypted, everything, for restoring) and **Export as Markdown** (a zip any app reads, with Tasks.md and Calendar.ics; not for restoring). Then **Privacy**: the passcode.
+
 ### Export everything (`src/lib/exportAll.ts`)
-A row in Settings › Storage and files next to Backup file, with one button, "Export". Backup is encrypted and restores the app exactly; Export is plain files for any other app. The row says which is which in one line, and the toast says what was written ("Exported 12 docs, 3 recordings, 8 events").
+Settings › Storage and files › Keep a copy › "Export as Markdown". Backup is encrypted and restores the app exactly; Export is plain files for any other app. The toast says what was written ("Exported 12 docs, 3 recordings, 5 tasks, 8 events").
 
 ### Printing
 Doc ··· › "Print or save as PDF" prints the doc alone, dark text on white whatever the theme: no sidebar, toolbar, Ask bar, contents or connections.
 
 ### Menus and dialogs
+- A dialog stops catching clicks the moment it starts closing, so a click right after Esc lands on the page.
 - Menu order for a doc: Add sub-doc, favourite, Move to, then Delete in red after a gap. iOS copies this order.
 - Confirm dialogs: a question as the title, one consequence line, a verb on the confirm button, and the main button disabled until the form is valid.
 
@@ -400,6 +412,13 @@ Three files load in order: `src/index.css` (base), `src/theme.css`, `src/soft.cs
 - A picture shows inline at its natural size (at most the text column), with a soft corner; selected, it gets a faint outline.
 - Any other file is a card on the soft fill: a file icon tile, the name (one line), "PDF · 2.3 MB" in faint tabular text, then **Open** and **Download**. A file that isn't on this device says so in place of its size.
 - On iOS an attachment shows its name and "Open it on your computer".
+
+### Lists in docs (`editor/lists.ts`)
+- **Tab / Shift-Tab** indent and outdent a list line, and never move focus out of the doc, even when the line can't go further.
+- **Backspace at the start of a line** takes its bullet away (nested: moves it out one level); it never glues the line onto the one above.
+- **Typing a marker at the start of a line changes the list**: `1. ` numbers a bulleted list, `- ` turns a numbered one back to bullets, `[] ` makes a checklist. It doesn't nest a new list inside the line.
+- **Plain text pasted** as lines starting with `- `, `* `, `1. ` or `[ ] ` becomes a real list, nested by indent.
+- Nested levels change marker so an outline reads at a glance: • ◦ ▪ and 1. a. i.
 
 ### Lists in the Library
 - Docs, Folders and Recordings are listed in the Library (fold a group to hide it); pages show them as cards, and there's no second list column anywhere.

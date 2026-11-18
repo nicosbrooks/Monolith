@@ -14,13 +14,13 @@ import { itemEmoji } from '../lib/util'
 import { fullText, searchText } from '../lib/text'
 import { startRecording } from '../lib/recordNext'
 import { related } from '../ai/system1'
-import { eventColor, whenLabel } from '../lib/dates'
-import { addTask, dueLabel, removeTask, useWorkspace, type Task } from '../lib/graph'
+import { eventColor, dueWhen, whenLabel } from '../lib/dates'
+import { addTask, dueLabel, removeTask, useOpenTasks, type Task } from '../lib/tasks'
 import { useOwnEvents } from '../lib/events'
 import { readDoc, readEvent, readTask, ruleKind, taskPreview, type RequestKind } from '../lib/request'
 import { focusAsk } from './AskBar'
 import { toast, toastError } from './Toast'
-import { completeTask } from '../views/TasksView'
+import { completeTask, editTask } from '../lib/tasks'
 import type { CalEvent, Item } from '../types'
 
 /** What the list is narrowed to. Tab and Shift-Tab move between them; ">" at the start means Commands. */
@@ -86,7 +86,7 @@ export function CommandPalette() {
   const open = useStore((s) => s.paletteOpen)
   const items = useStore((s) => s.items)
   const events = useOwnEvents()
-  const ws = useWorkspace()
+  const tasks = useOpenTasks()
   const st = useStore.getState()
   const [q, setQ] = useState(takeHeld)
   const [scope, setScope] = useState<Scope>('all')
@@ -134,9 +134,9 @@ export function CommandPalette() {
   const docHits = docs.filter((i) => i.kind !== 'lecture').slice(0, view === 'docs' ? 30 : ql ? 6 : 5)
   const recHits = docs.filter((i) => i.kind === 'lecture').slice(0, view === 'recordings' ? 30 : ql ? 4 : 3)
   const taskHits = useMemo(() => {
-    const out = ws.tasks.map((t) => ({ t, s: score(words, t.text) })).filter((x) => x.s)
+    const out = tasks.map((t) => ({ t, s: score(words, `${t.title} ${t.notes ?? ''}`) })).filter((x) => x.s)
     return out.sort((a, b) => b.s - a.s).map((x) => x.t).slice(0, view === 'tasks' ? 40 : ql ? 5 : 4)
-  }, [ws.tasks, words, view, ql])
+  }, [tasks, words, view, ql])
   const eventHits = useMemo(() => {
     const now = Date.now()
     const list = events
@@ -208,7 +208,7 @@ export function CommandPalette() {
     const line = readTask(query)
     const t = addTask(line)
     const { name, due } = taskPreview(line)
-    if (t) toast(`Added “${name}”${due ? ` · due ${whenLabel(due)}` : ''}`, { ms: 6000, action: { label: 'Undo', run: () => removeTask(t) } })
+    if (t) toast(`Added “${name}”${due ? ` · due ${dueWhen(due)}` : ''}`, { ms: 6000, action: { label: 'Undo', run: () => void removeTask(t.id) } })
   }
 
   const Icon = (i: Item) => (itemEmoji(i) ? <span className="emoji">{itemEmoji(i)}</span> : i.kind === 'lecture' ? <AudioWaveform size={16} /> : <FileText size={16} />)
@@ -224,11 +224,11 @@ export function CommandPalette() {
   )
   const titles = useMemo(() => new Map(items.map((i) => [i.id, i.title || 'Untitled'])), [items])
   const taskRow = (t: Task) => (
-    <Command.Item key={`${t.itemId}:${t.n}`} value={`task:${t.itemId}:${t.n}`} onSelect={run(() => st.open(t.itemId))}>
+    <Command.Item key={t.id} value={`task:${t.id}`} onSelect={run(() => (st.go('tasks'), editTask(t.id)))}>
       <Square size={16} />
       <span className="col">
         <b>{t.title}</b>
-        <small>{titles.get(t.itemId)}</small>
+        {t.docId && titles.has(t.docId) && <small>{titles.get(t.docId)}</small>}
       </span>
       {t.due !== undefined && <small className="qa-meta">{dueLabel(t)}</small>}
     </Command.Item>
@@ -250,7 +250,7 @@ export function CommandPalette() {
   const named = view === 'all' && ql.length >= 3 && cmdShown.some((c) => c.l.toLowerCase().startsWith(ql))
 
   // What ⌘↵ does with the highlighted row, shown in the footer.
-  const selTask = selected.startsWith('task:') ? ws.tasks.find((t) => `task:${t.itemId}:${t.n}` === selected) : undefined
+  const selTask = selected.startsWith('task:') ? tasks.find((t) => `task:${t.id}` === selected) : undefined
   const alt = selTask ? 'check off' : query ? 'ask the assistant' : null
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') return close()
@@ -273,7 +273,7 @@ export function CommandPalette() {
   return (
     <AnimatePresence>
       {open && (
-        <motion.div className="overlay" onMouseDown={close} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}>
+        <motion.div className="overlay" onMouseDown={close} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, pointerEvents: 'none' }} transition={{ duration: 0.12 }}>
           <motion.div
             className="palette qa"
             role="dialog"
@@ -306,7 +306,7 @@ export function CommandPalette() {
                     {kind === 'task' && (
                       <Command.Item value="do:task" onSelect={run(doTask)}>
                         <ListPlus size={16} />
-                        <span className="col"><b>Add task “{task?.name}”</b><small>{task?.due ? `Due ${whenLabel(task.due)} · to your Tasks doc` : 'To your Tasks doc'}</small></span>
+                        <span className="col"><b>Add task “{task?.name}”</b><small>{task?.due ? `Due ${dueWhen(task.due)} · to Tasks` : 'To Tasks'}</small></span>
                       </Command.Item>
                     )}
                     {kind === 'doc' && (

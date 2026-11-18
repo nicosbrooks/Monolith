@@ -121,7 +121,7 @@ export async function ask(text: string, base = useConvo.getState().msgs) {
 
   // Exact answers from the app's own data need no model ("what's on tomorrow").
   const files = useConvo.getState().files
-  const instant = !files.length && !wantsAction(text) && instantAnswer(text, { events: allEvents(), items: st.items })
+  const instant = !files.length && !wantsAction(text) && instantAnswer(text, { events: allEvents(), items: st.items, tasks: st.tasks })
   if (instant) return put(instant.text, { sources: [{ id: null, title: instant.source === 'calendar' ? 'Your calendar' : 'Your open tasks' }], acts: [] })
 
   const controller = new AbortController()
@@ -141,7 +141,7 @@ export async function ask(text: string, base = useConvo.getState().msgs) {
     const query = evidenceQuery(text, previous)
     if (wantsDeviceContext(query)) await Promise.race([refreshDevice(), new Promise((r) => setTimeout(r, 1500))])
     const current = useStore.getState()
-    const workspace: Workspace = { items: current.items, events: ownEvents(current.events), now: new Date(), device: deviceContext(), files }
+    const workspace: Workspace = { items: current.items, events: ownEvents(current.events), tasks: current.tasks, now: new Date(), device: deviceContext(), files }
     const open = active ? current.items.find((item) => item.id === active.id && !item.deletedAt) : null
     // System 1 ranks passages by meaning when it's ready (a few milliseconds); otherwise words alone decide.
     const semantic = await passageScores(query).catch(() => undefined)

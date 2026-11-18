@@ -3,7 +3,6 @@ import { useStore } from '../store'
 import { APP_NAME } from '../brand'
 import { toast } from '../components/Toast'
 import { allEvents } from './events'
-import { readWorkspace } from './graph'
 
 /**
  * Reminders: a notification ten minutes before an event starts, and when a task with a time comes due. Off until
@@ -57,10 +56,11 @@ function check() {
     const mins = Math.max(1, Math.round((e.start - now) / 60_000))
     void notify(e.title || 'Event', `In ${mins} min · ${format(e.start, 'h:mm a')}${e.location ? ` · ${e.location}` : ''}`, e.id)
   }
-  for (const t of readWorkspace(st.items).tasks) {
-    if (t.due === undefined || t.allDay || t.due > now || now - t.due > 5 * 60_000) continue
-    if (!once(`t:${t.itemId}:${t.title}:${t.due}`, now)) continue
-    void notify(t.title, `Due now · ${st.items.find((i) => i.id === t.itemId)?.title || 'Untitled'}`, `${t.itemId}:${t.n}`)
+  for (const t of st.tasks) {
+    if (t.done || t.due === undefined || t.allDay || t.due > now || now - t.due > 5 * 60_000) continue
+    if (!once(`t:${t.id}:${t.due}`, now)) continue
+    const doc = t.docId && st.items.find((i) => i.id === t.docId)
+    void notify(t.title, `Due now${doc ? ` · ${doc.title || 'Untitled'}` : ''}`, t.id)
   }
 }
 

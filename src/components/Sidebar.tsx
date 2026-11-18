@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react'
-import {
-  LayoutGrid, CalendarDays, Archive, FileText, Mic, Trash2, Plus, Folder, Settings, ChevronRight, PanelLeft, FolderPlus, 
-  AudioWaveform, RefreshCw, Search, ListChecks, GitCommitHorizontal, CircleAlert, Pencil, Star, StarOff, FilePlus2, Unplug, Inbox,
-} from 'lucide-react'
+import { LayoutGrid, CalendarDays, FileText, Mic, Trash2, Plus, Folder, Settings, ChevronRight, PanelLeft, FolderPlus, AudioWaveform, RefreshCw, Search, ListChecks, GitCommitHorizontal, CircleAlert, Pencil, StarOff, FilePlus2, Unplug, Inbox } from 'lucide-react'
+import { StarIcon, VaultIcon, type AnyIcon } from './icons'
 import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
 import type { Item, Section } from '../types'
@@ -14,7 +12,6 @@ import { APP_NAME } from '../brand'
 import { itemEmoji } from '../lib/util'
 import { startRecording } from '../lib/recordNext'
 import { rowMenu } from '../views/ItemList'
-import { useWorkspace } from '../lib/graph'
 
 /** The mark: an upright slab, 4 wide to 9 tall. Also the selection marker and the assistant's waiting sign (soft.css). */
 export function Logo({ size = 20 }: { size?: number }) {
@@ -65,7 +62,7 @@ export function Sidebar({ onNavigate, library }: { onNavigate?: () => void; libr
     if (await confirmDialog({ title: `Delete “${name}”?`, body: n ? `Its ${n} doc${n > 1 ? 's' : ''} stay in Docs. Nothing is deleted.` : undefined, confirm: 'Delete folder' })) s.deleteFolder(id)
   }
 
-  const nav = (id: Section, label: string, Icon: typeof LayoutGrid, n?: number) => (
+  const nav = (id: Section, label: string, Icon: AnyIcon, n?: number) => (
     <button className={`nav ${s.section === id ? 'on' : ''}`} onClick={() => (s.go(id), onNavigate?.())}>
       <Icon size={17} strokeWidth={1.8} />
       <span>{label}</span>
@@ -110,7 +107,7 @@ export function Sidebar({ onNavigate, library }: { onNavigate?: () => void; libr
         {!library && nav('home', 'Home', LayoutGrid)}
         {!library && <TasksNav nav={nav} />}
         {!library && nav('calendar', 'Calendar', CalendarDays)}
-        {!library && nav('vault', 'Vault', Archive)}
+        {!library && nav('vault', 'Vault', VaultIcon)}
 
         {group('docs', 'Docs', { title: 'New doc (⌘N)', run: () => (useStore.setState({ folderId: null }), s.createItem('doc'), onNavigate?.()) })}
         {!folded.docs && <div className="side-tree"><DocTree onNavigate={onNavigate} /></div>}
@@ -182,14 +179,14 @@ export function Sidebar({ onNavigate, library }: { onNavigate?: () => void; libr
   )
 }
 
-/** Tasks, with how many are open. Its own component so only this row re-reads docs as they change. */
-function TasksNav({ nav }: { nav: (id: Section, label: string, Icon: typeof LayoutGrid, n?: number) => React.ReactNode }) {
-  const n = useWorkspace().tasks.length
+/** Tasks, with how many are open. Its own component so only this row re-renders as tasks change. */
+function TasksNav({ nav }: { nav: (id: Section, label: string, Icon: AnyIcon, n?: number) => React.ReactNode }) {
+  const n = useStore((s) => s.tasks.filter((t) => !t.done).length)
   return <>{nav('tasks', 'Tasks', ListChecks, n)}</>
 }
 
 /** Recently Deleted, with how many things are waiting there. */
-function TrashNav({ nav }: { nav: (id: Section, label: string, Icon: typeof LayoutGrid, n?: number) => React.ReactNode }) {
+function TrashNav({ nav }: { nav: (id: Section, label: string, Icon: AnyIcon, n?: number) => React.ReactNode }) {
   const n = useStore((s) => s.items.reduce((k, i) => k + (i.deletedAt ? 1 : 0), 0))
   return <>{nav('trash', 'Recently Deleted', Trash2, n)}</>
 }
@@ -293,7 +290,7 @@ export function docMenu(d: Item): MenuItem[] {
   if (d.file?.dir) return [newHere]
   return [
     newHere,
-    { label: d.pinned ? 'Remove from favorites' : 'Add to favorites', icon: d.pinned ? StarOff : Star, run: () => st.updateItem(d.id, { pinned: !d.pinned }) },
+    { label: d.pinned ? 'Remove from favorites' : 'Add to favorites', icon: d.pinned ? StarOff : StarIcon, run: () => st.updateItem(d.id, { pinned: !d.pinned }) },
     ...(local && st.folders.length ? [{ heading: 'Move to' }, { label: 'No folder', icon: Inbox, checked: !d.folderId, run: () => st.updateItem(d.id, { folderId: null }) }, ...st.folders.map((f): MenuItem => ({ label: f.name, icon: Folder, checked: d.folderId === f.id, run: () => st.updateItem(d.id, { folderId: f.id }) }))] : []),
     'sep',
     { label: 'Delete', icon: Trash2, danger: true, run: () => (st.trashItem(d.id), toast('Doc moved to Recently Deleted', { action: { label: 'Undo', run: () => st.restoreItem(d.id) } })) },

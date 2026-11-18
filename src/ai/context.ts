@@ -1,7 +1,8 @@
 import { addDays, format, startOfDay } from 'date-fns'
-import type { CalEvent, Item } from '../types'
+import type { CalEvent, Item, Task } from '../types'
 import { textOf } from '../lib/text'
-import { dueLabel, readWorkspace } from '../lib/graph'
+import { dueLabel, openTasks } from '../lib/tasks'
+import { readWorkspace } from '../lib/graph'
 import { APP_NAME } from '../brand'
 import { promptBudget, tokensOf } from './prompt'
 import { gapLine, requestedMinutes } from './availability'
@@ -31,7 +32,7 @@ export function eventLine(e: CalEvent) {
 }
 
 /** Broad workspace snapshot used as the comparison baseline in the assistant benchmark. */
-export function sharedContext(o: { items: Item[]; events: CalEvent[]; now?: Date; device?: string }) {
+export function sharedContext(o: { items: Item[]; events: CalEvent[]; tasks?: Task[]; now?: Date; device?: string }) {
   const now = o.now ?? new Date()
   const start = new Date(now).setHours(0, 0, 0, 0)
   const dates = Array.from({ length: 14 }, (_, i) => {
@@ -47,7 +48,7 @@ export function sharedContext(o: { items: Item[]; events: CalEvent[]; now?: Date
     .map((e) => eventLine(e) + (e.end < now.getTime() ? ' (over)' : ''))
   const live = o.items.filter((i) => !i.deletedAt && !i.file?.dir)
   const title = new Map(live.map((i) => [i.id, i.title || 'Untitled']))
-  const tasks = readWorkspace(live, now).tasks.slice(0, 15).map((t) => `- ${t.title}${t.due !== undefined ? ` (due ${dueLabel(t, now)})` : ''} (in "${title.get(t.itemId)}")`)
+  const tasks = openTasks(o.tasks ?? []).slice(0, 15).map((t) => `- ${t.title}${t.due !== undefined ? ` (due ${dueLabel(t, now)})` : ''}${t.docId && title.has(t.docId) ? ` (for "${title.get(t.docId)}")` : ''}`)
   const recent = [...live]
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, 6)
@@ -201,7 +202,7 @@ export type Evidence = {
   file?: string
 }
 
-export type Workspace = { items: Item[]; events: CalEvent[]; now: Date; device?: string; files?: Attached[] }
+export type Workspace = { items: Item[]; events: CalEvent[]; tasks?: Task[]; now: Date; device?: string; files?: Attached[] }
 
 /** A file this short is given whole; a longer one gives the passages that match the question. */
 const WHOLE_FILE = 2400
@@ -307,10 +308,13 @@ export function turnEvidence(question: string, o: Workspace & { open?: Item | nu
   }
   if (tasks) {
     const title = new Map(live.map((i) => [i.id, i.title || 'Untitled']))
-    const rows = readWorkspace(live, o.now).tasks.map((t) => ({
-      text: `Open tasks: ${t.title}${t.due !== undefined ? ` (due ${dueLabel(t, o.now)})` : ''} (in “${title.get(t.itemId)}”)`,
-      match: score(`${t.text} ${title.get(t.itemId)}`),
-    })).sort((a, b) => b.match - a.match)
+    const rows = openTasks(o.tasks ?? []).map((t) => {
+      const doc = t.docId ? title.get(t.docId) : undefined
+      return {
+        text: `Open tasks: ${t.title}${t.due !== undefined ? ` (due ${dueLabel(t, o.now)})` : ''}${doc ? ` (for “${doc}”)` : ''}`,
+        match: score(`${t.title} ${t.notes ?? ''} ${doc ?? ''}`),
+      }
+    }).sort((a, b) => b.match - a.match)
     for (const row of rows.slice(0, 8)) evidence.push({ kind: 'tasks', text: row.text })
     if (!rows.length) evidence.push({ kind: 'tasks', text: 'Open tasks: none.' })
   }
@@ -354,7 +358,8 @@ export function packTurn(question: string, evidence: Evidence[], options: { wind
 export function sameEvidence(evidence: Evidence[], before: Workspace, after: Workspace) {
   return evidence.every(({ kind, item }) => {
     if (kind === 'calendar') return before.events === after.events
-    if (kind === 'tasks' || kind === 'recent') return before.items === after.items
+    if (kind === 'tasks') return before.tasks === after.tasks && before.items === after.items
+    if (kind === 'recent') return before.items === after.items
     if (kind === 'device') return before.device === after.device
     if (kind === 'file') return before.files === after.files
     if (kind === 'dates') return before.now.toDateString() === after.now.toDateString()

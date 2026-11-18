@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { del, get, set } from 'idb-keyval'
 import { useStore } from '../store'
-import type { CalEvent, Item } from '../types'
+import type { CalEvent, Item, Task } from '../types'
 import { fileBlob, fileMeta, hashBlob, inlineFiles, MAX_FILE, putFile, refsIn } from '../lib/files'
 import { setRemote, type RemoteModel } from '../ai/remote'
 import { aesKey, b64u, checkCode, deriveKey, equal, hmac, newKeyPair, open, random, seal, syncRoom } from './crypto'
@@ -29,10 +29,14 @@ export const RELAY = ((import.meta.env.VITE_RELAY_URL as string | undefined) || 
 /** True when pairing goes through this dev server, which a phone off this machine can't reach. */
 export const localRelay = !import.meta.env.VITE_RELAY_URL && /^(localhost|127\.|\[::1\])/.test(location.hostname)
 
-/** One note, doc, lecture or event as it travels between devices. Bodies are Markdown. */
+/**
+ * One note, doc, lecture, event or task as it travels between devices. Bodies are Markdown. A task uses `title`,
+ * `start` (when it's due), `allDay`, `body` (its notes), `done`, `doneAt` and `docId`. Phones that don't know tasks
+ * yet skip them (they skip any kind they don't know).
+ */
 export interface Rec {
   id: string
-  kind: 'note' | 'doc' | 'lecture' | 'event'
+  kind: 'note' | 'doc' | 'lecture' | 'event' | 'task'
   updatedAt: number
   deletedAt?: number
   title?: string
@@ -51,6 +55,9 @@ export interface Rec {
   /** Repeating events (web only for now; the phone keeps what it's given). */
   repeat?: CalEvent['repeat'] | null
   skip?: number[]
+  done?: boolean
+  doneAt?: number
+  docId?: string
 }
 
 type Turn = { role: string; content: string }
@@ -368,10 +375,10 @@ const md = () => import('../lib/markdown')
 const synced = (i: Item) => !i.sourceId && !i.file
 /** What each record looked like when we last sent or received it, so only real changes go out. */
 const known = new Map<string, string>()
-const sig = (x: Item | CalEvent) => JSON.stringify(x)
+const sig = (x: Item | CalEvent | Task) => JSON.stringify(x)
 /** The object last compared for each id: unchanged objects skip the JSON comparison entirely. */
-const seenObj = new Map<string, Item | CalEvent>()
-const changed = (x: Item | CalEvent) => {
+const seenObj = new Map<string, Item | CalEvent | Task>()
+const changed = (x: Item | CalEvent | Task) => {
   if (seenObj.get(x.id) === x) return false
   seenObj.set(x.id, x)
   return known.get(x.id) !== sig(x)
@@ -404,11 +411,15 @@ const evRec = (e: CalEvent, updatedAt: number): Rec => ({
   id: e.id, kind: 'event', updatedAt, title: e.title, start: e.start, end: e.end, allDay: e.allDay, location: e.location, color: e.color, repeat: e.repeat, skip: e.skip,
 })
 
+const taskRec = (t: Task): Rec => ({
+  id: t.id, kind: 'task', updatedAt: t.updatedAt, title: t.title, start: t.due, allDay: t.allDay, body: t.notes, done: t.done, doneAt: t.doneAt, docId: t.docId,
+})
+
 async function snapshot(room: string): Promise<Rec[]> {
   const st = useStore.getState()
   const inline = !takesFiles(room)
   const items = await Promise.all(st.items.filter(synced).map((i) => toRec(i, inline)))
-  return [...items, ...st.events.map((e) => evRec(e, eventTimes.get(e.id) || 0)), ...tombstones]
+  return [...items, ...st.events.map((e) => evRec(e, eventTimes.get(e.id) || 0)), ...st.tasks.map(taskRec), ...tombstones]
 }
 
 /** Events have no edit time on the web, so we remember when we saw each one change. */
@@ -428,6 +439,7 @@ async function apply(recs: Rec[]) {
   const st = useStore.getState()
   let items = [...st.items]
   const events = [...st.events]
+  const tasks = [...st.tasks]
   let folders = [...st.folders]
   let changed = false
   let noted = false
@@ -439,6 +451,23 @@ async function apply(recs: Rec[]) {
       if ((tomb.deletedAt || 0) >= stamp) continue // deleted here after that edit
       tombstones = tombstones.filter((t) => t !== tomb) // edited somewhere else since, so it comes back
       noted = true
+    }
+    if (r.kind === 'task') {
+      const i = tasks.findIndex((t) => t.id === r.id)
+      const cur = i >= 0 ? tasks[i] : undefined
+      if (cur && cur.updatedAt >= stamp) continue
+      if (r.deletedAt) {
+        if (cur) (tasks.splice(i, 1), known.delete(r.id), (changed = true))
+        bury(gone(r.id, 'task', r.deletedAt))
+        noted = true
+        continue
+      }
+      const t: Task = { id: r.id, title: r.title || '', done: !!r.done, due: r.start ?? undefined, allDay: r.allDay, notes: r.body || undefined, docId: r.docId, doneAt: r.doneAt, createdAt: cur?.createdAt ?? r.updatedAt, updatedAt: r.updatedAt }
+      if (i >= 0) tasks[i] = t
+      else tasks.push(t)
+      known.set(r.id, sig(t))
+      changed = true
+      continue
     }
     if (r.kind === 'event') {
       const i = events.findIndex((e) => e.id === r.id)
@@ -520,7 +549,7 @@ async function apply(recs: Rec[]) {
   if (noted) saveMemory()
   if (!changed) return
   applying = true
-  useStore.setState({ items, events, folders })
+  useStore.setState({ items, events, tasks, folders })
   applying = false
   useLink.setState({ lastSync: Date.now() })
 }
@@ -530,9 +559,10 @@ function watchStore() {
   const st = useStore.getState()
   st.items.forEach((i) => known.set(i.id, sig(i)))
   st.events.forEach((e) => known.set(e.id, sig(e)))
+  st.tasks.forEach((t) => known.set(t.id, sig(t)))
   let timer = 0
   useStore.subscribe((s, prev) => {
-    if (applying || (s.items === prev.items && s.events === prev.events)) return
+    if (applying || (s.items === prev.items && s.events === prev.events && s.tasks === prev.tasks)) return
     if (useLink.getState().pairings.length) {
       // Anything deleted for good here becomes a tombstone, so the phone deletes it too and can't hand it back.
       const now = Date.now()
@@ -540,6 +570,10 @@ function watchStore() {
       if (s.events !== prev.events) {
         const ids = new Set(s.events.map((e) => e.id))
         prev.events.forEach((e) => !ids.has(e.id) && lost.push(gone(e.id, 'event', now)))
+      }
+      if (s.tasks !== prev.tasks) {
+        const ids = new Set(s.tasks.map((t) => t.id))
+        prev.tasks.forEach((t) => !ids.has(t.id) && lost.push(gone(t.id, 'task', now)))
       }
       if (s.items !== prev.items && s.items.length < prev.items.length) {
         const ids = new Set(s.items.map((i) => i.id))
@@ -564,12 +598,14 @@ async function flushChanges() {
   const now = Date.now()
   const items = st.items.filter((i) => synced(i) && changed(i))
   const events = st.events.filter(changed)
+  const tasks = st.tasks.filter(changed)
+  tasks.forEach((t) => known.set(t.id, sig(t)))
   // Pinning doesn't move an item's edit time here; send it as a fresh edit so it still wins on the phone.
   const unstamped = new Set(items.filter((i) => known.get(i.id)?.includes(`"updatedAt":${i.updatedAt}`)).map((i) => i.id))
   items.forEach((i) => known.set(i.id, sig(i)))
   events.forEach((e) => (known.set(e.id, sig(e)), eventTimes.set(e.id, now)))
   if (events.length) saveMemory()
-  const rest = [...events.map((e) => evRec(e, now)), ...fresh.splice(0)]
+  const rest = [...events.map((e) => evRec(e, now)), ...tasks.map(taskRec), ...fresh.splice(0)]
   // Each device gets records in the form it takes: references, or pictures embedded. Built once per form.
   const forms = new Map<boolean, Promise<Rec[]>>()
   const recsFor = (inline: boolean) => {

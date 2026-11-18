@@ -7,6 +7,7 @@ export function useMobile() {
   useEffect(() => {
     const mq = matchMedia(MOBILE)
     const f = () => setM(mq.matches)
+    f() // catch a change that landed between the first render and this listener
     mq.addEventListener('change', f)
     return () => mq.removeEventListener('change', f)
   }, [])

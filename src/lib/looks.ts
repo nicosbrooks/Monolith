@@ -47,3 +47,30 @@ export function applyLook(look?: string, tint?: string) {
   root.dataset.look = lookOf(look).id
   root.dataset.tint = tintOf(tint).id
 }
+
+/** The material panels are made of. Fill: how much of the panel color covers the look behind (percent). Blur: frost
+ *  (px). Edge: outline strength (percent). Radius: corner roundness (px). */
+export interface Surface { fill: number; blur: number; edge: number; radius: number }
+
+export const SURFACES: { id: string; name: string; s: Surface }[] = [
+  { id: 'clear', name: 'Clear', s: { fill: 22, blur: 14, edge: 10, radius: 16 } },
+  { id: 'frosted', name: 'Frosted', s: { fill: 46, blur: 24, edge: 7, radius: 16 } },
+  { id: 'solid', name: 'Solid', s: { fill: 94, blur: 0, edge: 5, radius: 16 } },
+]
+export const DEFAULT_SURFACE = SURFACES[1].s
+export const surfaceOf = (s?: Partial<Surface>): Surface => ({ ...DEFAULT_SURFACE, ...s })
+/** The preset these values match, if any. */
+export const surfacePreset = (s?: Partial<Surface>) => {
+  const v = surfaceOf(s)
+  return SURFACES.find((p) => p.s.fill === v.fill && p.s.blur === v.blur && p.s.edge === v.edge)?.id ?? null
+}
+
+/** Puts the chosen surface on the page. */
+export function applySurface(s?: Partial<Surface>) {
+  const v = surfaceOf(s)
+  const st = document.documentElement.style
+  st.setProperty('--mat-fill', `${v.fill}%`)
+  st.setProperty('--mat-blur', `${v.blur}px`)
+  st.setProperty('--mat-edge', `${v.edge}%`)
+  st.setProperty('--mat-radius', `${v.radius}px`)
+}

@@ -325,5 +325,8 @@ export function whenLabel(p: Pick<ParsedEvent, 'start' | 'allDay' | 'due' | 'loc
   return `${p.due ? 'Due ' : ''}${day}${time}${again}${p.location ? ` · ${p.location}` : ''}`
 }
 
+/** When a task is due, for its labels ("Fri, Nov 20 · 5:00 PM"): the "Due" a deadline gets is left to the caller. */
+export const dueWhen = (p: Pick<ParsedEvent, 'start' | 'allDay' | 'due' | 'location' | 'repeat'>) => whenLabel({ ...p, due: false })
+
 /** The calendar colour for a new event: deadlines and exams stand out. */
 export const eventColor = (p: { title: string; due?: boolean }) => (p.due || /\b(exam|quiz|test|midterm|final|deadline)\b/i.test(p.title) ? 'rose' : 'blue')

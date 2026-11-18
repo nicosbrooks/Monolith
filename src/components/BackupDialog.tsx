@@ -24,7 +24,7 @@ export function BackupDialog() {
   return (
     <AnimatePresence>
       {open && (
-        <motion.div className="overlay bk-overlay" onMouseDown={close} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div className="overlay bk-overlay" onMouseDown={close} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, pointerEvents: 'none' }}>
           <motion.div className="modal bk" role="dialog" aria-modal="true" aria-labelledby="bk-title" onMouseDown={(e) => e.stopPropagation()}
             initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}>
             <button className="icon-btn bk-close" onClick={close} aria-label="Close"><X size={18} /></button>

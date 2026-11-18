@@ -2,11 +2,12 @@ import { create } from 'zustand'
 import { persist, type PersistStorage } from 'zustand/middleware'
 import { del, get, set } from 'idb-keyval'
 import { addDays, addHours, set as setDate, startOfDay } from 'date-fns'
-import type { CalEvent, FileMeta, Folder, Item, ItemKind, Section, Source } from './types'
+import type { CalEvent, FileMeta, Folder, Item, ItemKind, Section, Source, Task } from './types'
 import { extractTags, htmlToText, uid, withoutLegacyTitle } from './lib/util'
 import { APP_NAME } from './brand'
 import { openBlob, openText, sealBlob, sealText, vaultReady } from './lib/vault'
 import { occurrenceOf } from './lib/repeat'
+import { fromInboxDoc } from './lib/tasks'
 
 // Saving. Typing changes state several times a second, and a save writes the whole workspace, so:
 //  - nothing is turned into text until a save actually happens (it used to be on every change, including opening a menu);
@@ -67,13 +68,6 @@ const idbStorage: PersistStorage<unknown> = {
   removeItem: async (k) => del(k),
 }
 
-/** A checklist line someone checked off: which doc, its words, and when. */
-export interface Completion {
-  itemId: string
-  text: string
-  at: number
-}
-
 export interface Settings {
   llmModel: string
   /** The speech-to-text model (named for the first one the app used). */
@@ -87,6 +81,8 @@ export interface Settings {
   look?: string
   /** The color of buttons, selection and highlights (lib/looks.ts). Unset: neutral. */
   tint?: string
+  /** The material panels are made of (lib/looks.ts). Unset: Frosted. */
+  surface?: Partial<import('./lib/looks').Surface>
   /** What to call the person in greetings. Empty: no name. */
   name: string
   /** A connected folder that new docs are saved in, or null for this browser. */
@@ -120,6 +116,8 @@ interface State {
   items: Item[]
   folders: Folder[]
   events: CalEvent[]
+  /** To-dos, their own records (lib/tasks.ts). */
+  tasks: Task[]
   section: Section
   activeId: string | null
   calendarDate: number | null
@@ -133,8 +131,6 @@ interface State {
   drawerOpen: boolean
   sidebarCollapsed: boolean
   dismissed: string[]
-  /** Checklist lines as they were checked off, newest first, for Recently Deleted › Completed (lib/completed.ts). */
-  completed: Completion[]
   settings: Settings
   sources: Source[]
 
@@ -176,7 +172,7 @@ const seedItems: Item[] = [
     id: 'welcome',
     kind: 'doc',
     title: `Welcome to ${APP_NAME}`,
-    content: `<p>Your docs, tasks, recordings and calendar in one place, with an assistant that runs on your own devices.</p><h2>Try these</h2><ul data-type="taskList"><li data-type="taskItem" data-checked="true"><p>Open the app</p></li><li data-type="taskItem" data-checked="false"><p>Press <code>⌘K</code> to jump anywhere</p></li><li data-type="taskItem" data-checked="false"><p>Type <code>/</code> on an empty line for blocks — checklists, tables, sketches</p></li><li data-type="taskItem" data-checked="false"><p>Record a class or meeting and get notes written for you</p></li></ul><h2>Everything connects</h2><p>Type <code>[[</code> to link one doc to another, like <a href="#doc/doc-guide">Study system</a>. Each doc shows what links to it at the bottom.</p><p>Checklist lines from every doc gather in Tasks. Give one a date (<em>“essay draft by Friday”</em>) and it’s sorted by when it’s due.</p><p>Write something like <em>“Problem set due Friday 5pm”</em> in any doc, and ${APP_NAME} offers to put it on your calendar. #getting-started</p>`,
+    content: `<p>Your docs, tasks, recordings and calendar in one place, with an assistant that runs on your own devices.</p><h2>Try these</h2><p>They’re waiting in Tasks: press <code>⌘K</code> to jump anywhere, type <code>/</code> on an empty line for blocks, and record a class or meeting.</p><h2>Everything connects</h2><p>Type <code>[[</code> to link one doc to another, like <a href="#doc/doc-guide">Study system</a>. Each doc shows what links to it at the bottom.</p><p>Tasks are their own list. Type one in the Ask bar with a date (<em>“essay draft by Friday”</em>) and it’s sorted by when it’s due. A checklist in a doc stays part of that doc.</p><p>Write something like <em>“Problem set due Friday 5pm”</em> in any doc, and ${APP_NAME} offers to put it on your calendar. #getting-started</p>`,
     folderId: null,
     parentId: null,
     pinned: true,
@@ -196,6 +192,12 @@ const seedItems: Item[] = [
     createdAt: now - 1000,
     updatedAt: now - 1000,
   },
+]
+
+const seedTasks: Task[] = [
+  { id: 'task-k', title: 'Press ⌘K to jump anywhere', done: false, createdAt: now - 1, updatedAt: now - 1, docId: 'welcome' },
+  { id: 'task-blocks', title: 'Type / on an empty line for blocks: checklists, tables, sketches', done: false, createdAt: now - 2, updatedAt: now - 2, docId: 'welcome' },
+  { id: 'task-record', title: 'Record a class or meeting and get notes written for you', done: false, createdAt: now - 3, updatedAt: now - 3 },
 ]
 
 const seedEvents: CalEvent[] = [
@@ -230,6 +232,7 @@ export const useStore = create<State>()(
       items: seedItems,
       folders: [{ id: 'f-school', name: 'School' }, { id: 'f-personal', name: 'Personal' }],
       events: seedEvents,
+      tasks: seedTasks,
       section: 'home',
       activeId: null,
       setupOpen: false,
@@ -242,7 +245,6 @@ export const useStore = create<State>()(
       drawerOpen: false,
       sidebarCollapsed: false,
       dismissed: [],
-      completed: [],
       settings: {
         // 'default' means the Default tier, resolved per device (see modelForTier). Existing installs keep their pick.
         llmModel: 'default',
@@ -415,7 +417,7 @@ export const useStore = create<State>()(
     }),
     {
       name: 'socratic-v1',
-      version: 10,
+      version: 11,
       migrate: (persisted: unknown, v: number) => {
         const p = persisted as Partial<State>
         if (p.settings && p.settings.googleClientId === undefined) p.settings.googleClientId = ''
@@ -432,6 +434,12 @@ export const useStore = create<State>()(
           const { provider: _p, ollamaModel: _o, localEngines: _l, ...rest } = p.settings as Settings & { provider?: string; ollamaModel?: string; localEngines?: boolean }
           p.settings = rest
         }
+        // Tasks are their own records now. The "Tasks" doc the app kept for them becomes the list; other docs' checklists stay put.
+        if (v < 11) {
+          const moved = fromInboxDoc(p.items ?? [])
+          p.items = moved.items
+          p.tasks = [...moved.tasks, ...(p.tasks ?? [])]
+        }
         return p as State
       },
       // The saved part of the state (see partialize) goes through as it is; text is made only when a save happens.
@@ -440,10 +448,10 @@ export const useStore = create<State>()(
         items: s.items,
         folders: s.folders,
         events: s.events,
+        tasks: s.tasks,
         settings: s.settings,
         sources: s.sources,
         dismissed: s.dismissed,
-        completed: s.completed,
         sidebarCollapsed: s.sidebarCollapsed,
       }),
     },

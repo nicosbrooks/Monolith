@@ -13,8 +13,8 @@ import { useStore } from '../store'
 import type { CalEvent } from '../types'
 import { COLORS } from '../lib/colors'
 import { REPEATS, expandEvents, occurrenceId, occurrenceOf } from '../lib/repeat'
-import { useWorkspace, type Task } from '../lib/graph'
-import { completeTask } from './TasksView'
+import type { Task } from '../types'
+import { completeTask, editTask } from '../lib/tasks'
 
 const HOUR = 52 // px per hour
 const SNAP = 15
@@ -38,8 +38,8 @@ export function CalendarView({ initialDate }: { initialDate: number | null }) {
   const month = startOfMonth(cursor).getTime()
   const events = useMemo(() => [...expandEvents(own, month - 45 * 864e5, month + 80 * 864e5), ...subEvents], [own, subEvents, month])
   // Tasks with a date sit on their day, above the events.
-  const ws = useWorkspace()
-  const tasks = useMemo(() => ws.tasks.filter((t) => t.due !== undefined), [ws])
+  const allTasks = useStore((s) => s.tasks)
+  const tasks = useMemo(() => allTasks.filter((t) => !t.done && t.due !== undefined), [allTasks])
   const body = useRef<HTMLDivElement>(null)
   const offset = useMotionValue(0)
   const settle = useRef<ReturnType<typeof animate> | null>(null)
@@ -289,7 +289,7 @@ function Week({ cursor, events, tasks, onEdit, span, editing, onDismiss }: { cur
             {allDay(d).map((e) => (
               <button key={e.id} className="chip" style={{ '--c': COLORS[e.color] } as React.CSSProperties} onClick={() => onEdit(e.id)} onContextMenu={(ce) => colorMenu(ce, e)}>{e.title || 'Untitled'}</button>
             ))}
-            {tasks.filter((t) => isSameDay(t.due!, d)).map((t) => <TaskChip key={`${t.itemId}:${t.n}`} task={t} />)}
+            {tasks.filter((t) => isSameDay(t.due!, d)).map((t) => <TaskChip key={t.id} task={t} />)}
           </div>
         ))}
       </div>
@@ -388,7 +388,7 @@ function Month({ cursor, events, tasks, onEdit, onPickDay }: { cursor: Date; eve
             }}
           >
             <button className="num" onClick={() => onPickDay(d)}>{format(d, 'd')}</button>
-            {tasks.filter((t) => isSameDay(t.due!, d)).slice(0, 2).map((t) => <TaskChip key={`${t.itemId}:${t.n}`} task={t} month />)}
+            {tasks.filter((t) => isSameDay(t.due!, d)).slice(0, 2).map((t) => <TaskChip key={t.id} task={t} month />)}
             {evs.slice(0, 4).map((e) => (
               <button key={e.id} className={`mev ${e.allDay ? 'all' : ''}`} style={{ '--c': COLORS[e.color] } as React.CSSProperties} onClick={() => onEdit(e.id)} onContextMenu={(ce) => colorMenu(ce, e)}>
                 {!e.allDay && <i />}
@@ -404,12 +404,12 @@ function Month({ cursor, events, tasks, onEdit, onPickDay }: { cursor: Date; eve
   )
 }
 
-/** A task with a date, on its day: the box checks it off, the words open its doc. */
+/** A task with a date, on its day: the box checks it off, the words open it in Tasks. */
 function TaskChip({ task, month }: { task: Task; month?: boolean }) {
   return (
     <span className={`chip task ${month ? 'in-month' : ''}`}>
       <button className="box" aria-label={`Mark done: ${task.title}`} title="Mark done" onClick={(e) => (e.stopPropagation(), completeTask(task))} />
-      <button className="txt" title="Open the doc" onClick={(e) => (e.stopPropagation(), useStore.getState().open(task.itemId))}>{task.title}</button>
+      <button className="txt" title="Edit task" onClick={(e) => (e.stopPropagation(), useStore.getState().go('tasks'), editTask(task.id))}>{task.title}</button>
     </span>
   )
 }

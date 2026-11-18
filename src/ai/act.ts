@@ -4,7 +4,7 @@ import { useStore } from '../store'
 import type { CalEvent, Item } from '../types'
 import { htmlToText, mdToHtml } from '../lib/util'
 import { eventColor, parseQuickEvent } from '../lib/dates'
-import { getActiveEditor } from './actions'
+import { addTask, findOpenTask, removeTask, setTaskDone } from '../lib/tasks'
 
 /**
  * The assistant can do things, not just answer. It proposes them as `@event {…}`-style lines; the app shows each
@@ -15,7 +15,7 @@ export type Act =
   | { kind: 'move'; eventId: string; title: string; start: number; end: number; allDay: boolean; was: { start: number; end: number; allDay?: boolean } }
   | { kind: 'cancel'; eventId: string; title: string; start: number }
   | { kind: 'task'; title: string; docId: string | null; docTitle: string }
-  | { kind: 'done'; title: string; docId: string }
+  | { kind: 'done'; title: string; taskId: string }
   | { kind: 'note' | 'doc'; title: string; md: string }
 
 // Placeholders, not sample values: small models copy examples word for word.
@@ -55,23 +55,6 @@ function findEvent(title: string, events: CalEvent[]) {
   const mine = events.filter((e) => !e.calId)
   const pick = (l: CalEvent[]) => l.sort((a, b) => Math.abs(a.start - Date.now()) - Math.abs(b.start - Date.now()))[0] ?? null
   return pick(mine.filter((e) => norm(e.title) === t)) ?? pick(mine.filter((e) => norm(e.title).includes(t) || t.includes(norm(e.title))))
-}
-
-/** An open task by its text, in any doc. */
-function findTask(text: string, items: Item[]) {
-  const t = norm(text)
-  if (!t) return null
-  for (const exact of [true, false])
-    for (const i of items) {
-      if (i.deletedAt || !i.content.includes('data-checked="false"')) continue
-      const tpl = document.createElement('template') // inert: pictures in it don't load
-      tpl.innerHTML = i.content
-      for (const li of tpl.content.querySelectorAll('li[data-checked="false"]')) {
-        const n = norm(li.textContent || '')
-        if (exact ? n === t : n.includes(t) || t.includes(n)) return { item: i, text: (li.textContent || '').trim() }
-      }
-    }
-  return null
 }
 
 const time = (s: string) => new Date(s).getTime()
@@ -117,13 +100,12 @@ export function splitActs(text: string, ctx: { events: CalEvent[]; items: Item[]
         const raw = String(j.text || j.title || '').trim().slice(0, 200)
         const text = raw.charAt(0).toUpperCase() + raw.slice(1)
         if (!text) continue
-        const open = ctx.openId ? ctx.items.find((i) => i.id === ctx.openId && i.kind === 'doc' && !i.deletedAt) : null
-        const inbox = ctx.items.find((i) => !i.deletedAt && i.kind === 'doc' && i.title.trim().toLowerCase() === 'tasks')
-        const doc = open ?? inbox
-        acts.push({ kind, title: text, docId: doc?.id ?? null, docTitle: doc?.title || 'Tasks' })
+        // Asked from inside a doc: the task goes with that doc (it isn't written into it).
+        const doc = ctx.openId ? ctx.items.find((i) => i.id === ctx.openId && i.kind === 'doc' && !i.deletedAt) : null
+        acts.push({ kind, title: text, docId: doc?.id ?? null, docTitle: doc?.title || '' })
       } else if (kind === 'done') {
-        const f = findTask(String(j.task || j.text || ''), ctx.items)
-        if (f) acts.push({ kind, title: f.text, docId: f.item.id })
+        const t = findOpenTask(String(j.task || j.text || ''))
+        if (t) acts.push({ kind, title: t.title, taskId: t.id })
       } else {
         acts.push({ kind: kind as 'note' | 'doc', title: String(j.title || 'Untitled').slice(0, 120), md: String(j.md || '') })
       }
@@ -192,8 +174,8 @@ export function describe(a: Act) {
     case 'event': return (a.due ? 'Due ' : '') + (a.due && !a.allDay ? format(a.start, 'EEE, MMM d · h:mm a') : span(a.start, a.end, a.allDay)) + (a.repeat ? ` · ${repeatLabel(a.repeat)}` : '') + (a.location ? ` · ${a.location}` : '') + past(a.start)
     case 'move': return `${format(a.was.start, 'EEE h:mm a')} → ${span(a.start, a.end, a.allDay)}${past(a.start)}`
     case 'cancel': return `Remove from ${format(a.start, 'EEE, MMM d')}`
-    case 'task': return `Add to “${a.docTitle}”`
-    case 'done': return `Check off in “${useStore.getState().items.find((i) => i.id === a.docId)?.title || 'Untitled'}”`
+    case 'task': return a.docId ? `Add to Tasks · for “${a.docTitle || 'Untitled'}”` : 'Add to Tasks'
+    case 'done': return 'Check off in Tasks'
     default: return 'New doc'
   }
 }
@@ -201,14 +183,6 @@ export function describe(a: Act) {
 /** The card's button, and what it says once done. */
 export const verbs = (a: Act): [string, string] =>
   ({ event: ['Add', 'Added'], move: ['Move', 'Moved'], cancel: ['Remove', 'Removed'], task: ['Add', 'Added'], done: ['Check off', 'Checked off'], note: ['Create', 'Created'], doc: ['Create', 'Created'] })[a.kind] as [string, string]
-
-/** Replace a doc's content, and the open editor's too when it's showing that doc (it doesn't follow the store). */
-function setDocHtml(id: string, html: string) {
-  const st = useStore.getState()
-  st.updateItem(id, { content: html })
-  const ed = getActiveEditor()
-  if (st.activeId === id && ed && !ed.isDestroyed) ed.commands.setContent(html)
-}
 
 /** Do it. Returns how to undo it. */
 export function perform(a: Act): () => void {
@@ -231,28 +205,12 @@ export function perform(a: Act): () => void {
       return () => useStore.setState({ events: before })
     }
     case 'task': {
-      const li = `<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>${esc(a.title)}</p></li></ul>`
-      const doc = (a.docId && st.items.find((i) => i.id === a.docId && !i.deletedAt)) || null
-      if (!doc) {
-        const it = st.createItem('doc', { title: 'Tasks', content: li })
-        return () => useStore.getState().trashItem(it.id)
-      }
-      const before = doc.content
-      const ed = getActiveEditor()
-      if (st.activeId === doc.id && ed && !ed.isDestroyed) ed.chain().focus('end').insertContent(li).run()
-      else st.updateItem(doc.id, { content: before + li })
-      return () => setDocHtml(doc.id, before)
+      const t = addTask(a.title, a.docId ? { docId: a.docId } : {})
+      return () => void (t && removeTask(t.id))
     }
     case 'done': {
-      const doc = st.items.find((i) => i.id === a.docId)
-      if (!doc) return () => {}
-      const before = doc.content
-      const tpl = document.createElement('template') // inert: pictures in it don't load
-      tpl.innerHTML = before
-      const li = [...tpl.content.querySelectorAll('li[data-checked="false"]')].find((x) => (x.textContent || '').trim() === a.title)
-      li?.setAttribute('data-checked', 'true')
-      setDocHtml(doc.id, tpl.innerHTML)
-      return () => setDocHtml(doc.id, before)
+      setTaskDone(a.taskId, true)
+      return () => setTaskDone(a.taskId, false)
     }
     default: {
       const it = st.createItem(a.kind, { title: a.title, content: mdToHtml(a.md) })
@@ -262,4 +220,3 @@ export function perform(a: Act): () => void {
   }
 }
 
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)

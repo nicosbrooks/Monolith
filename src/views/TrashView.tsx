@@ -1,30 +1,27 @@
 import { useMemo } from 'react'
 import { formatDistanceToNowStrict } from 'date-fns'
-import { AudioWaveform, CheckSquare, Ellipsis, FileText, RotateCcw, Trash2 } from 'lucide-react'
+import { AudioWaveform, FileText, RotateCcw, Trash2 } from 'lucide-react'
+import { MoreIcon } from '../components/icons'
 import { useStore } from '../store'
 import type { Item } from '../types'
 import { itemEmoji } from '../lib/util'
 import { confirmDialog, openMenu } from '../components/Overlays'
 import { toast } from '../components/Toast'
-import { completedTasks, deleteTask, restoreTask, type CompletedTask } from '../lib/completed'
 import { useMobile, useScrolled } from '../lib/useMobile'
 import { PhoneTitle } from '../components/Phone'
 
 const ago = (t: number) => formatDistanceToNowStrict(t, { addSuffix: true })
 
 /**
- * Recently Deleted: everything you can get back, in one place. Docs and recordings you deleted, and checklist lines
- * you checked off. Each row has its own Restore; deleting forever is in the row's menu, and always asks first.
+ * Recently Deleted: docs and recordings you deleted, to get back. (Checked-off tasks wait under Tasks › Done.) Each
+ * row has its own Restore; deleting forever is in the row's menu, and always asks first.
  */
 export function TrashView() {
   const items = useStore((s) => s.items)
-  const log = useStore((s) => s.completed)
   const mobile = useMobile()
   const [scrolled, onScroll] = useScrolled()
   const st = useStore.getState()
   const deleted = useMemo(() => items.filter((i) => i.deletedAt).sort((a, b) => b.deletedAt! - a.deletedAt!), [items])
-  const done = useMemo(() => completedTasks(items, log ?? []), [items, log])
-  const titles = useMemo(() => new Map(items.map((i) => [i.id, i.title || 'Untitled'])), [items])
 
   const restoreItem = (i: Item) => {
     st.restoreItem(i.id)
@@ -34,20 +31,10 @@ export function TrashView() {
     const what = i.kind === 'lecture' ? 'recording' : 'doc'
     if (await confirmDialog({ title: `Delete this ${what} forever?`, body: 'This can’t be undone.', confirm: 'Delete forever', danger: true })) st.purgeItem(i.id)
   }
-  const reopen = (t: CompletedTask) => {
-    const before = restoreTask(t)
-    if (before === null) return
-    toast(`“${t.title.slice(0, 40)}” is a task again`, { ms: 6000, action: { label: 'Undo', run: () => useStore.getState().updateItem(t.itemId, { content: before }) } })
-  }
-  const removeLine = async (t: CompletedTask) => {
-    if (!(await confirmDialog({ title: 'Remove this line from its doc?', body: `“${t.text.slice(0, 80)}” is taken out of “${titles.get(t.itemId)}”.`, confirm: 'Remove' }))) return
-    const before = deleteTask(t)
-    if (before !== null) toast('Line removed', { ms: 6000, action: { label: 'Undo', run: () => useStore.getState().updateItem(t.itemId, { content: before }) } })
-  }
   const empty = async () => {
     if (!deleted.length) return
     const n = deleted.length
-    if (await confirmDialog({ title: `Delete ${n === 1 ? 'this item' : `all ${n} items`} forever?`, body: 'Deleted docs and recordings can’t be brought back after this. Completed checklist lines stay in their docs.', confirm: 'Delete forever', danger: true }))
+    if (await confirmDialog({ title: `Delete ${n === 1 ? 'this item' : `all ${n} items`} forever?`, body: 'Deleted docs and recordings can’t be brought back after this.', confirm: 'Delete forever', danger: true }))
       for (const i of deleted) st.purgeItem(i.id)
   }
 
@@ -57,7 +44,7 @@ export function TrashView() {
       <div className="hm trash">
         <header className="hm-head">
           {!mobile && <h1>Recently Deleted</h1>}
-          <p>Deleted docs and recordings, and checklist lines you’ve checked off. Restore any of them.</p>
+          <p>Deleted docs and recordings wait here. Restore any of them.</p>
         </header>
 
         <section className="hm-sec" aria-labelledby="tr-items">
@@ -77,7 +64,7 @@ export function TrashView() {
                       <small>{i.kind === 'lecture' ? 'Recording' : 'Doc'} · deleted {ago(i.deletedAt!)}</small>
                     </button>
                     <button className={mobile ? 'icon-btn sm' : 'btn sm'} onClick={() => restoreItem(i)} aria-label={mobile ? `Restore ${i.title || 'Untitled'}` : undefined}><RotateCcw size={mobile ? 16 : 13} />{!mobile && ' Restore'}</button>
-                    <button className="icon-btn sm" aria-label={`More for ${i.title || 'Untitled'}`} onClick={(e) => openMenu(e, [{ label: 'Delete forever', icon: Trash2, danger: true, run: () => void purge(i) }])}><Ellipsis size={15} /></button>
+                    <button className="icon-btn sm" aria-label={`More for ${i.title || 'Untitled'}`} onClick={(e) => openMenu(e, [{ label: 'Delete forever', icon: Trash2, danger: true, run: () => void purge(i) }])}><MoreIcon size={15} /></button>
                   </div>
                 )
               })}
@@ -87,26 +74,6 @@ export function TrashView() {
           )}
         </section>
 
-        <section className="hm-sec" aria-labelledby="tr-done">
-          <div className="hm-label"><h2 id="tr-done">Completed</h2></div>
-          {done.length ? (
-            <div className="hm-card hm-list">
-              {done.slice(0, 200).map((t) => (
-                <div key={`${t.itemId}:${t.n}`} className="hm-row tr-row">
-                  <span className="tr-ico"><CheckSquare size={16} strokeWidth={1.8} /></span>
-                  <button className="hm-row-main" onClick={() => st.open(t.itemId)} title="Open the doc">
-                    <span className="tr-done-text">{t.text}</span>
-                    <small>{titles.get(t.itemId)}{t.at ? ` · checked ${ago(t.at)}` : ''}</small>
-                  </button>
-                  <button className={mobile ? 'icon-btn sm' : 'btn sm'} onClick={() => reopen(t)} aria-label={mobile ? `Restore ${t.text}` : undefined}><RotateCcw size={mobile ? 16 : 13} />{!mobile && ' Restore'}</button>
-                  <button className="icon-btn sm" aria-label={`More for ${t.text}`} onClick={(e) => openMenu(e, [{ label: 'Remove from doc', icon: Trash2, danger: true, run: () => void removeLine(t) }])}><Ellipsis size={15} /></button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="tr-none">Nothing completed yet. Checklist lines you check off show here, so you can bring them back.</p>
-          )}
-        </section>
       </div>
     </div>
   )

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Connections } from '../components/Connections'
 import type { Editor as TEditor } from '@tiptap/react'
 import { format } from 'date-fns'
-import { Mic, Square, Pause, Play, PenLine, Upload, Trash2, Layers, Captions, RotateCcw, MoreHorizontal } from 'lucide-react'
+import { Mic, Square, Pause, Play, PenLine, Upload, Trash2, Layers, Captions, RotateCcw } from 'lucide-react'
+import { MoreIcon } from '../components/icons'
 import { openMenu } from '../components/Overlays'
 import { motion } from 'motion/react'
 import { loadAudio, saveAudio, useStore } from '../store'
@@ -349,7 +350,7 @@ export function LectureView({ item }: { item: Item }) {
               ])
             }
           >
-            <MoreHorizontal size={17} />
+            <MoreIcon size={17} />
           </button>
         )}
         <SideControls />

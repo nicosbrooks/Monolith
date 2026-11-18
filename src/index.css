@@ -2249,3 +2249,13 @@ kbd {
 
 /* Read by screen readers, not shown. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* Nested lists change marker by level, so the outline reads at a glance: • ◦ ▪ and 1. a. i. */
+.prose ul:not([data-type='taskList']) { list-style-type: disc; }
+.prose ul:not([data-type='taskList']) ul:not([data-type='taskList']) { list-style-type: circle; }
+.prose ul:not([data-type='taskList']) ul:not([data-type='taskList']) ul:not([data-type='taskList']) { list-style-type: square; }
+.prose ol { list-style-type: decimal; }
+.prose ol ol { list-style-type: lower-alpha; }
+.prose ol ol ol { list-style-type: lower-roman; }
+.prose li > p { margin: 0; }
+.prose li::marker { font-variant-numeric: tabular-nums; }

@@ -5,12 +5,12 @@ import {
   FileInput, Paperclip, Check, Copy, BookOpen, CalendarClock, CalendarX, CheckSquare, SquarePen, CornerDownLeft,
 } from 'lucide-react'
 import { useStore } from '../store'
-import { whenLabel, type ParsedEvent } from '../lib/dates'
+import { dueWhen, whenLabel, type ParsedEvent } from '../lib/dates'
 import { itemEmoji, mdToHtml } from '../lib/util'
 import { searchText } from '../lib/text'
 import { toast } from './Toast'
 import { Listen } from './Listen'
-import { addTask, removeTask } from '../lib/graph'
+import { addTask, removeTask } from '../lib/tasks'
 import { readEvent, ruleKind, readTask, readDoc, isQuestion, cleanTitle, taskPreview } from '../lib/request'
 import { useConvo, ask, openThread, reset, retry, say, stop, doCard, attachFiles, detachFile, type Pending } from '../ai/conversation'
 import { ACCEPT, sizeLabel } from '../ai/attach'
@@ -117,12 +117,15 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
     toast(`Added “${title}” · ${whenLabel(w)}`, { ms: 8000, action: { label: 'Undo', run: undo } })
   }
   const addTaskNow = (question: string, line: string) => {
-    const t = addTask(line)
+    // Asked from inside a doc (open as the page): the task goes with that doc.
+    const st = useStore.getState()
+    const doc = st.section === 'docs' && st.activeId ? st.items.find((i) => i.id === st.activeId && i.kind === 'doc') : undefined
+    const t = addTask(line, doc ? { docId: doc.id } : {})
     if (!t) return
     const { name, due } = taskPreview(line)
-    const label = `Added “${name}”${due ? ` · due ${whenLabel(due)}` : ''}`
+    const label = `Added “${name}”${due ? ` · due ${dueWhen(due)}` : ''}`
     if (useConvo.getState().open) say(question, `${label} to Tasks.`)
-    toast(label, { ms: 6000, action: { label: 'Undo', run: () => removeTask(t) } })
+    toast(label, { ms: 6000, action: { label: 'Undo', run: () => void removeTask(t.id) } })
   }
   const newDoc = (title: string) => useStore.getState().createItem('doc', title ? { title } : {})
   const askNow = (prompt: string) => {
@@ -201,7 +204,7 @@ export function AskBar({ phone = false }: { phone?: boolean }) {
     if (!filesMode && now.kind === 'task') {
       // The line keeps its date words ("… on tuesday"): Tasks reads the due date from them. Show it as it will be listed.
       const { name, due } = taskPreview(now.task || text)
-      options.push({ key: 'task', icon: ListPlus, label: <>Add task “{name.slice(0, 60)}”</>, hint: due ? `due ${whenLabel(due)}` : undefined, run: () => (done(), void run(now)) })
+      options.push({ key: 'task', icon: ListPlus, label: <>Add task “{name.slice(0, 60)}”</>, hint: due ? `due ${dueWhen(due)}` : undefined, run: () => (done(), void run(now)) })
     }
     if (!filesMode && now.kind === 'doc') options.push({ key: 'doc', icon: FilePlus2, label: now.doc ? <>New doc “{now.doc}”</> : 'New doc', run: () => (done(), void run(now)) })
     const findFirst = !filesMode && now.kind === 'find' && hits.length > 0

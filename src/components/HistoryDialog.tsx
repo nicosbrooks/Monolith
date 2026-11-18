@@ -51,7 +51,7 @@ export function HistoryDialog() {
   return (
     <AnimatePresence>
       {id && item && (
-        <motion.div className="overlay" onMouseDown={close} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div className="overlay" onMouseDown={close} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, pointerEvents: 'none' }}>
           <motion.div className="modal hist" role="dialog" aria-modal="true" aria-labelledby="hist-title" onMouseDown={(e) => e.stopPropagation()} initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}>
             <header>
               <h2 id="hist-title">Earlier versions</h2>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
-import { Archive, FileText, Search, Upload, X } from 'lucide-react'
+import { FileText, Search, Upload, X } from 'lucide-react'
+import { VaultIcon } from './icons'
 import { fileUrl, formatSize, type VaultFile } from '../lib/files'
 import { uploadFiles, useVaultFiles } from '../views/VaultView'
 import { kindOf } from './FileViewer'
@@ -35,7 +36,7 @@ function Picker({ finish }: { finish: (f: VaultFile | null) => void }) {
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && finish(null)}>
       <div className="modal vault-pick" role="dialog" aria-modal="true" aria-label="Link a file from the Vault" onKeyDown={key}>
         <header>
-          <Archive size={16} aria-hidden="true" />
+          <VaultIcon size={16} aria-hidden="true" />
           <h2>Link a file from the Vault</h2>
           <button className="icon-btn" onClick={() => finish(null)} aria-label="Close"><X size={16} /></button>
         </header>

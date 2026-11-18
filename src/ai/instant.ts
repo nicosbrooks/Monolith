@@ -1,6 +1,6 @@
 import { format, isSameDay } from 'date-fns'
-import type { CalEvent, Item } from '../types'
-import { dueLabel, readWorkspace } from '../lib/graph'
+import type { CalEvent, Item, Task } from '../types'
+import { dueLabel, openTasks } from '../lib/tasks'
 import { betweenEventsAnswer } from './availability'
 
 // Some questions have an exact answer in the app's own data: what's on a day, what's next, what's left to do.
@@ -35,7 +35,7 @@ function range(q: string, now: Date): { from: number; to: number; label: string;
   return null
 }
 
-export function instantAnswer(question: string, o: { events: CalEvent[]; items: Item[]; now?: Date }): Instant | null {
+export function instantAnswer(question: string, o: { events: CalEvent[]; items: Item[]; tasks?: Task[]; now?: Date }): Instant | null {
   const now = o.now ?? new Date()
   const q = question.toLowerCase().replace(/[’']/g, "'").replace(/[?.!]+$/, '').trim()
   if (q.length > 70) return null
@@ -72,11 +72,11 @@ export function instantAnswer(question: string, o: { events: CalEvent[]; items: 
   // "what are my tasks", "what's left to do", "my to-dos"
   if (/^(what are |show( me)? |list )?(my )?(open |remaining )?(tasks|to-?dos|todo list)$|^what('s| is) (left|on my (to-?do|task) list)( to do)?$|^what do i (still )?(need|have) to do$/.test(q)) {
     const title = new Map(o.items.map((i) => [i.id, i.title || 'Untitled']))
-    const todos = readWorkspace(o.items, now).tasks.map((t) => ({ t: `${t.title}${t.due !== undefined ? `, ${dueLabel(t, now).toLowerCase().replace(/^(?!today|tomorrow|yesterday)/, 'due ')}` : ''}`, doc: title.get(t.itemId)! }))
+    const todos = openTasks(o.tasks ?? []).map((t) => ({ t: `${t.title}${t.due !== undefined ? `, ${dueLabel(t, now).toLowerCase().replace(/^(?!today|tomorrow|yesterday)/, 'due ')}` : ''}`, doc: t.docId ? title.get(t.docId) : undefined }))
     if (!todos.length) return { text: 'No open tasks. Everything’s checked off.', source: 'tasks' }
     const shown = todos.slice(0, 12)
     return {
-      text: `${todos.length === 1 ? 'One open task' : `${todos.length} open tasks`}:\n${shown.map((x) => `- ${x.t} *(${x.doc})*`).join('\n')}${todos.length > shown.length ? `\n\n…and ${todos.length - shown.length} more.` : ''}`,
+      text: `${todos.length === 1 ? 'One open task' : `${todos.length} open tasks`}:\n${shown.map((x) => `- ${x.t}${x.doc ? ` *(${x.doc})*` : ''}`).join('\n')}${todos.length > shown.length ? `\n\n…and ${todos.length - shown.length} more.` : ''}`,
       source: 'tasks',
     }
   }

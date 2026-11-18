@@ -118,14 +118,14 @@ test('Start recording records on the first press', async ({ page }) => {
   await expect((await library(page)).locator('.rl-doc.on')).toHaveCount(1)
 })
 
-test('Recently Deleted holds deleted docs and completed checklist lines, and restores each', async ({ page }) => {
+test('Recently Deleted holds deleted docs and restores them; done tasks fold under Tasks › Done', async ({ page }) => {
   await start(page)
   // A deleted doc waits there, and Restore puts it back in the Library.
   await (await library(page)).locator('.rl-doc', { hasText: 'Study system' }).click({ button: 'right' })
   await page.getByText('Delete', { exact: true }).click()
   await expect(page.locator('.toast')).toContainText('Recently Deleted')
   await expect((await library(page)).locator('.rl-doc', { hasText: 'Study system' })).toHaveCount(0)
-  // A checklist line checked off on Home is listed under Completed. (Esc puts the open sidebar away first.)
+  // A task checked off on Home leaves the list. (Esc puts the open sidebar away first.)
   await page.keyboard.press('Escape')
   const task = page.locator('.hm-task').first()
   const words = (await task.locator('.hm-row-main span').textContent())!.trim()
@@ -135,16 +135,15 @@ test('Recently Deleted holds deleted docs and completed checklist lines, and res
   await expect(page.locator('.hm-head h1')).toHaveText('Recently Deleted')
   const doc = page.locator('.tr-row', { hasText: 'Study system' })
   await expect(doc).toContainText('deleted')
-  const done = page.locator('.tr-row', { hasText: words })
-  await expect(done).toContainText('checked')
-  // Restore each: the doc is back, and the line is an open task again.
   await doc.getByRole('button', { name: 'Restore' }).click()
   await expect((await library(page)).locator('.rl-doc', { hasText: 'Study system' })).toHaveCount(1)
   await expect(page.locator('.tr-row', { hasText: 'Study system' })).toHaveCount(0)
-  await done.getByRole('button', { name: 'Restore' }).click()
-  await expect(page.locator('.tr-row', { hasText: words })).toHaveCount(0)
+  // The done task is under Tasks › Done; unchecking it makes it open again.
   await place(page, 'Tasks')
-  await expect(page.locator('.hm-task', { hasText: words })).toHaveCount(1)
+  await expect(page.locator('.hm-task:not(.done)', { hasText: words })).toHaveCount(0)
+  await page.locator('.tk-done-head').click()
+  await page.locator('.hm-task.done', { hasText: words }).locator('input').click()
+  await expect(page.locator('.hm-task:not(.done)', { hasText: words })).toHaveCount(1)
 })
 
 test('Ask bar: "make an event for tomorrow" asks for the name instead of using the prompt as the title', async ({ page }) => {
@@ -252,8 +251,19 @@ test('[[ links docs together: the link opens its doc, which shows what links to 
   await page.keyboard.press('Enter')
   await expect(page.locator('.doc-title')).toHaveValue('Thesis outline')
   await expect(page.locator('.ProseMirror a[href^="#doc/"]')).toHaveText(['Study system', 'Reading list'])
-  await page.locator('.ProseMirror a', { hasText: 'Study system' }).click()
-  await expect(page.locator('.doc-title')).toHaveValue('Study system')
+  // A click opens the linked doc beside this one, which stays the page.
+  await page.locator('main .ProseMirror a', { hasText: 'Study system' }).click()
+  await expect(page.locator('.side-pane .doc-title')).toHaveValue('Study system')
+  await expect(page.locator('main .doc-title')).toHaveValue('Thesis outline')
+  // Clicking back into the sentence with "[[" in it doesn't pop the link menu up again.
+  await page.locator('main .ProseMirror p').first().click({ position: { x: 4, y: 8 } })
+  await page.keyboard.press('End')
+  await expect(page.locator('.link-menu')).toHaveCount(0)
+  await page.locator('.side-pane').getByRole('button', { name: 'Close' }).click()
+  // ⌘ or Ctrl-click makes it the page.
+  await page.locator('main .ProseMirror a', { hasText: 'Study system' }).click({ modifiers: ['ControlOrMeta'] })
+  await expect(page.locator('main .doc-title')).toHaveValue('Study system')
+  await expect(page.locator('.side-pane')).toHaveCount(0)
   const from = page.locator('.cx-row', { hasText: 'Thesis outline' })
   await expect(from.locator('q')).toHaveText('Builds on Study system and Reading list')
   await page.fill('.doc-title', 'Study method')
@@ -262,34 +272,85 @@ test('[[ links docs together: the link opens its doc, which shows what links to 
   await expect(page.locator('.ProseMirror a[href^="#doc/"]').first()).toHaveText('Study method')
 })
 
-test('Tasks gathers checklist lines from every doc, sorts them by date, and adds and completes them', async ({ page }) => {
+test('lists: Tab nests and stays in the doc, a typed marker changes the list, Backspace takes the bullet away, pasted lines become a list', async ({ page }) => {
+  await start(page)
+  await newDoc(page, 'List test')
+  const pm = page.locator('main .ProseMirror')
+  await page.keyboard.type('- apples')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Tab')
+  await page.keyboard.type('green')
+  await expect(pm.locator('ul ul li', { hasText: 'green' })).toHaveCount(1)
+  // Nested levels get their own marker.
+  expect(await pm.locator('ul ul').first().evaluate((u) => getComputedStyle(u).listStyleType)).toBe('circle')
+  // Tab on a line that can't go further stays in the doc.
+  await page.keyboard.press('Tab')
+  await expect(pm).toBeFocused()
+  // Shift-Tab brings it back out.
+  await page.keyboard.press('Shift+Tab')
+  await expect(pm.locator('ul ul')).toHaveCount(0)
+  // "1. " at the start of a bulleted line numbers the list instead of nesting a new one.
+  await page.keyboard.press('Home')
+  await page.keyboard.type('1. ')
+  await expect(pm.locator('ol > li')).toHaveCount(2)
+  await expect(pm.locator('ul')).toHaveCount(0)
+  // Backspace at the start of a line takes its number away; the words stay.
+  await page.keyboard.press('Backspace')
+  await expect(pm.locator('ol > li')).toHaveCount(1)
+  await expect(pm.locator(':scope > p', { hasText: 'green' })).toHaveCount(1)
+  // Plain text pasted as lines with markers arrives as a list.
+  await page.keyboard.press('End')
+  await page.keyboard.press('Enter')
+  await page.evaluate(() => {
+    const dt = new DataTransfer()
+    dt.setData('text/plain', '- milk\n- eggs\n  - brown')
+    document.querySelector('main .ProseMirror')!.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+  })
+  await expect(pm.locator('ul > li', { hasText: 'milk' })).toHaveCount(1)
+  await expect(pm.locator('ul ul li', { hasText: 'brown' })).toHaveCount(1)
+})
+
+test('Tasks are their own list: added in the bar, sorted by date, edited in place; doc checklists stay in docs', async ({ page }) => {
   await start(page)
   await newDoc(page, 'Week plan')
-  await page.keyboard.type('[] essay draft by friday')
-  await page.keyboard.press('Enter')
-  await page.keyboard.type('buy index cards')
+  await page.keyboard.type('[] buy index cards')
   await place(page, 'Tasks')
   await expect(page.locator('.hm-head h1')).toHaveText('Tasks')
-  // The dated one comes first, under its time group, titled without the date words.
-  const first = page.locator('.hm-task').first()
-  await expect(first.locator('.hm-row-main span')).toHaveText('Essay draft')
-  await expect(first.locator('.hm-due')).toBeVisible()
-  await expect(page.locator('.hm-task', { hasText: 'buy index cards' })).toHaveCount(1)
-  // Typing in the bar on this page adds a task, to a doc called Tasks.
+  // A checklist in a doc is part of that doc, not a task.
+  await expect(page.locator('.hm-task', { hasText: 'buy index cards' })).toHaveCount(0)
+  // Typing in the bar on this page adds a task; the date words become its due date.
+  const bar = page.locator('.ask-field input:not([type=file])')
+  await bar.fill('essay draft by friday')
+  await page.keyboard.press('Enter')
+  // Said once: "due Fri, …", never "due Due …".
+  await expect(page.locator('.toast')).toContainText('Added “Essay draft” · due ')
+  await expect(page.locator('.toast')).not.toContainText('Due')
   const before = await page.locator('.hm-task').count()
-  await page.locator('.ask-field input:not([type=file])').fill('renew library books tomorrow')
+  await bar.fill('renew library books tomorrow')
   await expect(page.locator('.ask-opt.on')).toContainText('Add task “Renew library books”')
   await page.keyboard.press('Enter')
   await expect(page.locator('.toast')).toContainText('Added “Renew library books” · due')
   await expect(page.locator('.hm-task')).toHaveCount(before + 1)
+  // Dated ones come first, titled without the date words.
+  await expect(page.locator('.hm-task').first().locator('.hm-row-main span')).toHaveText('Renew library books')
   await expect(page.locator('.hm-task', { hasText: 'Renew library books' }).locator('.hm-due')).toHaveText('Tomorrow')
-  // Checking it here checks it in its doc, and Undo brings it back.
-  await page.locator('.hm-task', { hasText: 'buy index cards' }).locator('input').click()
-  await expect(page.locator('.hm-task', { hasText: 'buy index cards' })).toHaveCount(0)
+  await expect(page.locator('.hm-task', { hasText: 'Essay draft' }).locator('.hm-due')).toBeVisible()
+  // Done, and Undo brings it back.
+  await page.locator('.hm-task', { hasText: 'Essay draft' }).locator('input').click()
+  await expect(page.locator('.hm-task:not(.done)', { hasText: 'Essay draft' })).toHaveCount(0)
   await page.locator('.toast', { hasText: 'Task done' }).getByText('Undo').click()
-  await expect(page.locator('.hm-task', { hasText: 'buy index cards' })).toHaveCount(1)
-  await page.locator('.hm-task', { hasText: 'Essay draft' }).locator('.hm-row-main').click()
-  await expect(page.locator('.doc-title')).toHaveValue('Week plan')
+  await expect(page.locator('.hm-task', { hasText: 'Essay draft' })).toHaveCount(1)
+  // Clicking one opens it in place: rename it, clear its date, and delete it (with Undo).
+  await page.locator('.hm-task', { hasText: 'Renew library books' }).locator('.hm-row-main').click()
+  await page.locator('.tk-edit-title').fill('Renew library books online')
+  await page.getByRole('button', { name: 'Clear due date' }).click()
+  await page.locator('.tk-edit').getByRole('button', { name: 'Done' }).click()
+  await expect(page.locator('.hm-task', { hasText: 'Renew library books online' }).locator('.hm-due')).toHaveCount(0)
+  await page.locator('.hm-task', { hasText: 'Renew library books online' }).locator('.hm-row-main').click()
+  await page.locator('.tk-edit-del').click()
+  await expect(page.locator('.hm-task', { hasText: 'Renew library books' })).toHaveCount(0)
+  await page.locator('.toast', { hasText: 'Task deleted' }).getByText('Undo').click()
+  await expect(page.locator('.hm-task', { hasText: 'Renew library books online' })).toHaveCount(1)
 })
 
 test('Settings shows one section at a time', async ({ page }) => {
@@ -332,8 +393,11 @@ test('a repeating event shows on every date; one date can be removed, or all of 
 
 test('a task with a date shows on the calendar and can be checked off there', async ({ page }) => {
   await start(page)
-  await newDoc(page, 'Plan')
-  await page.keyboard.type('[] essay draft today')
+  await place(page, 'Tasks')
+  const bar = page.locator('.ask-field input:not([type=file])')
+  await bar.fill('essay draft today')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.hm-task', { hasText: 'Essay draft' })).toHaveCount(1)
   await place(page, 'Calendar')
   const chip = page.locator('.chip.task', { hasText: 'Essay draft' })
   await expect(chip).toBeVisible()
@@ -365,7 +429,7 @@ test('Export everything downloads a zip, and reminders can be turned on', async 
   await start(page)
   await page.keyboard.press('Control+,')
   await page.locator('.set-nav button', { hasText: 'Storage and files' }).click()
-  const [file] = await Promise.all([page.waitForEvent('download'), page.locator('.model', { hasText: 'Export everything' }).getByRole('button').click()])
+  const [file] = await Promise.all([page.waitForEvent('download'), page.locator('.model', { hasText: 'Export as Markdown' }).getByRole('button').click()])
   expect(file.suggestedFilename()).toMatch(/^Monolith \d{4}-\d\d-\d\d\.zip$/)
   await expect(page.locator('.toast')).toContainText('Exported 2 docs')
   await page.locator('.set-nav button', { hasText: 'General' }).click()

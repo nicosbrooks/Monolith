@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { create } from 'zustand'
-import type { LucideIcon } from 'lucide-react'
+import type { AnyIcon } from './icons'
 
 // ─── Confirm dialog ────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ function ConfirmHost() {
 
 // ─── Context menu ──────────────────────────────────────────────────────────
 
-export type MenuItem = { label: string; icon?: LucideIcon; run: () => void; danger?: boolean; checked?: boolean; hint?: string } | 'sep' | { heading: string }
+export type MenuItem = { label: string; icon?: AnyIcon; run: () => void; danger?: boolean; checked?: boolean; hint?: string } | 'sep' | { heading: string }
 const useMenu = create<{ cur: { x: number; y: number; items: MenuItem[] } | null }>(() => ({ cur: null }))
 
 /** Open a menu at the pointer. Use from onContextMenu, or from a "more" button click. */

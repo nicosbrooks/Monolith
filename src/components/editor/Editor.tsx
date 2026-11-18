@@ -6,6 +6,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Bold, Italic, Underline, Strikethrough, Code, Link2, Highlighter, MessageCircle, ChevronDown, FileText, AudioWaveform, FilePlus2 } from 'lucide-react'
 import { useStore } from '../../store'
 import { linkHref, linkedId } from '../../lib/graph'
+import { openBeside } from '../../lib/panes'
 import { itemEmoji } from '../../lib/util'
 import { Sketch } from './SketchNode'
 import { BLOCKS, insertFiles, setStoresFiles, type Block } from './blocks'
@@ -112,11 +113,14 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
     editorProps: {
       attributes: { class: `prose ${className || ''}`, spellcheck: 'true', 'aria-label': 'Doc body', 'aria-multiline': 'true' },
       handleClick: (_view, _pos, e) => {
-        // A link to another doc opens it; other links stay as text to edit, as before.
+        // A link to another doc opens it beside this one on a computer, so you keep your place; ⌘ or Ctrl-click (or a
+        // narrow window) makes it the page. Other links stay as text to edit, as before.
         const id = linkedId((e.target as HTMLElement).closest?.('a')?.getAttribute('href'))
         if (!id) return false
         e.preventDefault()
-        useStore.getState().open(id)
+        const wide = window.matchMedia('(min-width: 900px)').matches
+        if (wide && !(e.metaKey || e.ctrlKey)) openBeside(id)
+        else useStore.getState().open(id)
         return true
       },
       handleKeyDown: (view, e): boolean => {
@@ -164,12 +168,12 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
       },
     },
     onUpdate: ({ editor }) => {
-      detectSlash(editor)
+      detectSlash(editor, true)
       storeEmbedded(editor)
       clearTimeout(saveTimer.current)
       saveTimer.current = window.setTimeout(() => ((saveTimer.current = 0), onChangeRef.current(editor.getHTML(), editor)), 250)
     },
-    onSelectionUpdate: ({ editor }) => detectSlash(editor),
+    onSelectionUpdate: ({ editor }) => detectSlash(editor, false),
     onFocus: ({ editor }) => setActiveEditor(editor),
   })
   const editorRef = useRef<TEditor | null>(editor)
@@ -229,13 +233,19 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
     mounted.current = true
     return () => void (mounted.current = false)
   }, [])
-  function detectSlash(editor: TEditor) {
+  /**
+   * The `/` and `[[` menus. They open only while typing (`typed`): moving the cursor into old text that happens to
+   * contain `[[` or `/` (like the sentence "type [[ to link") doesn't pop one up. Once open, they follow the cursor
+   * and close when it leaves. Never inside code.
+   */
+  function detectSlash(editor: TEditor, typed: boolean) {
     if (!mounted.current) return // the editor fires selection events while it is still being created
     const { $from, empty } = editor.state.selection
-    if (!empty || $from.parent.type.name === 'codeBlock') return (setSlash(null), setLink(null))
+    const inCode = $from.parent.type.name === 'codeBlock' || $from.marks().some((m) => m.type.name === 'code')
+    if (!empty || inCode) return (setSlash(null), setLink(null))
     const before = $from.parent.textBetween(0, $from.parentOffset, undefined, '￼')
     const l = before.match(/\[\[([^\[\]\n]{0,40})$/)
-    if (l) {
+    if (l && (typed || linkRef.current)) {
       const at = editor.view.coordsAtPos($from.pos)
       setSlash(null)
       return setLink((prev) => {
@@ -245,7 +255,7 @@ export function Editor({ html, onChange, placeholder, autofocus, onReady, classN
     }
     setLink(null)
     const m = before.match(/(?:^|\s)\/([\w ]{0,20})$/)
-    if (!m || m[1].endsWith('  ')) return setSlash(null)
+    if (!m || m[1].endsWith('  ') || !(typed || slashRef.current)) return setSlash(null)
     const coords = editor.view.coordsAtPos($from.pos)
     setSlash((prev) => {
       if (!prev || prev.q !== m[1]) setSel(0)

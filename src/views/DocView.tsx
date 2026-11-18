@@ -2,7 +2,8 @@ import { Listen } from '../components/Listen'
 import { useEffect, useRef, useState } from 'react'
 import type { Editor as TEditor } from '@tiptap/react'
 import { formatDistanceToNow } from 'date-fns'
-import { History, Printer, ArrowDownWideNarrow, CheckSquare, ChevronRight, Download, FilePlus2, FolderInput, MoreHorizontal, Trash2, Upload, Copy, Star, RotateCcw, Folder, Check, CircleAlert, Loader2, GitCommitHorizontal, FileText, SmilePlus } from 'lucide-react'
+import { History, Printer, ArrowDownWideNarrow, CheckSquare, ChevronRight, Download, FilePlus2, FolderInput, Trash2, Upload, Copy, RotateCcw, Folder, Check, CircleAlert, Loader2, GitCommitHorizontal, FileText, SmilePlus } from 'lucide-react'
+import { MoreIcon, StarIcon } from '../components/icons'
 import { useStore } from '../store'
 import { MobileBack } from '../components/MobileBack'
 import { PaneNav, SideControls } from '../components/PaneNav'
@@ -149,9 +150,9 @@ export function DocView({ item }: { item: Item }) {
             )}
             {!isDir && <Listen id={item.id} text={() => `${item.title}. ${htmlToText(useStore.getState().items.find((i) => i.id === item.id)?.content ?? '')}`} />}
             {/* A filled star means it's a favorite (a struck-out star read as "not a favorite"). */}
-            <button className={`tb ${item.pinned ? 'on' : ''}`} onClick={() => st.updateItem(item.id, { pinned: !item.pinned })} title={item.pinned ? 'Remove from favorites' : 'Add to favorites'} aria-pressed={item.pinned}><Star size={17} fill={item.pinned ? 'currentColor' : 'none'} /></button>
+            <button className={`tb ${item.pinned ? 'on' : ''}`} onClick={() => st.updateItem(item.id, { pinned: !item.pinned })} title={item.pinned ? 'Remove from favorites' : 'Add to favorites'} aria-pressed={item.pinned}><StarIcon size={17} fill={item.pinned ? 'currentColor' : 'none'} /></button>
             <div className="drop-wrap">
-              <button className="tb" aria-label="More options" aria-expanded={more} onClick={() => setMore(!more)}><MoreHorizontal size={17} /></button>
+              <button className="tb" aria-label="More options" aria-expanded={more} onClick={() => setMore(!more)}><MoreIcon size={17} /></button>
               {more && (
                 <div className="drop right" onMouseLeave={() => setMore(false)}>
                   {source ? (
