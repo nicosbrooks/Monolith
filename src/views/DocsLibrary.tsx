@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { AudioWaveform, FilePlus2, FileText, FolderPlus, Mic, MoreHorizontal, Pin, Search, Upload, X } from 'lucide-react'
 import { useStore } from '../store'
+import { openDoc, useSidePane } from '../lib/panes'
 import { formatDuration, itemEmoji, preview } from '../lib/util'
 import { openMenu } from '../components/Overlays'
 import { docMenu } from '../components/Sidebar'
@@ -98,15 +99,19 @@ export function DocsLibrary({ kind }: { kind: 'doc' | 'lecture' }) {
   )
 }
 
-function Card({ item }: { item: Item }) {
+/** A doc or recording as a card: icon, title, its first lines, when it was edited. Docs, Recordings and Home's Recent
+ *  row share it. Opens like any doc in a list (beside the page on Home; ⌘-click beside from anywhere). */
+export function Card({ item }: { item: Item }) {
   const rec = item.kind === 'lecture'
   const emoji = itemEmoji(item)
+  // The doc open beside the page is marked, so you can see which card it came from.
+  const beside = useSidePane((s) => s.id === item.id)
   const text = rec
     ? `${formatDuration(item.lecture?.duration || 0)} · ${item.lecture?.transcript.length ? 'Transcribed' : item.lecture?.hasAudio ? 'Audio saved' : 'Not recorded'}`
     : preview(item.content, item.title)
   return (
     <div className="lib-cell">
-    <button className="lib-card" onClick={() => useStore.getState().open(item.id)} onContextMenu={(e) => openMenu(e, rec ? rowMenu(item) : docMenu(item))}>
+    <button className={`lib-card ${beside ? 'on' : ''}`} aria-current={beside ? 'true' : undefined} onClick={(e) => openDoc(item.id, e)} onContextMenu={(e) => openMenu(e, rec ? rowMenu(item) : docMenu(item))}>
       <span className="lib-card-top">
         <span className="lib-ico">{emoji || (rec ? <AudioWaveform size={16} strokeWidth={1.8} /> : <FileText size={16} strokeWidth={1.8} />)}</span>
         {item.pinned && <Pin size={12} className="pin" aria-label="Favorite" />}

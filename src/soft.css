@@ -60,7 +60,9 @@
   border: 0;
   border-radius: 22px;
   background: var(--content);
-  overflow: hidden;
+  /* clip, not hidden: hidden can still be scrolled by focus or scrollIntoView, and the Ask bar's fade reaches far
+     past the sides, which once slid a whole page 270px to the left. */
+  overflow: clip;
 }
 .side-wrap,
 .sidebar {
@@ -215,15 +217,6 @@ kbd {
   width: min(100%, 728px);
   margin-inline: auto;
   padding: 56px 24px 132px;
-}
-.app:not(.mobile) .hm {
-  width: min(100%, 1320px);
-  padding: 44px 40px 116px;
-}
-/* Tasks reads as one list: a narrower column keeps each row's doc name near its text. */
-.app:not(.mobile) .sec-tasks .hm {
-  width: min(100%, 980px);
-  padding-bottom: 168px;
 }
 .hm-head h1 {
   margin: 0;
@@ -2986,9 +2979,25 @@ body {
   background: var(--card-hover);
   color: var(--text);
 }
+/* Where you are reads differently from where the pointer is: a firmer fill, a heavier name, and a short bar at the
+   rail's edge (in the accent when there is one), so the current page is clear even while hovering another row. */
 .rl-row.on {
-  background: var(--card-hover);
+  position: relative;
+  background: color-mix(in oklab, var(--text) 11%, transparent);
   color: var(--text);
+}
+.rl-row.on .rl-name {
+  font-weight: 600;
+}
+.rl-row.on::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 11px;
+  bottom: 11px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent, var(--text));
 }
 .rl-row:focus-visible,
 .rl-pin:focus-visible {
@@ -3109,24 +3118,30 @@ body {
   }
 }
 /* Home: a board of cards. The assistant leads; the week sits beside it. */
+/* Every page's header: title, one quiet line under it, and the page's actions on the right, centred on both lines.
+   The same grid on Home, Tasks, Docs, Recordings, the Vault and Recently Deleted (Calendar matches it in .cal-head). */
 .hm-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  column-gap: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'title actions' 'sub actions';
+  align-items: center;
+  column-gap: 16px;
 }
 .hm-head h1 {
-  flex: 1 1 100%;
+  grid-area: title;
+  min-width: 0;
+  margin: 0;
 }
 .hm-quick {
-  margin-left: auto;
+  grid-area: actions;
   display: flex;
+  align-items: center;
   gap: 8px;
-  order: 3;
 }
 .hm-head time,
 .hm-head p {
-  flex: 1;
+  grid-area: sub;
+  min-width: 0;
 }
 .hm-quick button {
   height: 36px;
@@ -3820,36 +3835,38 @@ body {
 
 /* ── Calendar header: the same title and pills as every other page, on one row above the grid ── */
 .app:not(.mobile) .cal-head {
-  padding: 26px 28px 14px 24px;
-  gap: 10px;
+  min-height: 48px;
+  padding: 26px 28px 14px;
+  gap: 6px;
 }
 .app:not(.mobile) .cal-head h2 {
   min-width: 0;
-  margin-right: 8px;
-  font: 650 30px/1.2 var(--font-display);
-  letter-spacing: -0.028em;
+  margin-right: 10px;
+  font: 650 22px/1.2 var(--font-display);
+  letter-spacing: -0.02em;
 }
 .app:not(.mobile) .cal-head h2 .muted {
   font-weight: 400;
   color: var(--text-3);
 }
 .app:not(.mobile) .cal-head .btn.sm {
-  height: 36px;
-  padding: 0 14px;
-  font: 550 13.5px/1 var(--font);
+  height: 30px;
+  padding: 0 11px;
+  font: 550 13px/1 var(--font);
 }
 .app:not(.mobile) .cal-head .icon-btn {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
 }
 .app:not(.mobile) .cal-head .seg {
-  padding: 3px;
+  height: 30px;
+  padding: 2px;
 }
 .app:not(.mobile) .cal-head .seg button {
-  height: 30px;
-  padding: 0 14px;
-  font-size: 13.5px;
+  height: 26px;
+  padding: 0 11px;
+  font-size: 13px;
 }
 /* A grid child may shrink below its content, so a long title is cut with an ellipsis instead of running off its card. */
 .hm-board > * {
@@ -3890,37 +3907,24 @@ body {
 }
 
 /* ── Notifications (`Toast.tsx`) ──
-   They rise out of the Ask bar: centred over it, the same pill shape, on the popup glass. Nothing at the top of the
-   page is ever covered. While the conversation or the Ask options are open (they own the space above the bar),
-   notifications drop in at the top centre instead. */
+   One at a time, in from the top right. Its height is measured each time one appears (just below the lowest control
+   in the top-right of the window: header pills, Calendar's switch, a doc beside, a dialog's close), so it never
+   covers something you can press. A new one replaces the one showing. Phones: top centre, below the title bar. */
 .toaster {
   position: fixed;
   z-index: 300;
-  left: 58px;
-  right: 0;
-  bottom: 84px;
+  top: 16px;
+  right: 16px;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 24px;
+  justify-content: flex-end;
+  max-width: min(440px, calc(100vw - 32px));
   pointer-events: none;
 }
-/* Newest nearest where they come from: the bar below, or the top edge while the bar's space is taken. */
-.toaster {
-  flex-direction: column;
-}
-.app:has(.convo, .ask-pop) .toaster {
-  bottom: auto;
-  top: 16px;
-  flex-direction: column-reverse;
-}
 .app.mobile .toaster {
-  left: 0;
-  bottom: calc(74px + env(safe-area-inset-bottom));
-  padding: 0 14px;
-}
-.app.mobile:has(.convo, .ask-pop) .toaster {
-  top: calc(10px + env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
+  max-width: none;
+  justify-content: center;
 }
 .toast {
   pointer-events: auto;
@@ -4154,8 +4158,13 @@ body {
   width: min(100%, 1480px);
   padding: 26px 28px 100px;
 }
-.app:not(.mobile) .sec-tasks .hm {
-  width: min(100%, 920px);
+/* Tasks reads as one list, so its rows stay within 920px, but the page itself sits where every other page does. */
+.app:not(.mobile) .sec-tasks .hm > :not(.hm-head) {
+  max-width: 920px;
+}
+/* The header is the same height on every page, with or without actions, so titles never jump between pages. */
+.app:not(.mobile) .hm-head {
+  min-height: 48px;
 }
 .app:not(.mobile) .hm-head h1 {
   font-size: 22px;
@@ -5056,4 +5065,195 @@ body {
 [data-glass='on'] .vault-pick .lib-search input {
   background: transparent !important;
   box-shadow: none !important;
+}
+
+/* ═════════ Tasks by doc (TasksByDoc in TasksView.tsx) ═════════
+   Each doc's tasks under its name: a chevron that folds them away, the doc's icon and name (opens it), and how many.
+   The tasks sit indented under the name, their checkboxes lined up with it. */
+.tk-docs {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+.tk-group {
+  display: grid;
+}
+.hm-card.tk-group {
+  padding: 4px;
+}
+.tk-group + .tk-group:not(.hm-card) {
+  margin-top: 6px;
+}
+.tk-doc {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  padding: 0 10px 0 8px;
+  color: var(--text-2);
+}
+.tk-fold {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--text-3);
+  transition: background 0.12s, color 0.12s;
+}
+.tk-fold svg {
+  transform: rotate(90deg);
+  transition: transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.tk-doc.folded .tk-fold svg {
+  transform: none;
+}
+.tk-fold:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+.tk-doc-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px 0 6px;
+  border-radius: 7px;
+  color: var(--text);
+  font: 600 13px/1 var(--font);
+}
+.tk-doc-name:hover {
+  background: var(--card-hover);
+}
+.tk-doc-ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  color: var(--text-3);
+  font-size: 13px;
+}
+.tk-doc-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tk-doc-count {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.tk-doc-count b {
+  color: var(--danger, #e5484d);
+  font-weight: 550;
+}
+/* Checkboxes line up under the doc's icon: the chevron's column sits over the rows' usual checkbox column. */
+.tk-group > .hm-row.hm-task,
+.app:not(.mobile) .tk-group > .hm-row.hm-task {
+  padding-left: 40px;
+}
+.tk-fold:focus-visible,
+.tk-doc-name:focus-visible {
+  outline: 2px solid var(--text-2);
+  outline-offset: -2px;
+}
+/* The By doc / By date switch sits with the header's pills, not styled as one. */
+.hm-quick .seg {
+  height: 30px;
+  padding: 2px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--btn-grad, var(--surface-2));
+}
+.hm-quick .seg button {
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font: 550 13px/1 var(--font);
+}
+.hm-quick .seg button.on {
+  background: var(--raised-fill-2, var(--surface-3));
+  color: var(--text);
+  box-shadow: none;
+}
+.app.mobile .tk-docs {
+  margin-top: 8px;
+}
+.app.mobile .tk-doc {
+  min-height: 44px;
+}
+.app.mobile .tk-doc-name {
+  font-size: 15px;
+}
+
+/* ═════════ Home: Recent leads the page (.hm-recent-row) ═════════
+   The docs you were just in, as the same cards as the Docs page, in one row that fits the window: as many as fit,
+   the rest a click away in See all. */
+.app:not(.mobile) .hm-recent-row {
+  flex: none;
+  margin-top: 18px;
+}
+.app:not(.mobile) .hm-recent-row .hm-label {
+  margin: 0 0 8px;
+}
+.app:not(.mobile) .hm-recent-cards {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-rows: auto;
+  grid-auto-rows: 0;
+  row-gap: 0;
+  overflow: hidden;
+  padding: 2px;
+  margin: -2px;
+}
+.app:not(.mobile) .hm-recent-cards .lib-card {
+  min-height: 112px;
+}
+.app:not(.mobile) .hm-recent-cards .lib-card-text {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.app:not(.mobile) .hm-recent-row + .hm-grid {
+  margin-top: 18px;
+}
+
+/* Section links (See all, Open) read as quiet text links, the same as a panel's Open, not as pills. */
+.app:not(.mobile) .hm-recent-row .hm-label button {
+  height: 24px;
+  padding: 0 4px 0 8px;
+  background: transparent;
+  color: var(--text-2);
+  font-weight: 550;
+}
+.app:not(.mobile) .hm-recent-row .hm-label button:hover {
+  color: var(--text);
+}
+
+/* ═════════ Calendar: the editor sits beside the week, not over it ═════════
+   With an event open, the header and grid make room for the editor (320px + its 12px inset), so every day and the
+   Week / Month switch stay in view and clickable. The grid also leaves room under its last hour for the Ask bar. */
+.app:not(.mobile) .calendar.editing > .cal-head,
+.app:not(.mobile) .calendar.editing > .cal-body {
+  margin-right: 344px;
+  transition: margin-right 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.app:not(.mobile) .calendar > .cal-head,
+.app:not(.mobile) .calendar > .cal-body {
+  transition: margin-right 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.app:not(.mobile) .week-grid {
+  margin-bottom: 84px;
+}
+.app:not(.mobile) .calendar .sheet {
+  background: var(--popup, color-mix(in oklab, var(--surface) 96%, transparent));
+}
+/* The card whose doc is open beside the page. */
+.lib-card.on {
+  background: color-mix(in oklab, var(--text) 9%, var(--card));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent, var(--text)) 45%, transparent);
 }

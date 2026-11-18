@@ -557,7 +557,7 @@ button:focus-visible {
   --nav-on: var(--s4);
 }
 :root[data-theme='dark'] {
-  --blue: #1a73e8;
+  --blue: #166ad9;
   --blue-text: #5aa5ff;
   --bg: #19191c;
   --content: #111113;

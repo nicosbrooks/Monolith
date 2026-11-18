@@ -70,7 +70,40 @@ export function CalendarView({ initialDate }: { initialDate: number | null }) {
     })
     return () => { stop(); settle.current?.stop() }
   }, [offset])
-  const edit = (id: string) => setEditing(id)
+  // An event made by clicking the grid is a draft until it's given a name: closing it untitled throws it away, so a
+  // stray click never leaves a "New event" behind.
+  const draft = useRef<string | null>(null)
+  const edit = (id: string, isNew = false) => {
+    closeEditor()
+    draft.current = isNew ? id : null
+    setEditing(id)
+  }
+  const closeEditor = () => {
+    const id = editingRef.current
+    if (id) {
+      const st = useStore.getState()
+      const ev = st.events.find((e) => e.id === id)
+      if (ev && !ev.title.trim()) {
+        if (draft.current === id) st.deleteEvent(id)
+        else st.updateEvent(id, { title: 'New event' })
+      }
+    }
+    draft.current = null
+    setEditing(null)
+  }
+  const editingRef = useRef(editing)
+  editingRef.current = editing
+  // Esc closes the editor.
+  useEffect(() => {
+    if (!editing) return
+    const k = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || (e.target as HTMLElement).closest('.overlay, .menu')) return
+      e.preventDefault()
+      closeEditor()
+    }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  })
   const today = () => (setDir(0), setCursor(new Date()))
   const changeMode = (next: CalendarPosition['mode']) => (setDir(0), setMode(next))
 
@@ -90,7 +123,7 @@ export function CalendarView({ initialDate }: { initialDate: number | null }) {
 
 
   return (
-    <div className="calendar">
+    <div className={`calendar ${editing ? 'editing' : ''}`}>
       <header className="cal-head">
         <h2>
           {format(cursor, 'MMMM')} <span className="muted">{format(cursor, 'yyyy')}</span>
@@ -114,24 +147,24 @@ export function CalendarView({ initialDate }: { initialDate: number | null }) {
         <motion.div className="cal-track" style={{ x: offset }}>
           <AnimatePresence initial={false} custom={dir}>
             <motion.div key={`${mode}-${cursor.toDateString()}`} className="cal-slide" custom={dir} variants={{ enter: (d: number) => ({ x: reducedMotion ? 0 : d * 86, opacity: reducedMotion ? 1 : 0 }), center: { x: 0, opacity: 1 }, leave: (d: number) => ({ x: reducedMotion ? 0 : -d * 72, opacity: 0 }) }} initial="enter" animate="center" exit="leave" transition={{ duration: reducedMotion ? 0 : 0.26, ease: [0.2, 0.7, 0.3, 1] }}>
-              {mode === 'week' ? <Week cursor={cursor} events={events} tasks={tasks} onEdit={edit} span={narrow ? 3 : 7} /> : <Month cursor={cursor} events={events} tasks={tasks} onEdit={edit} onPickDay={(d) => (setDir(0), setCursor(d), setMode('week'))} />}
+              {mode === 'week' ? <Week cursor={cursor} events={events} tasks={tasks} onEdit={edit} span={narrow ? 3 : 7} editing={!!editing} onDismiss={closeEditor} /> : <Month cursor={cursor} events={events} tasks={tasks} onEdit={edit} onPickDay={(d) => (setDir(0), setCursor(d), setMode('week'))} />}
             </motion.div>
           </AnimatePresence>
         </motion.div>
       </div>
       <AnimatePresence>
-        {editing && (subEvents.some((e) => e.id === editing) ? <SubEventSheet ev={subEvents.find((e) => e.id === editing)!} onClose={() => setEditing(null)} /> : <EventEditor id={editing} onRetarget={setEditing} onClose={() => setEditing(null)} />)}
+        {editing && (subEvents.some((e) => e.id === editing) ? <SubEventSheet ev={subEvents.find((e) => e.id === editing)!} onClose={closeEditor} /> : <EventEditor id={editing} onRetarget={setEditing} onClose={closeEditor} />)}
       </AnimatePresence>
     </div>
   )
 }
 
-function Week({ cursor, events, tasks, onEdit, span }: { cursor: Date; events: CalEvent[]; tasks: Task[]; onEdit: (id: string) => void; span: number }) {
+function Week({ cursor, events, tasks, onEdit, span, editing, onDismiss }: { cursor: Date; events: CalEvent[]; tasks: Task[]; onEdit: (id: string, isNew?: boolean) => void; span: number; editing: boolean; onDismiss: () => void }) {
   const st = useStore.getState()
   const days = span === 7 ? eachDayOfInterval({ start: startOfWeek(cursor), end: endOfWeek(cursor) }) : eachDayOfInterval({ start: startOfDay(cursor), end: addDays(startOfDay(cursor), span - 1) })
   const scroller = useRef<HTMLDivElement>(null)
   const cols = useRef<HTMLDivElement>(null)
-  const [drag, setDrag] = useState<null | { id?: string; mode: 'new' | 'move' | 'resize'; day: number; a: number; b: number; offset?: number; moved?: boolean }>(null)
+  const [drag, setDrag] = useState<null | { id?: string; mode: 'new' | 'move' | 'resize'; day: number; a: number; b: number; offset?: number; moved?: boolean; x?: number; y?: number }>(null)
   const [now, setNow] = useState(new Date())
   const dragRef = useRef(drag)
   dragRef.current = drag
@@ -163,7 +196,7 @@ function Week({ cursor, events, tasks, onEdit, span }: { cursor: Date; events: C
   const createEvent = (day: number, a: number, b: number) => {
     const base = days[day]
     const ev = st.addEvent({ title: '', start: addMinutes(base, a).getTime(), end: addMinutes(base, b - a < SNAP ? a + 60 : b).getTime(), color: 'blue' })
-    setTimeout(() => onEdit(ev.id))
+    setTimeout(() => onEdit(ev.id, true))
   }
 
   useEffect(() => {
@@ -172,6 +205,8 @@ function Week({ cursor, events, tasks, onEdit, span }: { cursor: Date; events: C
       const m = minsAt(e)
       setDrag((d) => {
         if (!d) return d
+        // A click wobbles: until the pointer has really travelled, it's still a click (opens the event), not a move.
+        if (!d.moved && d.x !== undefined && Math.hypot(e.clientX - d.x, e.clientY - (d.y ?? 0)) < 5) return d
         if (d.mode === 'new') return { ...d, b: m, moved: true }
         if (d.mode === 'resize') return { ...d, b: Math.max(d.a + SNAP, m), moved: true }
         const len = d.b - d.a
@@ -272,11 +307,13 @@ function Week({ cursor, events, tasks, onEdit, span }: { cursor: Date; events: C
                 className={`col ${isToday(d) ? 'today' : ''}`}
                 onPointerDown={(e) => {
                   if (e.button !== 0 || (e.target as HTMLElement).closest('.ev')) return
+                  // With an event open, a click on the grid just closes it, rather than starting another.
+                  if (editing) return onDismiss()
                   if (e.pointerType === 'touch') return startTouch(e)
                   const m = minsAt(e)
-                  setDrag({ mode: 'new', day: di, a: m, b: m + 60 })
+                  setDrag({ mode: 'new', day: di, a: m, b: m + 60, x: e.clientX, y: e.clientY })
                 }}
-                onPointerUp={(e) => { if (e.pointerType === 'touch' && tapped(e)) createEvent(di, minsAt(e), minsAt(e) + 60) }}
+                onPointerUp={(e) => { if (e.pointerType === 'touch' && tapped(e)) { if (editing) onDismiss(); else createEvent(di, minsAt(e), minsAt(e) + 60) } }}
                 onPointerCancel={() => { touch.current = null }}
               >
                 {layout(d).map(({ e, col, cols }) => {
@@ -296,7 +333,7 @@ function Week({ cursor, events, tasks, onEdit, span }: { cursor: Date; events: C
                         const a = differenceInMinutes(e.start, startOfDay(d))
                         const b = differenceInMinutes(e.end, startOfDay(d))
                         const resize = (pe.target as HTMLElement).classList.contains('rz')
-                        setDrag({ id: e.id, mode: resize ? 'resize' : 'move', day: di, a, b, offset: minsAt(pe) - a })
+                        setDrag({ id: e.id, mode: resize ? 'resize' : 'move', day: di, a, b, offset: minsAt(pe) - a, x: pe.clientX, y: pe.clientY })
                       }}
                       onPointerUp={(pe) => {
                         if (pe.pointerType !== 'touch') return
@@ -333,7 +370,7 @@ function Week({ cursor, events, tasks, onEdit, span }: { cursor: Date; events: C
   )
 }
 
-function Month({ cursor, events, tasks, onEdit, onPickDay }: { cursor: Date; events: CalEvent[]; tasks: Task[]; onEdit: (id: string) => void; onPickDay: (d: Date) => void }) {
+function Month({ cursor, events, tasks, onEdit, onPickDay }: { cursor: Date; events: CalEvent[]; tasks: Task[]; onEdit: (id: string, isNew?: boolean) => void; onPickDay: (d: Date) => void }) {
   const days = eachDayOfInterval({ start: startOfWeek(startOfMonth(cursor)), end: endOfWeek(endOfMonth(cursor)) })
   const st = useStore.getState()
   return (
@@ -347,7 +384,7 @@ function Month({ cursor, events, tasks, onEdit, onPickDay }: { cursor: Date; eve
             className={`md ${isSameMonth(d, cursor) ? '' : 'out'} ${isToday(d) ? 'today' : ''}`}
             onDoubleClick={() => {
               const ev = st.addEvent({ title: '', start: d.getTime(), end: addDays(d, 1).getTime(), allDay: true, color: 'blue' })
-              onEdit(ev.id)
+              onEdit(ev.id, true)
             }}
           >
             <button className="num" onClick={() => onPickDay(d)}>{format(d, 'd')}</button>
@@ -398,10 +435,8 @@ function EventEditor({ id, onClose, onRetarget }: { id: string; onClose: () => v
     onRetarget(ev.id)
   }
   const toLocal = (t: number) => format(t, ev.allDay ? 'yyyy-MM-dd' : "yyyy-MM-dd'T'HH:mm")
-  const close = () => {
-    if (!ev.title.trim()) up({ title: 'New event' })
-    onClose()
-  }
+  // The calendar decides what an untitled event becomes (a draft is thrown away; an existing one is "New event").
+  const close = onClose
   const del = (which: string, said: string) => {
     const before = st.events
     st.deleteEvent(which)

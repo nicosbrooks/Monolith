@@ -191,13 +191,15 @@ Seven equal day buttons: weekday, date, up to three event-colour dots. The selec
 - In cards and empty states they are 38px tall with 18px side padding. Labels are verbs: "Add to calendar", "Start recording".
 - `.icon-btn`: round, for toolbar actions. Always has a `title` and `aria-label`.
 
-### Notifications (`.toaster`, `.toast` in `src/index.css`; `Toaster` / `ToastView` in `apple/iOS/Feedback.swift`)
-- A small pill in the **upper right**, on the raised surface with an edge and shadow. Never a white bar, never at the bottom (the Ask bar owns the bottom).
-- Web: 56px from the top so it sits under the page's own top-right buttons. Phone width: top centre.
-- iOS: 54pt below the top safe area, trailing edge, so the title bar and its buttons stay clear.
+### Notifications (`.toaster`, `.toast` in `src/soft.css`; `Toast.tsx`; `Toaster` / `ToastView` in `apple/iOS/Feedback.swift`)
+- **In from the top right**, a small pill on the raised surface with an edge and shadow. Never white, never at the bottom (the Ask bar owns the bottom).
+- **Never over a control.** Each time one appears it measures the top-right of the window and sits just below the lowest button there: a page's header pills, Calendar's Week / Month, the header of a doc open beside, a dialog's close. Text and doc titles don't count; buttons do.
+- **One at a time.** A new one replaces the one showing (the old slides out first); they never stack.
+- Resting the pointer on it holds it there.
+- Phone width: top centre, below the title bar. iOS: 54pt below the top safe area, trailing edge, so the title bar and its buttons stay clear.
 - Text is a short past-tense statement: "Added to calendar", "Task done", "Doc moved to Recently Deleted".
 - At most one action, as a small pill inside: usually Undo.
-- 4 seconds by default; 6 seconds when it carries Undo.
+- 4 seconds by default; 6 seconds when it carries Undo or reports a problem.
 
 ### Empty state (`.blank`)
 One per screen: a 52px round icon, a title that names the state ("No recordings yet"), one sentence on what the place is for, and at most one primary button. When the empty state has the button, the same action is hidden from the header.
@@ -220,11 +222,14 @@ The **only** place the assistant lives: there is no chat panel or sidebar. One 4
 Desktop is a workspace, not a poster: dense, and arranged by the person. The **Ask bar** sits at the bottom centre of every page.
 - **Sidebar** (`Rail.tsx`, `.rail`): a slim rail of icons down the left edge (Search, Home, Tasks, Docs, Recordings, Calendar; Settings at the foot). Resting the pointer on it for a moment (or tabbing into it) **opens it in place** over the page, 246px wide on the popup glass: names appear beside the same icons (each row keeps a fixed 40px icon column, so nothing moves), then **Favorites** and **Recent** docs, which scroll on their own, and Recently Deleted and Settings at the foot, always. Moving away, Esc or choosing something closes it; coming back while it is closing keeps it open. **⌘\\** (or the button at its top) keeps it open beside the page as a flat panel, remembered in this browser. There is no separate Library popup any more; the old `Sidebar.tsx` is only the phone drawer.
 - **Docs and Recordings pages** (`DocsLibrary.tsx`): a wide page of small cards (icon tile, title, first lines, time), with search, folder chips and New doc / Record. Phones keep their own lists and tab bar.
-- **Home is a few panels and open space** (`Board` in `HomeView.tsx`, `.hm-grid`, `.hm-tile`): a four-column grid; by default **Tasks and Calendar side by side at the top**, each as tall as what's in it (up to its height), and nothing filling the rest. **Empty space is fine.** Each panel has its name and link (Open, See all) in a 40px header and scrolls inside itself. **Hold a panel's header and drag** to move it (a mouse can just drag; touch holds still first); **drag its corner** to resize (whole columns 1–4, heights 1–3); its **⋯** menu does the same from the keyboard. **Panels** chooses which show (Calendar, Tasks, Favorites) and resets the layout. **Calendar hides itself when nothing is left today**, and comes back in its place tomorrow. **There is no assistant panel**: its starting points show when you click into the Ask bar. Remembered in this browser (`monolith-home-board-3`). Under 880px of board it shows two columns; phones keep one column (Calendar if anything is left, Tasks, Recent).
-- **Recent sits right above the Ask bar** (`.hm-shelf`): one row of plain chips (icon and title), no box around them, fading out at the right; See all goes to Docs.
+- **Home is a few panels and open space** (`Board` in `HomeView.tsx`, `.hm-grid`, `.hm-tile`): a four-column grid; by default **Tasks and Calendar side by side at the top**, each as tall as what's in it (up to its height), and nothing filling the rest. **Empty space is fine.** Each panel has its name and link (Open, See all) in a 40px header and scrolls inside itself. **Hold a panel's header and drag** to move it (a mouse can just drag; touch holds still first); **drag its corner** to resize (whole columns 1–4, heights 1–3); its **⋯** menu does the same from the keyboard. **Panels** chooses which show (Calendar, Tasks, Favorites) and resets the layout. **Calendar hides itself when nothing is left today**, and comes back in its place tomorrow; while it's away, the panel beside it in that row takes its columns, so no row is left half empty. **There is no assistant panel**: its starting points show when you click into the Ask bar. Remembered in this browser (`monolith-home-board-3`). Under 880px of board it shows two columns; phones keep one column (Calendar if anything is left, Tasks, Recent).
+- **Recent leads Home** (`.hm-recent-row`): right under the header, the docs you were just in as the same cards as the Docs page (icon, title, first two lines, time), one row that fits the window, with See all. The card whose doc is open beside is marked. (It replaced the quiet row of chips above the Ask bar, which was too easy to miss.)
 - **New** (`NewMenu.tsx`): Home has one **New ⌄** button instead of New doc / Record. Its menu: Doc (⌘N), Recording, Event, Task, then Upload files to the Vault and Upload a recording. Events and tasks open their page with the Ask bar ready.
 - **The Vault** (`VaultView.tsx`, sidebar › Vault): every uploaded file lives here, once. Docs **link** to a file (`monolith-file:<hash>`) instead of holding it, so one file can be in many docs. The page is a grid of cards (picture or kind icon, name, size, age, "in N docs"), with search, kind chips (Pictures, PDFs, Audio and video, Other) and drop-to-upload. Click opens it; **drag a card onto a doc** to link it; its menu has Rename, Download, **Linked from** (each doc), and Delete, which warns how many docs will show it missing. In a doc, **/ › From the Vault** opens a picker (search, arrow keys, Enter). Files in the Vault are never cleaned up on their own; only Delete removes them.
 - **A doc beside the page** (`lib/panes.ts`, `.side-pane`): from Home, Tasks and Calendar, a doc opens **beside** the page instead of replacing it; ⌘ or Ctrl-click does that from anywhere. Its header ends with **Open as the page** and **Close** (Esc). The edge between them drags to resize (double-click resets). Remembered in this browser.
+- **One page header** (`.hm-head`, and `.cal-head` on Calendar): title (22px) over one quiet line, actions as 30px pills on the right, centred on both lines. Every page starts at the same left edge and the header is the same height with or without actions, so moving between pages nothing jumps. Tasks keeps its rows within 920px but sits where every other page does.
+- **Current page in the sidebar**: a firmer fill, a heavier name and a short bar at the rail's edge (accent color when there is one). Hover is only the light fill, so where you are and where the pointer is never look alike.
+- **Tasks are bundled by doc** (`TasksByDoc` in `TasksView.tsx`, `.tk-*`): each doc's tasks sit under its name, with a chevron that folds them away (remembered in this browser), the doc's icon and name (opens it) and a count ("2 late · 5"). Checkboxes line up under the doc's icon. Docs with the soonest due task come first, then the most recently edited. Home's Tasks panel always shows them this way; the Tasks page has **By doc** (the default) and **By date** in its header, remembered. In By date, a row names its doc only when the row above is from a different doc.
 - **Where am I**: a doc's or recording's header starts with **back** and **forward** and its **place** ("Docs /", "Recordings /", "Recently Deleted /"), which goes to that page.
 
 ### Looks and accent (Settings › Appearance, `lib/looks.ts`)
@@ -337,6 +342,12 @@ Sections on the left (General, Assistant, Storage and files, Devices, About), on
 
 ### Files from another device
 - A picture or file in a synced doc that hasn't arrived yet shows as a quiet placeholder ("Arrives when your computer is connected" on iOS), never a broken image. It fills in by itself when the file comes.
+
+### Calendar: making and editing events (`CalendarView.tsx`)
+- A click on an empty slot makes a one-hour **draft** and opens the editor; drag to choose the length. A draft that's closed without a name is thrown away, so a stray click never leaves a "New event". An existing event closed with its name cleared becomes "New event".
+- With the editor open, a click on the grid **closes it** instead of starting another event; **Esc** closes it too.
+- Clicking an event opens it. It only moves once the pointer has travelled 5px, so a click's wobble never nudges it.
+- The editor sits **beside** the week, not over it: the header and grid make room for it, so every day and the Week / Month switch stay in view. The grid leaves room under its last hour for the Ask bar.
 
 ### Repeating events (`src/lib/repeat.ts`, `EventEditor` in `CalendarView.tsx`)
 - The editor has a **Repeat** choice: Never, Every day, Weekdays, Every week, Every 2 weeks, Every month, Every year, and when it repeats an optional **Until** date. One quiet line under it says how changes apply.

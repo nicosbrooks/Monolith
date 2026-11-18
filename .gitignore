@@ -42,3 +42,6 @@ playwright-report/
 
 # Trained model outputs (large; kept local)
 models/
+
+# Screenshot passes
+screenshots-*/

@@ -8,7 +8,8 @@ import { PhoneTitle } from '../components/Phone'
 import { useStore } from '../store'
 import { itemEmoji } from '../lib/util'
 import { useWorkspace } from '../lib/graph'
-import { TaskRow } from './TasksView'
+import { TaskRow, TasksByDoc } from './TasksView'
+import { Card } from './DocsLibrary'
 import { useEvents } from '../lib/events'
 import { COLORS } from '../lib/colors'
 import type { CalEvent } from '../types'
@@ -79,7 +80,9 @@ export function HomeView() {
       action: todos.length ? { label: todos.length > SHOWN ? `See all ${todos.length}` : 'Open', run: () => st.go('tasks') } : undefined,
       body: (
         <div className="hm-list">
-          {tasks.map((t) => <TaskRow key={`${t.itemId}:${t.n}`} task={t} docTitle={live.find((x) => x.id === t.itemId)?.title || 'Untitled'} />)}
+          {mobile
+            ? tasks.map((t, i) => <TaskRow key={`${t.itemId}:${t.n}`} task={t} docTitle={i > 0 && tasks[i - 1].itemId === t.itemId ? '' : live.find((x) => x.id === t.itemId)?.title || 'Untitled'} />)
+            : <TasksByDoc tasks={todos} />}
           {!todos.length && <p className="hm-empty">Nothing to do. Checklist items from your docs show up here.</p>}
         </div>
       ),
@@ -138,23 +141,19 @@ export function HomeView() {
           </div>
         ) : (
           <>
-            <Board tiles={board.filter((t) => t.id !== 'calendar' || leftToday)} allTiles={board} setTiles={setBoard} panels={panels} />
-            {/* Recent sits just above the Ask bar, as a quiet row: no box. */}
+            {/* Recent leads the page: the docs you were just in, as cards, one row that fits the window. */}
             {recent.length > 0 && (
-              <nav className="hm-shelf" aria-label="Recent">
-                <span className="hm-shelf-label">Recent</span>
-                {recent.slice(0, 8).map((r) => {
-                  const Icon = KindIcon[r.kind]
-                  return (
-                    <button key={r.id} className="hm-shelf-item" onClick={(e) => openDoc(r.id, e)} onContextMenu={r.kind === 'lecture' ? undefined : (e) => openMenu(e, docMenu(r))} title={r.title || 'Untitled'}>
-                      <span className="hm-shelf-ico">{itemEmoji(r) || <Icon size={14} strokeWidth={1.8} />}</span>
-                      <span>{r.title || 'Untitled'}</span>
-                    </button>
-                  )
-                })}
-                {recent.length > 8 && <button className="hm-shelf-item more" onClick={() => st.go('docs')}>See all</button>}
-              </nav>
+              <section className="hm-recent-row" aria-labelledby="hm-recent-h">
+                <div className="hm-label">
+                  <h2 id="hm-recent-h">Recent</h2>
+                  <button onClick={() => st.go('docs')}>See all<ChevronRight size={14} aria-hidden="true" /></button>
+                </div>
+                <div className="lib-grid hm-recent-cards">
+                  {recent.slice(0, 8).map((r) => <Card key={r.id} item={r} />)}
+                </div>
+              </section>
             )}
+            <Board tiles={board.filter((t) => t.id !== 'calendar' || leftToday)} allTiles={board} setTiles={setBoard} panels={panels} />
           </>
         )}
       </div>
@@ -217,10 +216,14 @@ const span = (w: number, cols: number) => (cols === COLS ? w : Math.ceil(w / (CO
  * Panels scroll inside themselves.
  */
 function Board({ tiles, allTiles, setTiles: saveAll, panels }: { tiles: Tile[]; allTiles: Tile[]; setTiles: (t: Tile[]) => void; panels: Record<PanelId, Panel> }) {
-  // Changes are made to the tiles shown; a panel that's stepped aside (Calendar with nothing left today) keeps its place.
+  // Changes are made to the tiles shown; a panel that's stepped aside (Calendar with nothing left today) keeps its
+  // place in the order, so it comes back where it was.
   const setTiles = (shown: Tile[]) => {
-    const hidden = allTiles.filter((t) => !tiles.some((x) => x.id === t.id))
-    saveAll([...shown, ...hidden.filter((h) => !shown.some((x) => x.id === h.id))])
+    const out = [...shown]
+    allTiles.forEach((t, i) => {
+      if (!tiles.some((x) => x.id === t.id) && !out.some((x) => x.id === t.id)) out.splice(Math.min(i, out.length), 0, t)
+    })
+    saveAll(out)
   }
   const grid = useRef<HTMLDivElement>(null)
   const [lifted, setLifted] = useState<PanelId | null>(null)
@@ -238,6 +241,34 @@ function Board({ tiles, allTiles, setTiles: saveAll, panels }: { tiles: Tile[]; 
     ro.observe(el)
     return () => ro.disconnect()
   }, [tiles.length > 0])
+
+  // Lay the panels out in rows, counting any that stepped aside. A panel that stepped aside lends its columns to its
+  // neighbour in the same row, so Tasks widens to fill the gap instead of leaving half the row empty.
+  const spans = new Map<PanelId, number>()
+  {
+    let row: { id: PanelId; s: number; away: boolean }[] = []
+    let used = 0
+    const flush = () => {
+      const here = row.filter((r) => !r.away)
+      if (here.length) {
+        row.forEach((r) => !r.away && spans.set(r.id, r.s))
+        row.forEach((r, i) => {
+          if (!r.away) return
+          const to = [...row.slice(0, i)].reverse().find((x) => !x.away) ?? row.slice(i + 1).find((x) => !x.away)
+          if (to) spans.set(to.id, (spans.get(to.id) ?? to.s) + r.s)
+        })
+      }
+      row = []
+      used = 0
+    }
+    for (const t of allTiles) {
+      const s = span(t.w, cols)
+      if (used + s > cols) flush()
+      row.push({ id: t.id, s, away: !tiles.some((x) => x.id === t.id) })
+      used += s
+    }
+    flush()
+  }
 
   const tileEl = (id: string) => grid.current?.querySelector<HTMLElement>(`[data-tile="${id}"]`) ?? null
   /** Remember where every panel is, so after a change each one glides to its new place. */
@@ -353,7 +384,7 @@ function Board({ tiles, allTiles, setTiles: saveAll, panels }: { tiles: Tile[]; 
       const shown = clamp(Math.round((ev.clientX - r.left + gap) / (colW + gap)), 1, cols)
       const h = clamp(Math.ceil((ev.clientY - r.top - 20) / (ROW + gap)), 1, MAX_H)
       const cur = live.current.find((t) => t.id === id)!
-      const w = shown === span(cur.w, cols) ? cur.w : shown * (COLS / cols)
+      const w = shown === (spans.get(id) ?? span(cur.w, cols)) ? cur.w : shown * (COLS / cols)
       if (w !== cur.w || h !== cur.h) change(live.current.map((t) => (t.id === id ? { ...t, w, h } : t)))
     }
     const stop = () => {
@@ -403,7 +434,7 @@ function Board({ tiles, allTiles, setTiles: saveAll, panels }: { tiles: Tile[]; 
             key={t.id}
             data-tile={t.id}
             className={`hm-tile hm-card hm-t-${t.id} ${lifted === t.id ? 'lifted' : ''} ${sizing === t.id ? 'sizing' : ''}`}
-            style={{ gridColumn: `span ${span(t.w, cols)}`, maxHeight: ROW * t.h + 12 * (t.h - 1) }}
+            style={{ gridColumn: `span ${spans.get(t.id) ?? span(t.w, cols)}`, maxHeight: ROW * t.h + 12 * (t.h - 1) }}
             aria-labelledby={`hm-t-${t.id}`}
           >
             <header className="hm-tile-head" onPointerDown={(e) => startMove(e, t.id)} title="Hold and drag to move">
