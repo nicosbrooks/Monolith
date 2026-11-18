@@ -214,9 +214,9 @@ struct Block: Identifiable, Equatable {
     /// The font a kind of line is written in.
     static func font(_ k: Kind) -> Font {
         switch k {
-        case .h1: .title2.bold()
-        case .h2: .title3.weight(.semibold)
-        case .h3: .headline
+        case .h1: .title.bold()
+        case .h2: .title2.weight(.semibold)
+        case .h3: .title3.weight(.semibold)
         default: .body
         }
     }
@@ -250,12 +250,20 @@ struct BlockEditor: View {
     /// The line a link is being added to, kept while the address is typed (the alert takes the keyboard).
     @State private var linking: UUID?
     @State private var address = ""
+    /// The line a "/" was typed at the start of, and what's typed after it: the slash menu shows under that line.
+    @State private var slashID: UUID?
+    @State private var slashQuery = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             let paragraphs = paragraphs
             ForEach($blocks) { $b in
-                row($b).padding(.top, paragraphs.contains(b.id) ? 8 : 0)
+                row($b).padding(.top, paragraphs.contains(b.id) ? 10 : 0)
+                if slashID == b.id, !slashChoices.isEmpty {
+                    SlashMenu(choices: slashChoices) { pick($0, line: b.id) }
+                        .padding(.vertical, 6)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
+                }
             }
             // Tap below the last line to keep writing.
             Color.clear.frame(height: 240).contentShape(.rect).onTapGesture { focusEnd() }
@@ -265,6 +273,8 @@ struct BlockEditor: View {
         .onChange(of: markdown) { if markdown != lastSaved { load() } }
         .onChange(of: blocks) { save() }
         .onChange(of: focusRequest) { focusStart() }
+        .onChange(of: focus) { if focus != slashID { slashID = nil } }
+        .animation(.snappy(duration: 0.2), value: slashID)
         .alert("Link", isPresented: Binding(get: { linking != nil }, set: { if !$0 { linking = nil } })) {
             TextField("https://", text: $address).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
             Button("Cancel", role: .cancel) {}
@@ -316,7 +326,7 @@ struct BlockEditor: View {
                         b.wrappedValue.kind = .todo(!done)
                     } label: {
                         Image(systemName: done ? "checkmark.square.fill" : "square")
-                            .font(.title3).foregroundStyle(done ? Color.primary : Color.secondary)
+                            .font(.title3.weight(.light)).foregroundStyle(done ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                             .contentTransition(.symbolEffect(.replace))
                     }
                     .buttonStyle(.plain)
@@ -345,14 +355,14 @@ struct BlockEditor: View {
         }
         .padding(.leading, CGFloat(block.level) * 22)
         .padding(.top, topPad(block.kind))
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
     }
 
     private func topPad(_ k: Block.Kind) -> CGFloat {
         switch k {
-        case .h1: 12
-        case .h2: 10
-        case .h3: 6
+        case .h1: 18
+        case .h2: 14
+        case .h3: 10
         default: 0
         }
     }
@@ -413,6 +423,12 @@ struct BlockEditor: View {
     /// A Markdown shortcut typed at the start of a line turns it into what it means.
     private func shortcut(_ id: UUID, _ plain: String) -> LineEvents.Shortcut {
         guard let i = index(id) else { return .none }
+        if blocks[i].kind == .text, plain.hasPrefix("/"), !plain.contains(" "), plain.count <= 16 {
+            slashID = id
+            slashQuery = String(plain.dropFirst()).lowercased()
+        } else if slashID == id {
+            slashID = nil
+        }
         switch blocks[i].kind {
         case .text:
             // "/record" then a space: a recording starts, and this line becomes a link to it.
@@ -612,6 +628,55 @@ struct BlockEditor: View {
         focus = (prev?.isLine == true ? prev?.id : nil) ?? blocks.first?.id
     }
 
+    // MARK: Slash menu
+
+    private var slashChoices: [SlashMenu.Choice] {
+        var all: [SlashMenu.Choice] = [
+            .init(id: "h1", label: "Title", symbol: "textformat.size.larger", words: "title heading h1"),
+            .init(id: "h2", label: "Heading", symbol: "textformat.size", words: "heading h2"),
+            .init(id: "h3", label: "Subheading", symbol: "textformat", words: "subheading h3"),
+            .init(id: "todo", label: "Checklist", symbol: "checklist", words: "checklist todo task check"),
+            .init(id: "bullet", label: "Bulleted list", symbol: "list.bullet", words: "bulleted list bullets"),
+            .init(id: "numbered", label: "Numbered list", symbol: "list.number", words: "numbered list numbers"),
+            .init(id: "quote", label: "Quote", symbol: "text.quote", words: "quote"),
+            .init(id: "code", label: "Code", symbol: "curlybraces", words: "code"),
+            .init(id: "divider", label: "Divider", symbol: "minus", words: "divider line rule"),
+            .init(id: "table", label: "Table", symbol: "tablecells", words: "table grid"),
+            .init(id: "link", label: "Link", symbol: "link", words: "link url web"),
+        ]
+        if record != nil { all.insert(.init(id: "record", label: "Record", symbol: "mic", words: "record recording audio"), at: 0) }
+        let q = slashQuery
+        guard !q.isEmpty else { return all }
+        return all.filter { c in c.label.lowercased().hasPrefix(q) || c.words.split(separator: " ").contains { $0.hasPrefix(q) } }
+    }
+
+    /// Clears the "/…" that was typed, then makes the line what was picked.
+    private func pick(_ c: SlashMenu.Choice, line id: UUID) {
+        guard let i = index(id) else { return }
+        slashID = nil
+        blocks[i].content = AttributedString()
+        focus = id
+        Haptics.tap()
+        switch c.id {
+        case "h1": blocks[i].kind = .h1
+        case "h2": blocks[i].kind = .h2
+        case "h3": blocks[i].kind = .h3
+        case "todo": blocks[i].kind = .todo(false)
+        case "bullet": blocks[i].kind = .bullet
+        case "numbered": blocks[i].kind = .numbered
+        case "quote": blocks[i].kind = .quote
+        case "code":
+            let code = Block(kind: .code(""))
+            blocks[i] = code
+            focus = code.id
+        case "divider": insert(Block(kind: .divider))
+        case "table": insert(Block(kind: .table, text: "|  |  |\n| --- | --- |\n|  |  |"))
+        case "link": address = ""; linking = id
+        case "record": recordInto(i)
+        default: break
+        }
+    }
+
     // MARK: Toolbar
 
     private var focused: Int? { focus.flatMap(index) }
@@ -796,5 +861,40 @@ extension View {
         scrollContentBackground(.hidden)
             .scrollDisabled(true)
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+
+/// What "/" offers at the start of a line: one line per choice with its icon, filtered as you type. The same
+/// popup glass as the web's slash menu. Tapping doesn't take the keyboard away.
+struct SlashMenu: View {
+    struct Choice: Identifiable { let id: String; let label: String; let symbol: String; let words: String }
+    var choices: [Choice]
+    var pick: (Choice) -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(choices) { c in
+                    Button { pick(c) } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: c.symbol).font(.system(size: 14, weight: .medium))
+                                .frame(width: 30, height: 30)
+                                .background(Theme.tile, in: .rect(cornerRadius: 8, style: .continuous))
+                            Text(c.label)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 8)
+                        .frame(height: 44)
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.row)
+                }
+            }
+            .padding(6)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(width: 260, height: min(CGFloat(choices.count) * 44 + 12, 236))
+        .glassEffect(.regular, in: .rect(cornerRadius: 18, style: .continuous))
     }
 }

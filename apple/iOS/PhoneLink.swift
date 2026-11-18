@@ -21,7 +21,12 @@ final class PhoneLink: NSObject, WCSessionDelegate {
         let to = from.addingTimeInterval(2 * 86400)
         let events = (try? ctx.fetch(FetchDescriptor<Event>(predicate: #Predicate { $0.start >= from && $0.start < to }, sortBy: [SortDescriptor(\.start)]))) ?? []
         guard let data = try? JSONEncoder().encode(events.map(\.agenda)) else { return }
-        try? WCSession.default.updateApplicationContext([Link.agenda: data])
+        let d = UserDefaults.standard
+        try? WCSession.default.updateApplicationContext([
+            Link.agenda: data,
+            Link.look: d.string(forKey: Appearance.lookKey) ?? Appearance.defaultLook,
+            Link.tint: d.string(forKey: Appearance.tintKey) ?? Appearance.defaultTint,
+        ])
     }
 
     // MARK: WCSessionDelegate (called off the main thread)

@@ -42,7 +42,7 @@ struct MonolithApp: App {
                         Button("Not now", role: .cancel) {}
                     } else { Button("OK") {} }
                 } message: { Text(recorder.error ?? "") }
-                .tint(.primary) // monochrome; accents only where they mean something
+                .lookTint() // the accent chosen in Settings › Appearance (DESIGN.md › Looks and accent)
         }
         .modelContainer(Storage.container)
         .commands { CreateCommands() }
@@ -59,7 +59,7 @@ struct RootView: View {
         // iPhone: one screen at a time, with the sections in a drawer. iPad and wide windows: the split view.
         Group {
             if setupAt == 0 { SetupView().transition(.opacity) }
-            else if width == .compact { PhoneRoot() } else { PadRoot().bottomBar() }
+            else if width == .compact { PhoneRoot() } else { PadRoot() }
         }
         .animation(.easeOut(duration: 0.25), value: setupAt == 0)
             // With the lock on, nothing shows until it's opened, including in the app switcher.
@@ -70,85 +70,74 @@ struct RootView: View {
     }
 }
 
-extension View {
-    /// The one bar at the bottom of every screen: the chat field, with the live recording above it while one runs.
-    func bottomBar() -> some View { modifier(BottomBar()) }
+// MARK: - Places
+
+/// Where you can be: the four tabs, and Ask. Folders are chips inside Docs.
+enum PadSection: Hashable {
+    case today, tasks, docs, calendar, ask
 }
 
-private struct BottomBar: ViewModifier {
-    @Environment(LectureRecorder.self) private var recorder
-    @Environment(\.modelContext) private var ctx
-    @Environment(Router.self) private var router
-    @FocusState private var focused: Bool
-    @State private var text = ""
-    @State private var chat: ChatStart?
-    @State private var keyboard = false
+/// What to open next, from anywhere: a new item, or a day in the calendar.
+@Observable
+final class Router {
+    /// One per app, so Siri, quick actions and Spotlight can reach it from outside the views.
+    static let shared = Router()
+    /// Waiting to be done once the app is on screen (SystemActions.swift).
+    var action: SystemAction?
+    /// Go to Ask with the cursor in it (the "Ask" quick action).
+    var focusAsk = false
+    var pending: Item?
+    var calendarDay: Date?
+    /// Set to go to Tasks (the + menu's Task, Siri, a notification).
+    var showTasks = false
+    /// Put the cursor in Tasks' new-task row once it's on screen.
+    var typeTask = false
+    /// Set to go to a place (Docs after a folder is made, renamed or deleted).
+    var showSection: PadSection?
+    /// Set to open the new-event form on the calendar.
+    var newEvent = false
+    /// The doc on screen, if any: Ask offers to ask about it.
+    var reading: Item?
+    /// Set to open chat with this question already sent (Ask's starting points, Siri).
+    var ask: String?
+    var askAbout: Item?
 
-    func body(content: Content) -> some View {
-        content
-            // Notifications rise out of the chat bar, as on the web: attached before the bar's inset, so they sit just
-            // above it (or above the keyboard while the bar steps aside) and never cover the title bar.
-            .overlay(alignment: .bottom) {
-                if let t = Toaster.shared.current {
-                    ToastView(toast: t).id(t.id)
-                        .padding(.horizontal, 14).padding(.bottom, 10)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                // Typing in a note or doc: the bar steps aside so the keyboard toolbar has the room.
-                if !keyboard || focused || recorder.isRecording {
-                    VStack(spacing: 8) {
-                        if recorder.isRecording {
-                            RecordingAccessory()
-                                .frame(maxWidth: 420, minHeight: 50)
-                                .glassEffect(.regular, in: .capsule)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
-                        }
-                        if !keyboard || focused {
-                            ChatField(text: $text, focused: $focused,
-                                      prompt: placeholder, send: send) {
-                                if !focused { newMenu }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 14).padding(.top, 28).padding(.bottom, 8)
-                    .background(Fog())
-                }
-            }
-            .animation(.snappy, value: recorder.isRecording)
-            .animation(.snappy, value: Toaster.shared.current?.id)
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }
-            .sheet(item: $chat) { ChatView(first: $0.text, about: $0.about) }
-            // Tapping into the Ask field loads the model while the question is typed.
-            .onChange(of: focused) { if focused { Assistant.warm() } }
-            .onChange(of: router.focusAsk) {
-                guard router.focusAsk else { return }
-                router.focusAsk = false
-                focused = true
-            }
-            .onChange(of: router.ask) {
-                guard let q = router.ask else { return }
-                router.ask = nil
-                chat = ChatStart(text: q, about: nil)
-            }
+    func open(_ item: Item) { pending = item }
+    func openCalendar(_ day: Date) { calendarDay = day }
+
+    /// Go to Tasks with the new-task row ready to type in.
+    func newTask() {
+        showTasks = true
+        typeTask = true
     }
 
-    /// One place to start something new, like ChatGPT's +.
-    private var newMenu: some View {
+    func createEvent() {
+        showSection = .calendar
+        newEvent = true
+    }
+
+    /// Opens chat with a question, optionally about a doc.
+    func ask(question q: String, about: Item? = nil) {
+        askAbout = about
+        ask = q
+    }
+}
+
+/// One place to start something new: the + on Home and in the iPad sidebar.
+struct NewMenu<Label: View>: View {
+    @Environment(\.modelContext) private var ctx
+    @Environment(Router.self) private var router
+    @Environment(LectureRecorder.self) private var recorder
+    @ViewBuilder var label: Label
+
+    var body: some View {
         Menu {
-            // Doc, Record, Event: one line each, so the menu reads at a glance.
-            Button { create(.doc) } label: { Text("Doc"); Image(systemName: "doc.text") }
-            Button { record() } label: { Text("Record"); Image(systemName: "mic") }
+            Button { let d = Item(.doc); ctx.insert(d); router.open(d) } label: { Text("Doc"); Image(systemName: "doc.text") }
+            Button { record() } label: { Text("Recording"); Image(systemName: "mic") }
                 .disabled(recorder.isRecording)
             Button { router.newTask() } label: { Text("Task"); Image(systemName: "checklist") }
             Button { router.createEvent() } label: { Text("Event"); Image(systemName: "calendar.badge.plus") }
-        } label: {
-            Image(systemName: "plus").font(.title3.weight(.medium)).foregroundStyle(.primary)
-                .frame(width: 48, height: 48)
-                .glassEffect(.regular, in: .circle)
-        }
+        } label: { label }
         .accessibilityLabel("New")
     }
 
@@ -159,56 +148,69 @@ private struct BottomBar: ViewModifier {
         router.open(l)
         recorder.start(l)
     }
+}
 
-    private func create(_ kind: ItemKind) {
-        let item = Item(kind)
-        ctx.insert(item)
-        router.open(item)
-    }
-
-    private func send() {
-        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return }
-        focused = false
-        text = ""
-        // On the calendar, "calc review thu 4pm" is an event; a question still goes to chat.
-        if router.onCalendar, !Self.isQuestion(t), let p = QuickAdd.parse(t) {
-            let e = Event(title: p.title, start: p.start, end: p.end, allDay: p.allDay, location: p.location)
-            e.color = p.color
-            ctx.insert(e)
-            PhoneLink.shared.sendAgenda()
-            router.openCalendar(p.start)
-            Haptics.success()
-            let when = p.allDay ? e.start.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
-                : e.start.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
-            Toaster.shared.show("Added \(e.title)", detail: (p.due ? "Due " : "") + when + (p.location.map { " · \($0)" } ?? ""),
-                                action: ("Undo", { [ctx] in ctx.delete(e); PhoneLink.shared.sendAgenda() }))
-            return
+struct RecordingAccessory: View {
+    @Environment(LectureRecorder.self) private var recorder
+    @Environment(Router.self) private var router
+    var body: some View {
+        HStack(spacing: 10) {
+            Circle().fill(.red).frame(width: 8, height: 8)
+                .phaseAnimator([1.0, 0.35]) { c, o in c.opacity(o) } animation: { _ in .easeInOut(duration: 0.8) }
+            Button { if let i = recorder.item { router.open(i) } } label: {
+                Text(recorder.item?.displayTitle ?? "Recording")
+                    .font(.subheadline.weight(.semibold)).lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            Text(recorder.elapsed.clock).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+            Button { recorder.stop() } label: { Image(systemName: "stop.fill").frame(width: 32, height: 32) }
+                .foregroundStyle(.red)
+                .accessibilityLabel("Stop recording")
         }
-        // On Tasks, "essay draft by friday" is a task; a question still goes to chat.
-        if router.onTasks, !Self.isQuestion(t), let task = Todos.make(t) {
-            withAnimation(.snappy) { ctx.insert(task) }
-            Haptics.success()
-            Toaster.shared.show("Added to Tasks", detail: task.due == nil ? nil : Todos.label(task),
-                                action: ("Undo", { [ctx] in withAnimation(.snappy) { ctx.delete(task) } }))
-            return
-        }
-        chat = ChatStart(text: t, about: router.reading)
+        .padding(.horizontal, 16)
     }
+}
 
-    /// Says what the bar will do here, like the web app's "Ask about “Study system”".
-    private var placeholder: String {
-        if router.onCalendar { return "Add an event or ask" }
-        if router.onTasks { return "Add a task or ask" }
-        if let d = router.reading { return "Ask about \u{201C}\(d.displayTitle)\u{201D}" }
-        return "Ask Monolith"
+/// Notifications: one at a time, rising just above the tab bar (iPhone) or the bottom edge (iPad).
+struct Toasts: ViewModifier {
+    var bottom: CGFloat
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .bottom) {
+                if let t = Toaster.shared.current {
+                    ToastView(toast: t).id(t.id)
+                        .padding(.horizontal, 14).padding(.bottom, bottom)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.snappy, value: Toaster.shared.current?.id)
     }
+}
 
-    private static let questionWords: Set<String> = ["what", "when", "where", "who", "why", "how", "do", "does", "did", "is", "are", "am", "can", "could", "should", "will", "would", "which", "any", "show", "list", "find", "tell", "summarize", "explain"]
-    static func isQuestion(_ t: String) -> Bool {
-        if t.contains("?") { return true }
-        let first = t.lowercased().split(whereSeparator: { !$0.isLetter }).first.map(String.init) ?? ""
-        return questionWords.contains(first)
+/// Chat opened from anywhere (`router.ask`), and the routes every root follows.
+struct Routes: ViewModifier {
+    @Binding var section: PadSection
+    /// iPad has an Ask place; on iPhone the Ask field lives on Home.
+    var askPlace: PadSection = .ask
+    @Environment(Router.self) private var router
+    @State private var chat: ChatStart?
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: router.calendarDay) { if router.calendarDay != nil { section = .calendar } }
+            .onChange(of: router.showTasks) { if router.showTasks { router.showTasks = false; section = .tasks } }
+            .onChange(of: router.showSection) { if let s = router.showSection { router.showSection = nil; section = s } }
+            .onChange(of: router.focusAsk) { if router.focusAsk { section = askPlace } }
+            // Something to open: Docs pushes it (see DocsView), wherever you were.
+            .onChange(of: router.pending?.id) { if router.pending != nil { section = .docs } }
+            .onChange(of: router.ask) {
+                guard let q = router.ask else { return }
+                router.ask = nil
+                chat = ChatStart(text: q, about: router.askAbout)
+                router.askAbout = nil
+            }
+            .sheet(item: $chat) { ChatView(first: $0.text, about: $0.about) }
     }
 }
 
@@ -218,101 +220,15 @@ private struct ChatStart: Identifiable {
     var about: Item?
 }
 
-/// What to open next, from anywhere: a new item, or a day in the calendar.
-@Observable
-final class Router {
-    /// One per app, so Siri, quick actions and Spotlight can reach it from outside the views.
-    static let shared = Router()
-    /// Waiting to be done once the app is on screen (SystemActions.swift).
-    var action: SystemAction?
-    /// Put the cursor in the Ask bar (the "Ask" quick action).
-    var focusAsk = false
-    var pending: Item?
-    var calendarDay: Date?
-    /// True while the calendar is on screen: the bottom bar then adds events as well as answering.
-    var onCalendar = false
-    /// True while Tasks is on screen: the bottom bar then adds tasks as well as answering.
-    var onTasks = false
-    /// Set to go to Tasks (the + menu's Task, Siri, a notification).
-    var showTasks = false
-    /// Set to go to a section (a folder just made or renamed, or Docs after deleting the folder you were in).
-    var showSection: PadSection?
-    /// Set to open the new-event form on the calendar.
-    var newEvent = false
-    /// The doc on screen, if any: the bottom bar asks about it.
-    var reading: Item?
-    /// Set to open chat with this question already sent (Home's starting points).
-    var ask: String?
-
-    func open(_ item: Item) {
-        pending = item
-    }
-
-    func openCalendar(_ day: Date) {
-        calendarDay = day
-    }
-
-    /// Go to Tasks with the bar ready to type one.
-    func newTask() {
-        showTasks = true
-        focusAsk = true
-    }
-
-    func createEvent() {
-        if !onCalendar { calendarDay = .now }
-        newEvent = true
-    }
-}
-
-extension View {
-    /// Opens `router.pending` in this stack when it's this tab's kind.
-    func opensPending(_ kind: ItemKind, path: Binding<[Item]>) -> some View {
-        modifier(OpensPending(kind: kind, path: path))
-    }
-}
-
-private struct OpensPending: ViewModifier {
-    var kind: ItemKind
-    @Binding var path: [Item]
-    @Environment(Router.self) private var router
-    @Environment(\.openItem) private var openItem
-    func body(content: Content) -> some View {
-        content.task(id: router.pending?.id) {
-            // In the split view the root opens it in the editor column instead.
-            guard openItem == nil, let p = router.pending, p.kind == kind else { return }
-            path = [p]
-            router.pending = nil
-        }
-    }
-}
-
-struct RecordingAccessory: View {
-    @Environment(LectureRecorder.self) private var recorder
-    var body: some View {
-        HStack(spacing: 10) {
-            Circle().fill(.red).frame(width: 8, height: 8)
-                .phaseAnimator([1.0, 0.35]) { c, o in c.opacity(o) } animation: { _ in .easeInOut(duration: 0.8) }
-            Text(recorder.item?.displayTitle ?? "Recording")
-                .font(.subheadline.weight(.semibold)).lineLimit(1)
-            Spacer()
-            Text(recorder.elapsed.clock).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
-            Button { recorder.stop() } label: { Image(systemName: "stop.fill") }
-                .foregroundStyle(.red)
-                .accessibilityLabel("Stop recording")
-        }
-        .padding(.horizontal, 16)
-    }
-}
-
 // MARK: - iPhone root
 
 extension EnvironmentValues {
-    /// Set on iPhone: opens the section drawer. Each section's first screen shows a menu button for it.
+    /// Set on iPhone: slides the drawer open. Each tab's first screen shows ☰ for it.
     @Entry var openDrawer: (() -> Void)? = nil
 }
 
 extension View {
-    /// The menu button on a section's first screen (iPhone only).
+    /// ☰ at the top left of a tab's first screen (iPhone only).
     func drawerButton() -> some View { modifier(DrawerButton()) }
 }
 
@@ -322,177 +238,186 @@ private struct DrawerButton: ViewModifier {
         content.toolbar {
             if let open {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(action: open) { Image(systemName: "sidebar.left") }.accessibilityLabel("Menu")
+                    Button(action: open) { Image(systemName: "line.3.horizontal") }.accessibilityLabel("Menu")
                 }
             }
         }
     }
 }
 
-/// iPhone: Home is the base screen; the sections live in a drawer that slides over part of it.
+/// iPhone: four tabs at the bottom (Home, Tasks, Docs, Calendar) and a drawer behind the page for what you were just
+/// in, your folders and the rest. ☰ or a swipe from the left edge slides the page aside to show it.
 struct PhoneRoot: View {
-    @Environment(Router.self) private var router
-    @Environment(\.modelContext) private var ctx
-    @Query(filter: #Predicate<Item> { $0.deletedAt == nil }) private var items: [Item]
+    @Environment(LectureRecorder.self) private var recorder
     @State private var section: PadSection = .today
     @State private var drawer = false
-    @State private var settings = false
-    @State private var allRecents = false
+    @GestureState private var drag: CGFloat = 0
 
+    var body: some View {
+        GeometryReader { geo in
+            let w = min(330, geo.size.width * 0.82)
+            let shift = drawer ? max(0, w + min(0, drag)) : max(0, min(w, drag))
+            ZStack(alignment: .leading) {
+                Drawer(section: $section, close: close)
+                    .frame(width: w)
+                    .frame(maxHeight: .infinity)
+                    .opacity(Double(shift / w))
+                tabs
+                    .clipShape(.rect(cornerRadius: shift > 0 ? 44 : 0, style: .continuous))
+                    .overlay {
+                        if shift > 0 {
+                            RoundedRectangle(cornerRadius: 44, style: .continuous).strokeBorder(Color.primary.opacity(0.1))
+                                .ignoresSafeArea()
+                            Color.black.opacity(0.001).ignoresSafeArea().onTapGesture(perform: close)
+                        }
+                    }
+                    .offset(x: shift)
+                    .overlay(alignment: .leading) {
+                        // Swipe in from the left edge to open, like Back.
+                        if !drawer { Color.clear.frame(width: 18).contentShape(.rect).ignoresSafeArea().gesture(edgeDrag) }
+                    }
+                    .gesture(drawer ? edgeDrag : nil)
+                    .ignoresSafeArea(.container, edges: shift > 0 ? .vertical : [])
+            }
+            .background { Wash() }
+        }
+        .environment(\.openDrawer, { open() })
+        .modifier(Routes(section: $section, askPlace: .today))
+        .onChange(of: section) { close() }
+    }
+
+    private var tabs: some View {
+        TabView(selection: $section) {
+            Tab("Home", systemImage: "house", value: PadSection.today) { TodayView() }
+            Tab("Tasks", systemImage: "checklist", value: PadSection.tasks) { TasksScreen() }
+            Tab("Docs", systemImage: "doc.text", value: PadSection.docs) { DocsView() }
+            Tab("Calendar", systemImage: "calendar", value: PadSection.calendar) { CalendarScreen() }
+        }
+        .tabBarMinimizeBehavior(.onScrollDown)
+        .tabViewBottomAccessory(isEnabled: recorder.isRecording) { RecordingAccessory() }
+        .onChange(of: section) { Haptics.tap() }
+        .modifier(Toasts(bottom: recorder.isRecording ? 130 : 80))
+    }
+
+    private var edgeDrag: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .updating($drag) { v, s, _ in s = v.translation.width }
+            .onEnded { v in
+                withAnimation(.snappy) { drawer = drawer ? v.translation.width > -60 : v.translation.width > 60 }
+            }
+    }
+
+    private func open() { Haptics.tap(); withAnimation(.snappy) { drawer = true } }
+    private func close() { withAnimation(.snappy) { drawer = false } }
+}
+
+/// The drawer: Search, Recents (docs and recordings you were just in), Folders, More, and at the foot your initials
+/// (Settings) and New doc.
+private struct Drawer: View {
+    @Binding var section: PadSection
+    var close: () -> Void
+    @Environment(\.modelContext) private var ctx
+    @Environment(Router.self) private var router
+    @Query(filter: #Predicate<Item> { $0.deletedAt == nil }, sort: \Item.updatedAt, order: .reverse) private var items: [Item]
     @AppStorage(Folders.key) private var emptyFolders = ""
+    @AppStorage(Profile.name) private var name = ""
+    @State private var settings = false
+    @State private var search = false
+    @State private var deleted = false
+
     private var folders: [String] { Folders.all(items, emptyFolders) }
 
     var body: some View {
-        // A sidebar that sits beside the page: opening it slides the page over, the page stays in view.
-        GeometryReader { geo in
-            let w = min(310, geo.size.width * 0.8)
-            ZStack(alignment: .leading) {
-                menu
-                    .frame(width: w)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .background(Theme.paper.ignoresSafeArea())
-                    .opacity(drawer ? 1 : 0)
-                screen
-                    .id(section)
-                    .bottomBar()  // moves with the page, so it never sits over the sidebar
-                    .background(Theme.paper.ignoresSafeArea())
-                    .environment(\.openDrawer, { withAnimation(.snappy) { drawer = true } })
-                    .overlay {
-                        if drawer {
-                            Color.black.opacity(0.25).ignoresSafeArea()
-                                .onTapGesture { close() }
-                                .transition(.opacity)
-                        }
-                    }
-                    .overlay(alignment: .leading) {
-                        // Swipe in from the left edge to open, like the system back gesture.
-                        if !drawer {
-                            Color.clear.frame(width: 16).contentShape(.rect).ignoresSafeArea()
-                                .gesture(DragGesture(minimumDistance: 10).onEnded { if $0.translation.width > 40 { withAnimation(.snappy) { drawer = true } } })
-                        }
-                    }
-                    // Sidebar and page share the same black, so a hairline marks the page edge.
-                    .overlay(alignment: .leading) { if drawer { Theme.rule.frame(width: 1).ignoresSafeArea() } }
-                    .offset(x: drawer ? w : 0)
-                    .gesture(drawer ? DragGesture().onEnded { if $0.translation.width < -40 { close() } } : nil)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Monolith").font(.system(size: 30, weight: .bold)).tracking(-0.5)
+                Spacer()
+                Button { search = true } label: {
+                    Image(systemName: "magnifyingglass").font(.title3.weight(.medium)).frame(width: 50, height: 50)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .circle)
+                .accessibilityLabel("Search and ask")
             }
+            .padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 18)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if !items.isEmpty {
+                        HStack {
+                            heading("Recents")
+                            Spacer()
+                            Button { DocsView.show(folder: nil); go(.docs) } label: {
+                                HStack(spacing: 4) { Text("View all"); Image(systemName: "chevron.right").font(.footnote.weight(.semibold)) }
+                            }
+                            .buttonStyle(.plain).foregroundStyle(.primary).font(.subheadline)
+                        }
+                        ForEach(items.prefix(8)) { item in
+                            row(item.displayTitle, item.kind == .lecture ? "waveform" : "doc.text") { router.open(item); close() }
+                                .itemMenu(item, folders: folders)
+                        }
+                    }
+                    if !folders.isEmpty {
+                        heading("Folders").padding(.top, 22)
+                        ForEach(folders, id: \.self) { f in
+                            row(f, "folder") { DocsView.show(folder: f); go(.docs) }
+                                .folderActions(f) { router.open($0); close() }
+                        }
+                    }
+                    heading("More").padding(.top, 22)
+                    row("Recently Deleted", "trash") { deleted = true }
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 120)
+            }
+            .scrollIndicators(.hidden)
         }
-        .onChange(of: router.calendarDay) { if router.calendarDay != nil { section = .calendar } }
-        .onChange(of: router.showTasks) { if router.showTasks { router.showTasks = false; section = .tasks; close() } }
-        .onChange(of: router.showSection) { if let s = router.showSection { router.showSection = nil; section = s; close() } }
-        // Something new to open: go to its list, which pushes it (see `opensPending`).
-        .onChange(of: router.pending?.id) {
-            guard let p = router.pending else { return }
-            section = p.kind == .lecture ? .lectures : .docs
-        }
+        .overlay(alignment: .bottom) { foot }
         .sheet(isPresented: $settings) { SettingsSheet() }
-        .sheet(isPresented: $allRecents) {
-            NavigationStack {
-                AllRecentsView { item in allRecents = false; close(); router.open(item) }
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { allRecents = false } } }
-            }
-            .presentationDetents([.medium, .large])
-        }
+        .sheet(isPresented: $search) { AskScreen(sheet: true) }
+        .sheet(isPresented: $deleted) { DeletedView() }
     }
 
-    @ViewBuilder private var screen: some View {
-        switch section {
-        case .today: TodayView()
-        case .tasks: TasksScreen()
-        case .folder(let f): DocsView(folder: f)
-        case .lectures: ItemListView(kind: .lecture)
-        case .docs: DocsView()
-        case .calendar: CalendarScreen()
-        case .search: SearchView()
-        case .integrations: IntegrationsView()
-        }
-    }
-
-    private var recents: [Item] { Array(items.sorted { $0.updatedAt > $1.updatedAt }.prefix(6)) }
-
-    private var menu: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text("Monolith").font(.title3.weight(.semibold))
-                    Spacer()
-                    HStack(spacing: 0) {
-                        Button { section = .search; close() } label: { Image(systemName: "magnifyingglass").frame(width: 44, height: 40) }
-                            .accessibilityLabel("Search")
-                        Button { close(); settings = true } label: { Image(systemName: "gearshape").frame(width: 44, height: 40) }
-                            .accessibilityLabel("Settings")
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular, in: .capsule)
-                }
-                .padding(.leading, 12).padding(.bottom, 20)
-                row("Home", "square.grid.2x2", .today)
-                row("Tasks", "checklist", .tasks)
-                row("Docs", "doc.text", .docs)
-                row("Recordings", "mic", .lectures)
-                row("Calendar", "calendar", .calendar)
-                row("Integrations", "link", .integrations)
-                if !folders.isEmpty {
-                    heading("Folders")
-                    ForEach(folders, id: \.self) { f in row(f, "folder", .folder(f)).folderActions(f) { router.open($0); close() } }
-                }
-                if !recents.isEmpty {
-                    heading("Recents")
-                    ForEach(recents.prefix(5)) { item in
-                        Button { router.open(item); close() } label: {
-                            Text(item.displayTitle).lineLimit(1)
-                                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                                .padding(.horizontal, 12)
-                                .contentShape(.rect)
-                        }
-                        .buttonStyle(.plain)
-                        .itemMenu(item)
-                    }
-                    if recents.count > 5 {
-                        Button { allRecents = true } label: {
-                            Label("See all", systemImage: "clock").foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
-                                .padding(.horizontal, 12).contentShape(.rect)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+    private var foot: some View {
+        HStack {
+            Button { settings = true } label: {
+                Text(initials).font(.headline).frame(width: 56, height: 56)
             }
-            .padding(.horizontal, 10)
-            .padding(.top, 12)
-            .padding(.bottom, 100)
-        }
-        .scrollIndicators(.hidden)
-        .overlay(alignment: .bottomTrailing) {
-            Button { let n = Item(.doc); ctx.insert(n); router.open(n); close() } label: {
-                Label("New doc", systemImage: "square.and.pencil").font(.body.weight(.semibold))
-                    .padding(.horizontal, 20).frame(height: 50)
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .circle)
+            .accessibilityLabel("Settings")
+            Spacer()
+            Button { let d = Item(.doc); ctx.insert(d); router.open(d); close() } label: {
+                Label("New doc", systemImage: "plus").font(.body.weight(.semibold))
+                    .padding(.horizontal, 22).frame(height: 56)
                     .foregroundStyle(Theme.paper)
                     .background(Color.primary, in: .capsule)
             }
-            .buttonStyle(.plain)
-            .padding(.trailing, 16).padding(.bottom, 12)
+            .buttonStyle(.card)
         }
+        .padding(.horizontal, 24).padding(.bottom, 8)
+    }
+
+    private var initials: String {
+        let parts = name.split(separator: " ").prefix(2).compactMap(\.first)
+        return parts.isEmpty ? "Me" : String(parts).uppercased()
     }
 
     private func heading(_ t: String) -> some View {
-        Text(t).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 12).padding(.top, 24).padding(.bottom, 4)
+        Text(t).font(.subheadline).foregroundStyle(.secondary).frame(minHeight: 40, alignment: .leading)
     }
 
-    private func row(_ title: String, _ symbol: String, _ s: PadSection) -> some View {
-        Button { section = s; close() } label: {
-            // A fixed icon column, so every label starts at the same x whatever the symbol's width.
-            HStack(spacing: 12) {
-                Image(systemName: symbol).frame(width: 24)
-                Text(title)
+    private func row(_ title: String, _ symbol: String, run: @escaping () -> Void) -> some View {
+        Button { Haptics.tap(); run() } label: {
+            HStack(spacing: 16) {
+                Image(systemName: symbol).font(.body).foregroundStyle(.secondary).frame(width: 24)
+                Text(title).font(.body).lineLimit(1)
+                Spacer(minLength: 0)
             }
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                .padding(.horizontal, 14)
-                .background(section == s ? Theme.wash : .clear, in: .rect(cornerRadius: 12))
-                .contentShape(.rect)
+            .frame(minHeight: 50).contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.row)
     }
 
-    private func close() { withAnimation(.snappy) { drawer = false } }
+    private func go(_ s: PadSection) { section = s; close() }
 }

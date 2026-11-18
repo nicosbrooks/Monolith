@@ -15,6 +15,8 @@
 		1E64B88A3D7AFC9C61331E02 /* Integrations.swift in Sources */ = {isa = PBXBuildFile; fileRef = C99EBA442C4F0BD300DDA5E8 /* Integrations.swift */; };
 		2BC16D3D039A1FA552539BD2 /* Icons.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9EEDD2C6BFDA06842CA9351 /* Icons.swift */; };
 		2BD2626D03D1C4BCFCCEFD3E /* Linker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7503D1A5C6B07543D2A0136 /* Linker.swift */; };
+		4010CBAC88CE1CC4EAF49438 /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1B04E22E29E163FDC4B819 /* Palette.swift */; };
+		41EBA3E22364EC8C308451CF /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1B04E22E29E163FDC4B819 /* Palette.swift */; };
 		4531D583A0F5425846E1079B /* LinkCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB9F91936797DDAC312193CC /* LinkCrypto.swift */; };
 		46D0525879F4DF196E89160F /* Pad.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09734D694A49C9E85D3E7E60 /* Pad.swift */; };
 		471619847F0276311BAFEEEA /* Rich.swift in Sources */ = {isa = PBXBuildFile; fileRef = 690BBDFCBAFE3A94CEB88D90 /* Rich.swift */; };
@@ -27,6 +29,8 @@
 		7580C21A120E1A140346736F /* Tasks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59D1D0E0A6E4AA98FEAA142E /* Tasks.swift */; };
 		7D4E2472ED471E5D597E3C64 /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB9E040FC8BDB52855BEAB3 /* Haptics.swift */; };
 		819657BE10A2676EF6369EF7 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 260A395667821A44BC7DB2E2 /* MLXLMCommon */; };
+		81DAACCDE33CEB9705322809 /* Looks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19FE7BE5C6ABDFE829CD0931 /* Looks.swift */; };
+		8427839E3DB3A096DA617465 /* Ask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46CDCBB2D7FF8980C85607EF /* Ask.swift */; };
 		8484FFB086AF7C04890F6C42 /* LFM3.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC55DD0CE1F03973ECD96CA2 /* LFM3.swift */; };
 		87B228FFFDCAE29ED89A6882 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = E74AABE9F54163826A6AA7F7 /* MLXLLM */; };
 		881BA816E0815D6D16C02583 /* LineField.swift in Sources */ = {isa = PBXBuildFile; fileRef = F76B95B1D409A6F24D3EFBE3 /* LineField.swift */; };
@@ -38,6 +42,7 @@
 		B775A379EEB9FFBBCE0EB702 /* QuickAdd.swift in Sources */ = {isa = PBXBuildFile; fileRef = B16543669E4058D71BCD4002 /* QuickAdd.swift */; };
 		B7A94B4661AA4A01B1385986 /* PhoneLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCF2B2B96F84B50B4753D0E7 /* PhoneLink.swift */; };
 		BD0AFD541213651A5EB2B464 /* WatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688F4EBE0DC85A3F469DE168 /* WatchApp.swift */; };
+		C14D799F0D5D30BD92B30453 /* Cards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13CC8FEB597B05F4AD5910F4 /* Cards.swift */; };
 		C378D4D5BC7402B7C5115562 /* Envelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8053DC040E829DD335E2F85E /* Envelope.swift */; };
 		C4EAA01D97E024DA817D0624 /* MonolithApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 620001F6D2FC06E4372CB8F6 /* MonolithApp.swift */; };
 		C95FC5B5EEB4EF924F1C0303 /* Feedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7120C08120D7582975221B91 /* Feedback.swift */; };
@@ -79,10 +84,14 @@
 /* Begin PBXFileReference section */
 		09734D694A49C9E85D3E7E60 /* Pad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pad.swift; sourceTree = "<group>"; };
 		0AB834927ACE30F7FBFAAD13 /* Monolith.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Monolith.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13CC8FEB597B05F4AD5910F4 /* Cards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cards.swift; sourceTree = "<group>"; };
+		19FE7BE5C6ABDFE829CD0931 /* Looks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Looks.swift; sourceTree = "<group>"; };
 		1D689AC30313CDC6D48ED210 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		1FB9E040FC8BDB52855BEAB3 /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
 		3A306B8806207F5250338C4F /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		3C1B04E22E29E163FDC4B819 /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
 		458DA780324B1F5FA7E52C7F /* OpenModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenModels.swift; sourceTree = "<group>"; };
+		46CDCBB2D7FF8980C85607EF /* Ask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ask.swift; sourceTree = "<group>"; };
 		51990FE7D0E32A7DCCF5FC40 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		579C8ACAD39BA7619977EEC1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		59D1D0E0A6E4AA98FEAA142E /* Tasks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tasks.swift; sourceTree = "<group>"; };
@@ -180,6 +189,7 @@
 			isa = PBXGroup;
 			children = (
 				8F47B2F02A3B9EE6D5B0E9A9 /* Link.swift */,
+				3C1B04E22E29E163FDC4B819 /* Palette.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -187,9 +197,11 @@
 		E35C7326E5BBEA7C1911A4C3 /* iOS */ = {
 			isa = PBXGroup;
 			children = (
+				46CDCBB2D7FF8980C85607EF /* Ask.swift */,
 				579C8ACAD39BA7619977EEC1 /* Assets.xcassets */,
 				947A1CF1606B31529EE173A9 /* BlockEditor.swift */,
 				BCE7D1973601C822D6DED58E /* CalendarScreen.swift */,
+				13CC8FEB597B05F4AD5910F4 /* Cards.swift */,
 				6DE43F2652211418925A613C /* DeviceCalendars.swift */,
 				92A3845769F8470D37A2AD5C /* DocViews.swift */,
 				7120C08120D7582975221B91 /* Feedback.swift */,
@@ -203,6 +215,7 @@
 				D2D4B401B89538C22CFFF154 /* Lectures.swift */,
 				AC55DD0CE1F03973ECD96CA2 /* LFM3.swift */,
 				F76B95B1D409A6F24D3EFBE3 /* LineField.swift */,
+				19FE7BE5C6ABDFE829CD0931 /* Looks.swift */,
 				5B32EC03DD25A8DCDBFDD313 /* Markdown.swift */,
 				3A306B8806207F5250338C4F /* Models.swift */,
 				9D435ED9BBEF776988BB6602 /* Monolith.entitlements */,
@@ -337,6 +350,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				CB554E3931446B6077351DD6 /* Link.swift in Sources */,
+				41EBA3E22364EC8C308451CF /* Palette.swift in Sources */,
 				BD0AFD541213651A5EB2B464 /* WatchApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -345,8 +359,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8427839E3DB3A096DA617465 /* Ask.swift in Sources */,
 				8E6721CBA9FDCE6015523821 /* BlockEditor.swift in Sources */,
 				1C16C914F08CB1E21E10B678 /* CalendarScreen.swift in Sources */,
+				C14D799F0D5D30BD92B30453 /* Cards.swift in Sources */,
 				FD3E69DE780103393FE6D95A /* DeviceCalendars.swift in Sources */,
 				755F6DABCB9537A377D7898B /* DocViews.swift in Sources */,
 				C378D4D5BC7402B7C5115562 /* Envelope.swift in Sources */,
@@ -364,11 +380,13 @@
 				4531D583A0F5425846E1079B /* LinkCrypto.swift in Sources */,
 				0E642AB4579E13F77DD62763 /* LinkViews.swift in Sources */,
 				2BD2626D03D1C4BCFCCEFD3E /* Linker.swift in Sources */,
+				81DAACCDE33CEB9705322809 /* Looks.swift in Sources */,
 				73DE171040967EF837F2304E /* Markdown.swift in Sources */,
 				A2733ADA547F31A53DE1186E /* Models.swift in Sources */,
 				C4EAA01D97E024DA817D0624 /* MonolithApp.swift in Sources */,
 				14F0E0A2E17F75038A0A4897 /* OpenModels.swift in Sources */,
 				46D0525879F4DF196E89160F /* Pad.swift in Sources */,
+				4010CBAC88CE1CC4EAF49438 /* Palette.swift in Sources */,
 				B7A94B4661AA4A01B1385986 /* PhoneLink.swift in Sources */,
 				B775A379EEB9FFBBCE0EB702 /* QuickAdd.swift in Sources */,
 				471619847F0276311BAFEEEA /* Rich.swift in Sources */,

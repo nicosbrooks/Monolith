@@ -1,12 +1,13 @@
 import SwiftUI
 import SwiftData
 
-/// All writing in one place (notes were merged into docs): top-level docs, newest first,
-/// with sub-docs folded under their parent. A folder shows just its docs.
+/// Docs, recordings and folders in one place, as cards (like the web's Docs page). Chips across the top choose
+/// what shows: All, Docs, Recordings, then each folder. Hold a folder's chip to rename or delete it.
 struct DocsView: View {
-    var folder: String? = nil
     @Environment(\.modelContext) private var ctx
-    @Query(filter: #Predicate<Item> { $0.kindRaw == "doc" && $0.deletedAt == nil }, sort: \Item.updatedAt, order: .reverse) private var docs: [Item]
+    @Environment(LectureRecorder.self) private var recorder
+    @Environment(Router.self) private var router
+    @Query(filter: #Predicate<Item> { $0.deletedAt == nil }, sort: \Item.updatedAt, order: .reverse) private var items: [Item]
     @State private var path: [Item] = []
     @State private var query = ""
     @State private var showDeleted = false
@@ -14,57 +15,55 @@ struct DocsView: View {
     @State private var folderName = ""
     @State private var renaming = false
     @AppStorage(Folders.key) private var emptyFolders = ""
-    @Environment(\.openItem) private var openItem
-    @Environment(Router.self) private var router
+    /// "all", "docs", "recordings" or "folder:<name>". Remembered, and set from outside to show a folder.
+    @AppStorage(DocsView.chipKey) private var chip = "all"
+    @AppStorage("docs.layout") private var layout = "grid"
+    @Namespace private var zoom
+    @Environment(\.horizontalSizeClass) private var size
 
-    private var folders: [String] { Folders.all(docs, emptyFolders) }
-    private var searching: Bool { !query.isEmpty }
+    static let chipKey = "docs.chip"
+    /// Shows a folder's docs next time Docs is on screen.
+    static func show(folder: String?) { UserDefaults.standard.set(folder.map { "folder:\($0)" } ?? "all", forKey: chipKey) }
+
+    private var folders: [String] { Folders.all(items, emptyFolders) }
+    private var folder: String? { chip.hasPrefix("folder:") ? String(chip.dropFirst(7)) : nil }
     private var shown: [Item] {
-        docs.filter { (folder == nil || $0.folder == folder)
-            && (!searching || $0.title.localizedCaseInsensitiveContains(query) || $0.body.localizedCaseInsensitiveContains(query)) }
+        items.filter { i in
+            let kindOK: Bool = switch chip {
+            case "docs": i.kind == .doc || i.kind == .note
+            case "recordings": i.kind == .lecture
+            default: folder.map { i.folder == $0 } ?? true
+            }
+            return kindOK && (query.isEmpty || i.title.localizedCaseInsensitiveContains(query) || i.body.localizedCaseInsensitiveContains(query))
+        }
     }
+    private var title: String { folder ?? (chip == "recordings" ? "Recordings" : "Docs") }
 
     var body: some View {
         NavigationStack(path: $path) {
-            List {
-                if folder != nil || searching {
-                    ForEach(shown) { row($0) }
-                } else {
-                    ForEach(shown.filter { $0.parent == nil }) { DocNode(doc: $0, all: docs, folders: folders) }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    chips
+                    if shown.isEmpty { empty } else { grid }
                 }
+                .padding(.horizontal, Space.page)
+                .padding(.bottom, 40)
+                .frame(maxWidth: 1100)
+                .frame(maxWidth: .infinity)
             }
-            .compactList()
-            .overlay {
-                if shown.isEmpty {
-                    if searching { ContentUnavailableView.search(text: query) }
-                    else { EmptyState(symbol: "doc.text", title: "No docs yet", message: "Tap the pencil to start writing.") }
-                }
-            }
-            .searchable(if: docs.count > 8, text: $query)
-            .navigationTitle(folder ?? "Docs")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: Item.self) { ItemDetail(item: $0) }
-            .opensPending(.doc, path: $path)
+            .paper()
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search docs")
+            .navigationTitle(title)
             .drawerButton()
+            .navigationBarTitleDisplayMode(.large)
+            .navigationDestination(for: Item.self) { ItemDetail(item: $0).navigationTransition(.zoom(sourceID: $0.id, in: zoom)) }
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        if let folder {
-                            Button("Rename folder", systemImage: "pencil") { folderName = folder; renaming = true }
-                            Button("Delete folder", systemImage: "trash", role: .destructive) {
-                                Folders.delete(folder, in: ctx)
-                                router.showSection = .docs
-                            }
-                        } else {
-                            Button("New folder", systemImage: "folder.badge.plus") { folderName = ""; naming = true }
-                            Button("Recently Deleted", systemImage: "trash") { showDeleted = true }
-                        }
-                    } label: { Icon.more }
-                    .accessibilityLabel(folder == nil ? "More" : "Folder options")
-                }
+                ToolbarItem(placement: .topBarTrailing) { moreMenu }
                 ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { let d = Item(.doc); d.folder = folder; open(d) } label: { Image(systemName: "square.and.pencil") }.accessibilityLabel("New doc")
+                    Button { create() } label: { Image(systemName: chip == "recordings" ? "mic" : "square.and.pencil") }
+                        .accessibilityLabel(chip == "recordings" ? "Record" : "New doc")
+                        .disabled(chip == "recordings" && recorder.isRecording)
                 }
             }
             .sheet(isPresented: $showDeleted) { DeletedView() }
@@ -75,23 +74,128 @@ struct DocsView: View {
                     let name = folderName.trimmingCharacters(in: .whitespaces)
                     guard !name.isEmpty else { return }
                     Folders.create(name)
-                    router.showSection = .folder(name)
+                    withAnimation(.snappy) { chip = "folder:\(name)" }
                 }
                 .disabled(folderName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .folderRename(folder ?? "", isPresented: $renaming, text: $folderName)
+            // Something to open (a new doc, a recording, a link): push it here.
+            .task(id: router.pending?.id) {
+                guard let p = router.pending else { return }
+                router.pending = nil
+                path = [p]
+            }
+            // A folder that's gone (deleted or renamed elsewhere) falls back to All.
+            .onChange(of: folders) { if let f = folder, !folders.contains(f) { chip = "all" } }
         }
     }
 
-    private func row(_ d: Item) -> some View {
-        ItemLink(item: d) { ItemRow(item: d) }
-            .swipeActions(edge: .trailing) { Button(role: .destructive) { d.trash() } label: { Image(systemName: "trash") } }
-            .itemMenu(d, folders: folders)
+    // MARK: Chips
+
+    private var chips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chipButton("All", "all")
+                chipButton("Docs", "docs")
+                chipButton("Recordings", "recordings")
+                ForEach(folders, id: \.self) { f in
+                    chipButton(f, "folder:\(f)", symbol: "folder")
+                        .folderActions(f) { path = [$0] }
+                }
+                Button { folderName = ""; naming = true } label: {
+                    Image(systemName: "plus").font(.subheadline.weight(.semibold))
+                        .frame(width: 36, height: 36)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("New folder")
+            }
+            .padding(.vertical, 4)
+        }
+        .scrollClipDisabled()
     }
 
-    private func open(_ d: Item) {
+    private func chipButton(_ name: String, _ id: String, symbol: String? = nil) -> some View {
+        let on = chip == id
+        return Button { Haptics.tap(); withAnimation(.snappy) { chip = id } } label: {
+            HStack(spacing: 6) {
+                if let symbol { Image(systemName: symbol).font(.caption.weight(.semibold)) }
+                Text(name).font(.subheadline.weight(on ? .semibold : .regular)).lineLimit(1)
+            }
+            .padding(.horizontal, 14).frame(height: 36)
+            .foregroundStyle(on ? Theme.paper : .primary)
+            .background { if on { Capsule().fill(Color.primary) } }
+            .glassEffect(on ? .identity : .regular.interactive(), in: .capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    // MARK: Cards
+
+    private var columns: [GridItem] {
+        if layout == "list" { return [GridItem(.flexible())] }
+        return [GridItem(.adaptive(minimum: size == .compact ? 150 : 220), spacing: 12)]
+    }
+
+    private var grid: some View {
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(shown) { item in
+                NavigationLink(value: item) { DocCard(item: item, lines: layout == "list" ? 1 : 3) }
+                    .buttonStyle(.card)
+                    .matchedTransitionSource(id: item.id, in: zoom)
+                    .itemMenu(item, folders: folders)
+            }
+        }
+        .animation(.snappy, value: chip)
+    }
+
+    @ViewBuilder private var empty: some View {
+        if !query.isEmpty {
+            ContentUnavailableView.search(text: query)
+        } else if chip == "recordings" {
+            WarmEmpty(title: "No recordings yet", message: "Record a class or a meeting and get notes written for you.", action: "Record") { create() }
+        } else if let folder {
+            WarmEmpty(title: "\(folder) is empty", message: "Docs you make here are filed in it.", action: "New doc") { create() }
+        } else {
+            WarmEmpty(title: "Nothing written yet", message: "A doc is a page for anything: notes, plans, a draft.", action: "New doc") { create() }
+        }
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            Picker("Layout", selection: $layout) {
+                Label("Cards", systemImage: "square.grid.2x2").tag("grid")
+                Label("List", systemImage: "list.bullet").tag("list")
+            }
+            Section {
+                Button("New folder", systemImage: "folder.badge.plus") { folderName = ""; naming = true }
+                if let folder {
+                    Button("Rename \u{201C}\(folder)\u{201D}", systemImage: "pencil") { folderName = folder; renaming = true }
+                    Button("Delete \u{201C}\(folder)\u{201D}", systemImage: "trash", role: .destructive) {
+                        Folders.delete(folder, in: ctx)
+                        withAnimation(.snappy) { chip = "all" }
+                    }
+                }
+            }
+            Section { Button("Recently Deleted", systemImage: "trash") { showDeleted = true } }
+        } label: { Icon.more }
+        .accessibilityLabel("More")
+    }
+
+    private func create() {
+        if chip == "recordings" {
+            guard !recorder.isRecording else { return }
+            let l = Item(.lecture, title: "Recording · \(Date.now.formatted(.dateTime.month(.abbreviated).day()))")
+            ctx.insert(l)
+            path = [l]
+            recorder.start(l)
+            return
+        }
+        let d = Item(.doc)
+        d.folder = folder
         ctx.insert(d)
-        if let openItem { openItem(d) } else { path.append(d) }
+        path = [d]
     }
 }
 

@@ -16,6 +16,19 @@ struct SettingsSheet: View {
         NavigationStack {
             List {
                 YouSection()
+                Section {
+                    NavigationLink { AppearanceView() } label: {
+                        HStack(spacing: 12) {
+                            LookDot()
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Appearance")
+                                Text(Look.of(UserDefaults.standard.string(forKey: Appearance.lookKey) ?? Appearance.defaultLook).name)
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    NavigationLink { IntegrationsView() } label: { Label("Integrations", systemImage: "link") }
+                }
                 AssistantModelSection()
 
                 Section {

@@ -54,7 +54,7 @@ private struct SystemActionHandler: ViewModifier {
         case .newEvent:
             router.createEvent()
         case .ask(let q):
-            router.ask = q
+            router.ask(question: q)
         case .focusAsk:
             router.focusAsk = true
         case .open(let id):

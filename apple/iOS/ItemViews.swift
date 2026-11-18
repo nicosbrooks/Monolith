@@ -1,73 +1,6 @@
 import SwiftUI
 import SwiftData
 
-/// Recordings: one plain list, newest first.
-struct ItemListView: View {
-    let kind: ItemKind
-    @Environment(\.modelContext) private var ctx
-    @Environment(LectureRecorder.self) private var recorder
-    @Query private var items: [Item]
-    @State private var path: [Item] = []
-    @State private var query = ""
-    @State private var showDeleted = false
-    @Environment(\.openItem) private var openItem
-
-    init(kind: ItemKind) {
-        self.kind = kind
-        let raw = kind.rawValue
-        _items = Query(filter: #Predicate<Item> { $0.kindRaw == raw && $0.deletedAt == nil }, sort: \Item.updatedAt, order: .reverse)
-    }
-
-    private var filtered: [Item] {
-        items.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) || $0.transcript.contains { $0.text.localizedCaseInsensitiveContains(query) } }
-    }
-
-    var body: some View {
-        NavigationStack(path: $path) {
-            List { rows(filtered) }
-                .compactList()
-                .overlay {
-                    if filtered.isEmpty {
-                        if query.isEmpty { EmptyState(symbol: kind.symbol, title: "No recordings yet", message: "Record a class or a meeting to get a transcript.") }
-                        else { ContentUnavailableView.search(text: query) }
-                    }
-                }
-                .searchable(if: items.count > 8, text: $query)
-                .navigationTitle("Recordings")
-                .navigationBarTitleDisplayMode(.inline)
-                .navigationDestination(for: Item.self) { ItemDetail(item: $0) }
-                .drawerButton()
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu { Button("Recently Deleted", systemImage: "trash") { showDeleted = true } } label: { Icon.more }
-                    }
-                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            let l = Item(.lecture, title: "Recording · \(Date.now.formatted(.dateTime.month(.abbreviated).day()))")
-                            ctx.insert(l)
-                            if let openItem { openItem(l) } else { path.append(l) }
-                            recorder.start(l)
-                        } label: { Image(systemName: "mic") }
-                        .disabled(recorder.isRecording)
-                        .accessibilityLabel("Record")
-                    }
-                }
-                .sheet(isPresented: $showDeleted) { DeletedView() }
-                .opensPending(kind, path: $path)
-        }
-    }
-
-    @ViewBuilder private func rows(_ list: [Item]) -> some View {
-        ForEach(list) { item in
-            ItemLink(item: item) { ItemRow(item: item) }
-                .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) { item.trash() } label: { Image(systemName: "trash") }
-                }
-                .itemMenu(item)
-        }
-    }
-}
 
 extension View {
     /// Plain list: no dividing lines; rows are told apart by height and spacing, like the web app.
@@ -157,6 +90,8 @@ struct ItemDetail: View {
             case .lecture: LectureView(item: item)
             }
         }
+        // A doc or recording gets the whole screen; Back brings the tabs back.
+        .toolbarVisibility(.hidden, for: .tabBar)
     }
 }
 
@@ -175,17 +110,20 @@ struct NoteEditor: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Where it lives, quietly, above the title: Docs, or its folder.
+                    Text(item.folder ?? "Docs").font(.footnote.weight(.medium)).foregroundStyle(.secondary)
                     PageEmoji(item: item, picking: $picking)
                     TextField("Untitled", text: $item.title, axis: .vertical)
-                        .font(.title.bold())
+                        .font(.system(size: 32, weight: .bold)).tracking(-0.5)
                         .focused($titleFocused)
                         .submitLabel(.next)
-                    BlockEditor(markdown: $item.body, placeholder: "Start writing", focusRequest: bodyFocus, record: recordHere)
+                        .padding(.bottom, 4)
+                    BlockEditor(markdown: $item.body, placeholder: "Start writing, or type / for more", focusRequest: bodyFocus, record: recordHere)
                 }
-                .frame(maxWidth: 720, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
+                .frame(maxWidth: 680, alignment: .leading)
+                .padding(.horizontal, Space.page + 4)
+                .padding(.top, 4)
                 .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboard(.interactively)
@@ -200,7 +138,7 @@ struct NoteEditor: View {
                 .buttonStyle(.plain)
             }
         }
-        .background(Theme.paper.ignoresSafeArea())
+        .washed()
         .onChange(of: item.body) { item.touch() }
         .onChange(of: item.title) { titleChanged() }
         .onChange(of: item.drawing) { item.touch() }
@@ -320,29 +258,6 @@ struct DeletedView: View {
     }
 }
 
-struct SearchView: View {
-    @Query(filter: #Predicate<Item> { $0.deletedAt == nil }, sort: \Item.updatedAt, order: .reverse) private var items: [Item]
-    @State private var query = ""
-    var body: some View {
-        NavigationStack {
-            List(results) { item in ItemLink(item: item) { ItemRow(item: item, showKind: true) } }
-                .compactList()
-                .overlay {
-                    if query.isEmpty { EmptyState(symbol: "magnifyingglass", title: "Search everything", message: "Notes, docs and recordings.") }
-                    else if results.isEmpty { ContentUnavailableView.search(text: query) }
-                }
-                .navigationTitle("Search")
-                .navigationBarTitleDisplayMode(.inline)
-                .navigationDestination(for: Item.self) { ItemDetail(item: $0) }
-                .drawerButton()
-                .searchable(text: $query)
-        }
-    }
-    private var results: [Item] {
-        guard !query.isEmpty else { return [] }
-        return items.filter { $0.title.localizedCaseInsensitiveContains(query) || $0.body.localizedCaseInsensitiveContains(query) || $0.transcript.contains { $0.text.localizedCaseInsensitiveContains(query) } }
-    }
-}
 
 /// A conversation with the assistant about the workspace. Opened from the chat bar with the first message.
 /// Every answer says which docs it used, and can be copied, saved as a doc, or added to the doc it was asked from.
@@ -414,7 +329,7 @@ struct ChatView: View {
                     .padding(.horizontal, 14).padding(.top, 24).padding(.bottom, 8)
                     .background(Fog())
             }
-            .background(Theme.paper.ignoresSafeArea())
+            .washed()
             .sheet(isPresented: $settings) { SettingsSheet() }
         }
         .onAppear { if turns.isEmpty { send(first) } }

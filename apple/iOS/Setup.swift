@@ -149,7 +149,7 @@ struct LockScreen: View {
             .opacity(lock.locked ? 1 : 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.paper.ignoresSafeArea())
+        .washed()
         // Ask as soon as Monolith is in front, not while it's still in the background.
         .task { if lock.locked && phase == .active { await lock.unlock() } }
         .onChange(of: phase) { if phase == .active && lock.locked { Task { await lock.unlock() } } }
@@ -158,7 +158,7 @@ struct LockScreen: View {
 
 // MARK: - First-time setup
 
-/// Two short steps: a name for greetings, then where work is kept and whether it's locked.
+/// Three short steps: a name for greetings, a look, then where work is kept and whether it's locked.
 struct SetupView: View {
     @AppStorage(Profile.name) private var savedName = ""
     @AppStorage(Profile.setupAt) private var setupAt = 0.0
@@ -174,38 +174,41 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 if step > 0 {
-                    Button { withAnimation(.snappy) { step = 0 } } label: {
+                    Button { withAnimation(.snappy) { step -= 1 } } label: {
                         Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 44, height: 44)
                     }
                     .glassEffect(.regular, in: .circle).accessibilityLabel("Back")
                 }
                 Spacer()
                 HStack(spacing: 6) {
-                    ForEach(0..<2) { i in
+                    ForEach(0..<3) { i in
                         Capsule().fill(i == step ? Color.primary : Theme.tile).frame(width: i == step ? 28 : 18, height: 4)
                     }
                 }
-                .accessibilityElement().accessibilityLabel("Step \(step + 1) of 2")
+                .accessibilityElement().accessibilityLabel("Step \(step + 1) of 3")
                 Spacer()
                 Color.clear.frame(width: 44, height: 44)
             }
             .padding(.bottom, 28)
 
             Group {
-                if step == 0 { nameStep.transition(.move(edge: .leading).combined(with: .opacity)) }
-                else { storageStep.transition(.move(edge: .trailing).combined(with: .opacity)) }
+                switch step {
+                case 0: nameStep.transition(.move(edge: .leading).combined(with: .opacity))
+                case 1: lookStep.transition(.opacity)
+                default: storageStep.transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
             .frame(maxHeight: .infinity, alignment: .top)
 
             Button(action: next) {
-                Text(step == 0 ? "Continue" : "Start using Monolith")
+                Text(step < 2 ? "Continue" : "Start using Monolith")
                     .font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 52)
             }
             .buttonStyle(.glassProminent).tint(.primary).foregroundStyle(Color(uiColor: .systemBackground))
             .disabled(asking)
         }
         .padding(.horizontal, Space.page).padding(.top, 12).padding(.bottom, 16)
-        .background(Theme.paper.ignoresSafeArea())
+        .washed()
         .onAppear { name = savedName; nameFocused = true }
     }
 
@@ -220,8 +223,17 @@ struct SetupView: View {
                 .focused($nameFocused).onSubmit(next)
                 .font(.title3)
                 .padding(.horizontal, 16).frame(minHeight: 54)
-                .background(Theme.card, in: .rect(cornerRadius: 16, style: .continuous))
+                .panel(radius: 16)
             Text("Used in greetings. Leave it blank if you’d rather not.").font(.footnote).foregroundStyle(.secondary)
+        }
+    }
+
+    private var lookStep: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Make it yours").font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
+            Text("A wash of color behind everything. Change it any time in Settings › Appearance.")
+                .font(.body).foregroundStyle(.secondary).padding(.bottom, 18)
+            AppearancePicker(compact: true)
         }
     }
 
@@ -264,7 +276,7 @@ struct SetupView: View {
                 }
                 .padding(16)
             }
-            .background(Theme.card, in: .rect(cornerRadius: 22, style: .continuous))
+            .panel()
             if failed {
                 Text("\(method ?? "Face ID") didn’t go through, so the lock is still off. Try again.")
                     .font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 4)
@@ -273,7 +285,7 @@ struct SetupView: View {
     }
 
     private func next() {
-        if step == 0 { withAnimation(.snappy) { step = 1 }; nameFocused = false; return }
+        if step < 2 { withAnimation(.snappy) { step += 1 }; nameFocused = false; return }
         savedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         setupAt = Date.now.timeIntervalSince1970
     }

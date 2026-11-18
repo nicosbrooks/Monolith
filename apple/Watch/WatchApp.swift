@@ -45,6 +45,10 @@ struct WatchRecording: Codable, Identifiable, Hashable {
 @Observable
 final class WatchLink: NSObject, WCSessionDelegate {
     var agenda: [AgendaEvent] = []
+    /// The phone's look and accent, remembered so the watch opens in them.
+    var look = UserDefaults.standard.string(forKey: Link.look) ?? "dusk"
+    var tint = UserDefaults.standard.string(forKey: Link.tint) ?? "look"
+    var accent: Color { Palette.accent(look: look, tint: tint) }
     private(set) var recordings: [WatchRecording] = []
     private let index = WatchRecording.folder.appending(path: "index.json")
 
@@ -110,6 +114,8 @@ final class WatchLink: NSObject, WCSessionDelegate {
     }
 
     private func load(_ ctx: [String: Any]) {
+        if let l = ctx[Link.look] as? String { look = l; UserDefaults.standard.set(l, forKey: Link.look) }
+        if let t = ctx[Link.tint] as? String { tint = t; UserDefaults.standard.set(t, forKey: Link.tint) }
         guard let data = ctx[Link.agenda] as? Data, let list = try? JSONDecoder().decode([AgendaEvent].self, from: data) else { return }
         agenda = list
     }
@@ -213,8 +219,9 @@ struct WatchHome: View {
         NavigationStack {
             List {
                 Button { recording = true } label: { recordButton }
+                    .buttonStyle(.plain)
                     .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 10, trailing: 0))
 
                 if !link.recordings.isEmpty {
                     Section {
@@ -239,31 +246,39 @@ struct WatchHome: View {
             }
             .navigationTitle("Monolith")
             .navigationDestination(isPresented: $recording) { RecordView() }
+            .containerBackground(wash, for: .navigation)
         }
+        .tint(link.accent)
     }
 
-    /// The one big thing on the watch: start recording. During an event it says which.
+    /// The phone's look, as a soft glow from the top of the screen.
+    private var wash: some ShapeStyle {
+        let c = Palette.wash(link.look)
+        return LinearGradient(colors: [(c.first ?? .gray).opacity(c.isEmpty ? 0.18 : 0.55), (c.dropFirst().first ?? .clear).opacity(0.18), .black],
+                              startPoint: .top, endPoint: .bottom)
+    }
+
+    /// The one big thing on the watch: start recording. A red core in an accent ring; during an event it says which.
     private var recordButton: some View {
-        HStack(spacing: 12) {
+        VStack(spacing: 6) {
             ZStack {
-                Circle().fill(.red).frame(width: 44, height: 44)
-                Image(systemName: recorder.isRecording ? "waveform" : "mic.fill").font(.title3.weight(.semibold)).foregroundStyle(.white)
+                Circle().strokeBorder(link.accent.opacity(0.9), lineWidth: 3).frame(width: 76, height: 76)
+                Circle().fill(.red).frame(width: 60, height: 60)
+                Image(systemName: recorder.isRecording ? "waveform" : "mic.fill").font(.title2.weight(.semibold)).foregroundStyle(.white)
                     .symbolEffect(.variableColor.iterative, isActive: recorder.isRecording)
             }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(recorder.isRecording ? "Recording" : "Record").font(.headline)
-                if recorder.isRecording {
-                    TimelineView(.periodic(from: recorder.started, by: 1)) { ctx in
-                        Text(ctx.date.timeIntervalSince(recorder.started).clock).font(.footnote.monospacedDigit()).foregroundStyle(.red)
-                    }
-                } else if let e = link.now {
-                    Text(e.title).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+            if recorder.isRecording {
+                TimelineView(.periodic(from: recorder.started, by: 1)) { ctx in
+                    Text(ctx.date.timeIntervalSince(recorder.started).clock).font(.headline.monospacedDigit()).foregroundStyle(.red)
                 }
+            } else {
+                Text("Record").font(.headline)
+                if let e = link.now { Text(e.title).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
             }
-            Spacer(minLength: 0)
         }
-        .padding(10)
-        .background(.red.opacity(0.16), in: .rect(cornerRadius: 22))
+        .frame(maxWidth: .infinity)
+        .contentShape(.rect)
+        .accessibilityElement(children: .combine)
         .accessibilityLabel(recorder.isRecording ? "Recording, open" : "Record")
     }
 
@@ -295,7 +310,8 @@ private struct RecordingRow: View {
                 Text("\(recording.duration.clock) · \(status)").font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
-            Image(systemName: symbol).font(.footnote).foregroundStyle(recording.state == .onPhone ? .green : .secondary)
+            Image(systemName: symbol).font(.footnote)
+                .foregroundStyle(recording.state == .onPhone ? AnyShapeStyle(.green) : AnyShapeStyle(.tint))
                 .symbolEffect(.pulse, isActive: recording.state == .sending)
         }
         .accessibilityElement(children: .combine)
@@ -331,9 +347,10 @@ struct RecordView: View {
                 Text(recorder.title.isEmpty ? "Recording" : recorder.title).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                 TimelineView(.periodic(from: recorder.started, by: 1)) { ctx in
                     Text((recorder.isRecording ? ctx.date.timeIntervalSince(recorder.started) : 0).clock)
-                        .font(.system(size: 36, weight: .semibold, design: .rounded).monospacedDigit())
+                        .font(.system(size: 40, weight: .semibold, design: .rounded).monospacedDigit())
+                        .contentTransition(.numericText())
                 }
-                Meter(levels: recorder.levels).frame(height: 26)
+                Meter(levels: recorder.levels).frame(height: 40)
             }
             Button {
                 if recorder.isRecording { finish() } else { begin() }
@@ -368,7 +385,7 @@ private struct Meter: View {
         HStack(alignment: .center, spacing: 2) {
             ForEach(Array(levels.enumerated()), id: \.offset) { _, l in
                 Capsule().fill(.red.opacity(0.85))
-                    .frame(width: 3, height: max(3, CGFloat(l) * 26))
+                    .frame(width: 3, height: max(3, CGFloat(l) * 40))
             }
         }
         .animation(.linear(duration: 0.12), value: levels)

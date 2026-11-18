@@ -95,23 +95,41 @@ iPhone screens felt cramped at web sizes, so iOS runs a little roomier. Use the 
 | `Space.card` | 18pt | inner padding of a card |
 | `Space.row` | 48pt | minimum row height in cards and lists |
 
-The drawer is min(310pt, 80% of the width), with 44pt rows (40pt for Recents), a 24pt icon column so every label starts at the same x, and 24pt above each heading.
+### iPhone and iPad: the web's look, a row of tabs (Nov 17 redo)
+The ChatGPT-style phone (true black, a slide-in drawer, grey rows) read as cold, empty and like the Settings app, so iOS now wears the web's look.
+- **Looks, accent and surface come from the web** (`apple/iOS/Looks.swift`, same hex values as `lib/looks.ts`). `Wash` paints the look's three blooms over the page color behind every screen (`.paper()` for lists and scroll views, `.washed()` for the rest). `.panel()` is a card: frosted material over a look (Clear: ultra-thin, Frosted: thin, Solid and Graphite: `Theme.card`), 22pt continuous corners, one hairline, no shadow. `.lookTint()` at the root makes the accent the tint, so checkboxes, toggles, today, the current place and toolbar icons pick it up; Neutral is the text color. **Defaults on iOS: Dusk, accent Match the look, Frosted.** Settings › Appearance has mode, looks as small washes, accent dots and surface; setup has a "Make it yours" step with the looks. The watch gets the look and accent through the application context.
+- **iPhone: four tabs, a drawer, and Ask on Home** (`PhoneRoot` in `MonolithApp.swift`, laid out like the Claude iPhone app):
+  - **Tabs**: Home, Tasks, Docs, Calendar. The tab bar shrinks while scrolling down and hides inside a doc or recording; Back brings it back. A recording in progress rides above the tabs (`tabViewBottomAccessory`); tap its name to open it.
+  - **☰ at the top left** of each tab's first screen (`.drawerButton()`), or a swipe in from the left edge, slides the page aside (rounded corners, hairline edge; tap it to close) to show the **drawer**: "Monolith" with a round Search button, **Recents** (eight docs and recordings, View all goes to Docs), **Folders**, **More** (Recently Deleted), and at the foot your initials in a circle (Settings) and a white **New doc** pill.
+  - **Home's composer** sits above the tabs: + (the New menu: Doc, Recording, Task, Event), "Ask or search", and the mic, which starts a recording; once something's typed the mic becomes Send and asks the assistant.
+  - Search in the drawer opens Ask over the page.
+- **iPad: the sidebar kept open** (`PadRoot`): Home, Tasks, Docs, Calendar, Ask, then Folders, then Recent, with Settings and + at its top. The page sits beside it and a doc opens on the page, in that place's own stack. Home doesn't repeat Settings or + on iPad.
+- **Fewer places.** Recordings live in Docs (a chip), folders are chips in Docs (and listed in the iPhone drawer), Integrations is in Settings, Search is part of Ask, Recently Deleted is in Docs' ⋯ and the drawer.
+- **Docs is cards** (`DocsView`, `DocCard` in `Cards.swift`): chips All · Docs · Recordings · each folder · +, then a grid (150pt minimum on iPhone, 220pt on iPad; Cards/List in ⋯). A card: icon tile (red waveform for a recording), time or length, title on one line, two lines of preview as plain words (`Item.previewLines`, never Markdown). Opening zooms the doc out of its card. Hold a folder chip for New doc here, Rename, Delete folder (Undo). The chosen chip is remembered (`docs.chip`) and set from outside with `DocsView.show(folder:)`.
+- **Home**: date over a 34pt greeting, **Recent** as a row of cards (See all goes to Docs), then **Tasks** and **Calendar** panels (side by side on iPad), each with one link in its header. Empty is a row that does the thing ("Add a task", "Nothing coming up. Add an event"). A date found in a doc is a panel with Add to calendar and Not now. On iPhone, Home's title bar has only ☰; Settings is the initials in the drawer and + is in the composer.
+- **Ask** (`Ask.swift`; a place in the iPad sidebar, the drawer's Search on iPhone): "What can I help with?", up to four starting points from what's on (next event, tasks, the doc you were in, the last recording), Recent cards, and the field pinned at the bottom. Typing shows "Ask “…”" and the docs that match, as you type; Return asks.
+- **Tasks**: a "New task" row at the top (a date in it sets when it's due; it stays ready for the next), then one panel per group with its count, then Done folded away. Checkboxes are squares in the accent.
+- **Calendar**: the week strip on a panel; the chosen day is an accent circle, today is accent text; + makes an event.
+- **Empty places** (`WarmEmpty`): the slab, a title, one sentence and the one button that fills it.
+- **Presses**: cards settle to 97% and spring back (`.buttonStyle(.card)`); rows take the soft wash (`.row`). Changing tabs taps.
+- **Rules kept**: no box inside a box, two buttons at most in a title bar, one line per menu option, one control per action.
 
-### iPhone: calm, not boxed (Nov 16)
-The iPhone read as clunky when every group sat in its own card. The rules now:
-- **One card per screen at most.** On Home that's the assistant card. Calendar, Tasks and Recent are plain rows under a small grey label. Never a box inside a box: inside the card, starting points are rows, and a suggestion's source is one quiet line (doc name, then the words it found).
-- **No doubled header.** Home's title bar is empty; the greeting is the title, with the date in small grey text under it.
-- **Empty is one quiet line** ("Nothing coming up", tertiary), not a box.
+### The doc editor on iOS (Nov 17)
+- **The page**: its place (Docs or the folder) in small grey text, then the title at 32pt bold, tracking -0.5, then the body in a 680pt column. Body text has 5pt between wrapped lines and 10pt between paragraphs; Title, Heading and Subheading are Title 1, Title 2 and Title 3 with 18, 14 and 10pt above. The empty doc reads "Start writing, or type / for more".
+- **Slash menu**: "/" at the start of a line opens a glass list under it (Record, Title, Heading, Subheading, Checklist, Bulleted list, Numbered list, Quote, Code, Divider, Table, Link), filtered by what's typed after the slash; a space closes it. It never takes the keyboard. "/record " still starts a recording straight away.
+- **Keyboard bar**: Aa (format, links, move, insert), Checklist, Bullets | Outdent, Indent, Hide keyboard.
+
+### iPhone: calm, not boxed (Nov 16, still applies where the redo doesn't say otherwise)
 - **Two buttons at most in a title bar.** In a doc: ··· (there are no favorites, Nov 17). Listen lives in ···; while it reads aloud, a stop button appears up top.
-- **Menus are one line per option.** The + menu reads Event, Record, Doc, with no descriptions.
-- **No flashes.** The launch screen is black, like the app's default, and the assistant card appears only once Home has read the docs, so nothing jumps in.
+- **Menus are one line per option.**
+- **No flashes.** The suggestion panel appears only once Home has read the docs, so nothing jumps in.
 - **Dates read as words.** "Nov 13", with the year only when it's another year.
 
 ### iPhone: touch, holds and feel (Nov 16)
 - **Haptics through `Haptics` only** (`apple/iOS/Haptics.swift`), never a generator made on the spot. `tap` for a choice (a checkbox, a Markdown shortcut taking effect, a toolbar format), `thud` for something removed (trash, delete a line, unlink), `success` when something new works (linked a computer, finished a task from a hold menu), `warning` when a gesture can't do anything (indenting the first item). Never on scroll or on every keystroke.
 - **Hold shows what you're holding.** Docs and recordings (Home, cards, Library) open a preview of their first lines above the menu (`.itemMenu`), as words, never Markdown. Tasks on Home show the doc they live in, with Mark complete and Copy.
 - **Hold a line's marker** (bullet, number, checkbox, quote bar, divider, picture) for Move up, Move down, Duplicate and Delete line. The same moves sit in the keyboard's Aa menu.
-- **Keyboard bar, one line:** Checklist, Bullets, Aa | Outdent, Indent, Hide keyboard. Outdent and Indent are greyed out off a list item rather than hidden, so the bar doesn't shift.
+- **Keyboard bar, one line:** Aa, Checklist, Bullets | Outdent, Indent, Hide keyboard. Outdent and Indent are greyed out off a list item rather than hidden, so the bar doesn't shift.
 - **Removing asks or offers Undo, never neither.** Trashing a doc or event shows the Undo pill; swiping to unlink a computer asks first, because there's nothing to undo.
 
 ### iPhone from outside the app (`SystemActions.swift`)
@@ -221,7 +239,7 @@ The **only** place the assistant lives: there is no chat panel or sidebar. One 4
 ### The sidebar and the workspace (desktop, Nov 17)
 Desktop is a workspace, not a poster: dense, and arranged by the person. The **Ask bar** sits at the bottom centre of every page.
 - **Sidebar** (`Rail.tsx`, `.rail`): a slim rail of icons down the left edge (Search, Home, Tasks, Docs, Recordings, Calendar; Settings at the foot). Resting the pointer on it for a moment (or tabbing into it) **opens it in place** over the page, 246px wide on the popup glass: names appear beside the same icons (each row keeps a fixed 40px icon column, so nothing moves), then **Recent** docs, which scroll on their own, and Recently Deleted and Settings at the foot, always. Moving away, Esc or choosing something closes it; coming back while it is closing keeps it open. **⌘\\** (or the button at its top) keeps it open beside the page as a flat panel, remembered in this browser. There is no separate Library popup any more; the old `Sidebar.tsx` is only the phone drawer.
-- **Docs and Recordings pages** (`DocsLibrary.tsx`): a wide page of small cards (icon tile, title, first lines, time), with search, folder chips and New doc / Record. Phones keep their own lists and tab bar.
+- **Docs and Recordings pages** (`DocsLibrary.tsx`): a wide page of small cards (icon tile, title, first lines, time), with search, folder chips and New doc / Record. The phone apps have their own version: see "iPhone and iPad" under Shape and space.
 - **Home is a few panels and open space** (`Board` in `HomeView.tsx`, `.hm-grid`, `.hm-tile`): a four-column grid; by default **Tasks and Calendar side by side at the top**, each as tall as what's in it (up to its height), and nothing filling the rest. **Empty space is fine.** Each panel has its name and link (Open, See all) in a 40px header and scrolls inside itself. **Hold a panel's header and drag** to move it (a mouse can just drag; touch holds still first); **drag its corner** to resize (whole columns 1–4, heights 1–3); its **⋯** menu does the same from the keyboard. **Panels** chooses which show (Calendar, Tasks) and resets the layout. **Calendar hides itself when nothing is left today**, and comes back in its place tomorrow; while it's away, the panel beside it in that row takes its columns, so no row is left half empty. **There is no assistant panel**: its starting points show when you click into the Ask bar. Remembered in this browser (`monolith-home-board-3`). Under 880px of board it shows two columns; phones keep one column (Calendar if anything is left, Tasks, Recent).
 - **Recent leads Home** (`.hm-recent-row`): right under the header, the docs you were just in as the same cards as the Docs page (icon, title, first two lines, time), one row that fits the window, with See all. The card whose doc is open beside is marked. (It replaced the quiet row of chips above the Ask bar, which was too easy to miss.)
 - **New** (`NewMenu.tsx`): Home has one **New ⌄** button instead of New doc / Record. Its menu: Doc (⌘N), Recording, Event, Task, then Upload files to the Vault and Upload a recording. Events and tasks open their page with the Ask bar ready.

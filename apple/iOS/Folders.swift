@@ -90,7 +90,8 @@ private struct FolderRename: ViewModifier {
             Button("Cancel", role: .cancel) {}
             Button("Rename") {
                 Folders.rename(name, to: text, in: ctx)
-                router.showSection = .folder(text.trimmingCharacters(in: .whitespacesAndNewlines))
+                DocsView.show(folder: text.trimmingCharacters(in: .whitespacesAndNewlines))
+                router.showSection = .docs
             }
             .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }

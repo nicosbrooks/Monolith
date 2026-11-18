@@ -217,7 +217,7 @@ struct LineField: UIViewRepresentable {
                 b.accessibilityLabel = label
                 return b
             }
-            let format = UIBarButtonItem(image: UIImage(systemName: "textformat"), menu: UIMenu(children: [
+            let format = UIBarButtonItem(image: UIImage(systemName: "textformat.size"), menu: UIMenu(children: [
                 UIDeferredMenuElement.uncached { [weak self] done in done(self?.parent.events.menu() ?? []) },
             ]))
             format.accessibilityLabel = "Format"
@@ -225,9 +225,9 @@ struct LineField: UIViewRepresentable {
             let into = item("increase.indent", "Indent") { [weak self] in self?.parent.events.indent(1) }
             indents = [out, into]
             bar.items = [
+                format,
                 item("checklist", "Checklist") { [weak self] in self?.parent.events.checklist() },
                 item("list.bullet", "Bulleted list") { [weak self] in self?.parent.events.bullets() },
-                format,
                 .flexibleSpace(),
                 out,
                 into,
@@ -355,9 +355,9 @@ enum LineText {
             return UIFont.monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .callout).pointSize, weight: .regular)
         }
         let (style, weight): (UIFont.TextStyle, UIFont.Weight) = switch kind {
-        case .h1: (.title2, .bold)
-        case .h2: (.title3, .semibold)
-        case .h3: (.headline, .semibold)
+        case .h1: (.title1, .bold)
+        case .h2: (.title2, .semibold)
+        case .h3: (.title3, .semibold)
         default: (.body, .regular)
         }
         let size = UIFont.preferredFont(forTextStyle: style).pointSize
@@ -369,11 +369,22 @@ enum LineText {
         return f
     }
 
+    /// Body text gets room between its wrapped lines (about 1.4 line height, as on the web); headings stay tight.
+    static func paragraph(_ kind: Block.Kind) -> NSParagraphStyle {
+        let p = NSMutableParagraphStyle()
+        switch kind {
+        case .h1, .h2, .h3: p.lineSpacing = 1
+        default: p.lineSpacing = 5
+        }
+        return p
+    }
+
     static func attributes(_ marks: Marks, link: URL?, kind: Block.Kind, mode: LineField.Mode) -> [NSAttributedString.Key: Any] {
         let done = kind == .todo(true)
         var a: [NSAttributedString.Key: Any] = [
             .font: font(kind, marks, mode: mode),
             .foregroundColor: done || kind == .quote ? UIColor.secondaryLabel : UIColor.label,
+            .paragraphStyle: LineText.paragraph(kind),
         ]
         guard mode == .rich else { return a }
         if !marks.isEmpty { a[.marks] = marks.rawValue }

@@ -324,7 +324,8 @@ struct IntegrationsView: View {
     private var model: Integrations { .shared }
 
     var body: some View {
-        NavigationStack {
+        // Pushed from Settings, so no stack of its own.
+        Group {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.section) {
                     Text("Let the assistant use what this iPhone knows. Each one stays off until you turn it on.")
@@ -363,7 +364,6 @@ struct IntegrationsView: View {
             .paper()
             .navigationTitle("Integrations")
             .navigationBarTitleDisplayMode(.inline)
-            .drawerButton()
             .onAppear { model.refresh() }
             .sheet(isPresented: $places) { PlacesView() }
             .confirmationDialog("Clear location history?", isPresented: $confirmClear, titleVisibility: .visible) {

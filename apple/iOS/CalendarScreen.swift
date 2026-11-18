@@ -67,10 +67,14 @@ struct CalendarScreen: View {
             }
             .compactList()
             // The week stays put above the day's list; swipe it for the next or last week.
-            .safeAreaInset(edge: .top, spacing: 0) { weekStrip.padding(.horizontal, 12).padding(.bottom, 6).background(Theme.paper) }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                weekStrip.padding(.vertical, 10).padding(.horizontal, 4)
+                    .panel(radius: 20)
+                    .padding(.horizontal, 12).padding(.bottom, 6)
+            }
             .navigationTitle(day.formatted(.dateTime.month(.wide).year()))
-            .navigationBarTitleDisplayMode(.inline)
             .drawerButton()
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if !Calendar.current.isDateInToday(day) {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -78,6 +82,10 @@ struct CalendarScreen: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) { CalendarsMenu() }
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { creating = true } label: { Image(systemName: "plus") }.accessibilityLabel("New event")
+                }
             }
             .sheet(item: $editing) { EventEditor(event: $0) }
             .sheet(isPresented: $creating) { EventEditor(event: nil, day: day) }
@@ -91,8 +99,6 @@ struct CalendarScreen: View {
                 router.newEvent = false
                 creating = true
             }
-            .onAppear { router.onCalendar = true }
-            .onDisappear { router.onCalendar = false }
         }
     }
 
@@ -107,10 +113,9 @@ struct CalendarScreen: View {
                         Text(d.formatted(.dateTime.weekday(.narrow))).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                         Text(d.formatted(.dateTime.day()))
                             .font(.callout.weight(on || today ? .semibold : .regular).monospacedDigit())
-                            .foregroundStyle(on ? Theme.paper : .primary)
-                            .frame(width: 30, height: 30)
-                            .background(on ? Color.primary : .clear, in: .circle)
-                            .overlay { if today && !on { Circle().strokeBorder(.secondary, lineWidth: 1) } }
+                            .foregroundStyle(on ? AnyShapeStyle(Theme.paper) : today ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                            .frame(width: 32, height: 32)
+                            .background { if on { Circle().fill(.tint) } }
                         HStack(spacing: 2) {
                             ForEach(Array((marks[d] ?? []).enumerated()), id: \.offset) { Circle().fill($0.element).frame(width: 4, height: 4) }
                         }

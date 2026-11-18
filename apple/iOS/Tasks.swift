@@ -179,8 +179,9 @@ struct TodoRow: View {
             Button {
                 if todo.done { Haptics.tap(); withAnimation(.snappy) { Todos.setDone(todo, false) } } else { Todos.complete(todo) }
             } label: {
-                Image(systemName: todo.done ? "checkmark.square.fill" : "square").font(.body)
-                    .foregroundStyle(todo.done ? .primary : .secondary)
+                Image(systemName: todo.done ? "checkmark.square.fill" : "square").font(.title3.weight(.light))
+                    .foregroundStyle(todo.done ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .contentTransition(.symbolEffect(.replace))
                     .frame(width: 22, height: Space.row).contentShape(.rect)
             }
             .buttonStyle(.plain)
@@ -296,13 +297,15 @@ struct TodoEditor: View {
 
 // MARK: - Screen
 
-/// Tasks: a list of its own, grouped by when each is due. Type one in the bar at the bottom ("essay draft by Friday").
+/// Tasks: a list of its own, grouped by when each is due. Type one in the row at the top ("essay draft by Friday").
 /// Checked-off ones fold away at the bottom for 30 days.
 struct TasksScreen: View {
     @Environment(Router.self) private var router
-    @Environment(\.horizontalSizeClass) private var size
+    @Environment(\.modelContext) private var ctx
     @Query private var todos: [Todo]
     @AppStorage("tasks.showDone") private var showDone = false
+    @State private var draft = ""
+    @FocusState private var typing: Bool
 
     var body: some View {
         let open = Todos.open(todos)
@@ -311,19 +314,19 @@ struct TasksScreen: View {
         let groups = Todos.Group.allCases.map { g in (g, open.filter { Todos.group($0, now: now) == g }) }.filter { !$0.1.isEmpty }
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: Space.section) {
+                VStack(alignment: .leading, spacing: 14) {
+                    newRow
                     ForEach(groups, id: \.0) { g, list in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(g.rawValue).font(.subheadline.weight(.semibold))
-                                .foregroundStyle(g == .overdue ? Color.red : .secondary)
-                                .accessibilityAddTraits(.isHeader)
-                            VStack(spacing: 0) { ForEach(list) { TodoRow(todo: $0) } }
+                        Panel(title: g.rawValue, tone: g == .overdue ? .red : .primary) {
+                            Text("\(list.count)").monospacedDigit()
+                        } content: {
+                            ForEach(list) { TodoRow(todo: $0) }
                         }
+                        .transition(.opacity)
                     }
                     if open.isEmpty {
-                        EmptyState(symbol: "checklist", title: "Nothing to do",
-                                   message: "Type a task in the bar below. Put a date in it (\u{201C}essay draft by Friday\u{201D}) and it\u{2019}s sorted by when it\u{2019}s due.")
-                            .frame(maxWidth: .infinity).padding(.top, 60)
+                        WarmEmpty(title: "Nothing to do",
+                                  message: "Type a task above. Put a date in it (\u{201C}essay draft by Friday\u{201D}) and it\u{2019}s sorted by when it\u{2019}s due.")
                     }
                     if !done.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
@@ -335,26 +338,64 @@ struct TasksScreen: View {
                                     Text("\(done.count)").font(.subheadline).foregroundStyle(.tertiary)
                                     Spacer()
                                 }
-                                .foregroundStyle(.secondary).frame(minHeight: 36).contentShape(.rect)
+                                .foregroundStyle(.secondary).frame(minHeight: 40).contentShape(.rect)
                             }
                             .buttonStyle(.plain)
+                            .padding(.horizontal, 4)
                             .accessibilityAddTraits(showDone ? .isSelected : [])
-                            if showDone { VStack(spacing: 0) { ForEach(done) { TodoRow(todo: $0) } } }
+                            if showDone {
+                                VStack(spacing: 0) { ForEach(done) { TodoRow(todo: $0) } }
+                                    .padding(.horizontal, Space.card).padding(.vertical, 6)
+                                    .panel()
+                            }
                         }
                     }
                 }
+                .animation(.snappy, value: open.map(\.id))
                 .frame(maxWidth: 720, alignment: .leading)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, Space.page)
-                .padding(.top, 8)
-                .padding(.bottom, 120)
+                .padding(.top, 4)
+                .padding(.bottom, 40)
             }
+            .scrollDismissesKeyboard(.interactively)
             .paper()
             .navigationTitle("Tasks")
-            .navigationBarTitleDisplayMode(size == .compact ? .large : .inline)
             .drawerButton()
-            .onAppear { router.onTasks = true }
-            .onDisappear { router.onTasks = false }
+            .navigationBarTitleDisplayMode(.large)
+            .onAppear { if router.typeTask { router.typeTask = false; typing = true } }
+            .onChange(of: router.typeTask) { if router.typeTask { router.typeTask = false; typing = true } }
         }
+    }
+
+    /// Type a task; a date in it ("by Friday", "tomorrow 3pm") sets when it's due.
+    private var newRow: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "plus.circle.fill").font(.title3).foregroundStyle(.tint)
+                .frame(width: 22)
+            TextField("New task", text: $draft)
+                .focused($typing)
+                .submitLabel(.done)
+                .onSubmit(add)
+            if !draft.isEmpty {
+                Button("Add", action: add).font(.subheadline.weight(.semibold))
+                    .transition(.opacity)
+            }
+        }
+        .padding(.horizontal, Space.card)
+        .frame(minHeight: 54)
+        .panel()
+        .animation(.snappy(duration: 0.2), value: draft.isEmpty)
+    }
+
+    private func add() {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let task = Todos.make(t) else { typing = false; return }
+        withAnimation(.snappy) { ctx.insert(task) }
+        draft = ""
+        Haptics.success()
+        if let _ = task.due { Toaster.shared.show("Added", detail: Todos.label(task)) }
+        // The row stays ready for the next one.
+        typing = true
     }
 }

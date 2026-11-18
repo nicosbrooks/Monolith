@@ -79,12 +79,18 @@ final class Item {
     }
 
     /// First line of body text that isn't the title, for list rows.
-    var preview: String {
-        // Lazy: stop at the first usable line instead of formatting the whole note for every row.
+    var preview: String { previewLines(1) }
+
+    /// The first few lines of body text as one run of plain words, for cards: no Markdown, no list markers.
+    func previewLines(_ n: Int) -> String {
+        // Lazy: stop at the first usable lines instead of formatting the whole note for every row.
         body.split(whereSeparator: \.isNewline).lazy
-            .filter { l in !["```", "|", "![", "---"].contains { l.trimmingCharacters(in: .whitespaces).hasPrefix($0) } }
-            .map { MD.plain($0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "#-*>[] "))) }
-            .first { !$0.isEmpty && $0 != title } ?? ""
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { l in !["```", "|", "![", "---"].contains { l.hasPrefix($0) } }
+            .map { MD.plain($0.replacingOccurrences(of: #"^(#{1,6}\s+|[-*+]\s+\[[ xX]\]\s+|[-*+]\s+|>\s*|\d+[.)]\s+)"#, with: "", options: .regularExpression)) }
+            .filter { !$0.isEmpty && $0 != self.title }
+            .prefix(n)
+            .joined(separator: " ")
     }
 
     var audioURL: URL? { audioFile.map { Storage.audio.appending(path: $0) } }

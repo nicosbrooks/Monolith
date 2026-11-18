@@ -12,6 +12,9 @@ nonisolated enum Link {
     /// The recording's id on the watch, and when it started (seconds since 1970).
     static let id = "id"
     static let start = "start"
+    /// applicationContext keys: the look and accent chosen on the phone (ids from `Palette`), so the watch matches.
+    static let look = "look"
+    static let tint = "tint"
     /// transferUserInfo key, phone → watch: the id of a recording the phone has saved. Until then the watch keeps it.
     static let received = "received"
 }

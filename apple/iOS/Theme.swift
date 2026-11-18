@@ -11,7 +11,7 @@ enum Theme {
         Color(UIColor { $0.userInterfaceStyle == .dark ? hex(dark) : hex(light) })
     }
     /// Page background: warm near-black in dark, warm paper in light. Same tokens as the web app.
-    static let paper = pair(0x000000, 0xF4F3F0)
+    static let paper = pair(0x0F0F0E, 0xF4F3F0)
     /// Rows and panels that sit on the page.
     static let panel = pair(0x0E0E0E, 0xFFFFFF)
     /// Raised surfaces (sheets, inputs, the Ask pill).
@@ -62,8 +62,11 @@ extension View {
         scrollContentBackground(.hidden)
             .listRowSeparator(.hidden)
             .listSectionSeparator(.hidden)
-            .background(Theme.paper.ignoresSafeArea())
+            .background { Wash() }
     }
+
+    /// The look's wash behind a screen that isn't a List (doc pages, setup).
+    func washed() -> some View { background { Wash() } }
 }
 
 /// Rounded-square glyph used for item kinds and menu options.
