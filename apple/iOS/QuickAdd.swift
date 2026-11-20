@@ -286,13 +286,16 @@ enum QuickAdd {
             let h = hour24(st, hint)
             var x = at(day ?? today, h, st.m)
             if h == 24 { x = addDays(x, 1) }
-            // A time with no day that's already gone today means tomorrow.
-            if day == nil, x < now { x = addDays(x, 1) }
-            s = x
-            if let en = end {
+            func endOf(_ x: Date, _ en: Clock) -> Date {
                 var y = at(x, hour24(en, hint), en.m)
                 if y <= x { y = addDays(y, 1) }
-                e = y
+                return y
+            }
+            // A time with no day that's already gone today means tomorrow, unless it's a range still going on now.
+            if day == nil, x < now, !(end.map { endOf(x, $0) > now } ?? false) { x = addDays(x, 1) }
+            s = x
+            if let en = end {
+                e = endOf(x, en)
             } else {
                 e = x.addingTimeInterval((minutes ?? (due ? 30 : 60)) * 60)
             }
