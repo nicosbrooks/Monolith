@@ -39,3 +39,15 @@ DerivedData/
 # Test output
 test-results/
 playwright-report/
+
+# Large local files (model weights, checkpoints, training data, screenshots)
+models/
+screenshots-*/
+*.safetensors
+*.gguf
+*.onnx
+*.pt
+
+# Python
+__pycache__/
+.venv/
